@@ -1,0 +1,203 @@
+SQL> @oml4sql-time-series-esm-auto-model-search
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Automated Model Search- Time Series Algorithm ESM
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --   The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --   https://oss.oracle.com/licenses/upl
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SAMPLE PROBLEM
+SQL> -----------------------------------------------------------------------
+SQL> -- Create an ESM Time Series Model with Automated Model Search, which is
+SQL> --   also the default behavior when no ESM model type is specified
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            EXAMPLE IN THIS SCRIPT
+SQL> -----------------------------------------------------------------------
+SQL> -- Create an ESM model with CREATE_MODEL2 and Model Search Enabled
+SQL> -- Evaluate the model
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -------------------------
+SQL> -- CREATE VIEW
+SQL> --
+SQL>
+SQL> CREATE OR REPLACE VIEW ESM_SH_DATA AS
+  2  SELECT TIME_ID, AMOUNT_SOLD
+  3  FROM   SH.SALES;
+
+View ESM_SH_DATAは作成されました。
+
+SQL>
+SQL>
+SQL> -------------------------
+SQL> -- CREATE MODEL
+SQL> --
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('ESM_SALES_FORECAST_1');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> DECLARE
+  2      v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4      v_setlst('ALGO_NAME')            := 'ALGO_EXPONENTIAL_SMOOTHING';
+  5      v_setlst('EXSM_INTERVAL')       := 'EXSM_INTERVAL_DAY';
+  6
+  7      DBMS_DATA_MINING.CREATE_MODEL2(
+  8          MODEL_NAME          => 'ESM_SALES_FORECAST_1',
+  9          MINING_FUNCTION     => 'TIME_SERIES',
+ 10          DATA_QUERY          => 'select * from ESM_SH_DATA',
+ 11          SET_LIST            => v_setlst,
+ 12          CASE_ID_COLUMN_NAME => 'TIME_ID',
+ 13          TARGET_COLUMN_NAME  => 'AMOUNT_SOLD');
+ 14  END;
+ 15  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            ANALYZE THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL> -------------------------
+SQL> -- GET MODEL DETAILS
+SQL> --
+SQL>
+SQL> SELECT setting_name, setting_value, setting_type
+  2  FROM   user_mining_model_settings
+  3  WHERE  (setting_type != 'DEFAULT' or setting_name like 'EXSM%')
+  4  AND    model_name = upper('ESM_SALES_FORECAST_1')
+  5  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE                  SETTING_TY
+------------------------------ ------------------------------ ----------
+ALGO_NAME                      ALGO_EXPONENTIAL_SMOOTHING     INPUT
+EXSM_ACCUMULATE                EXSM_ACCU_TOTAL                DEFAULT
+EXSM_BACKCAST_OUTPUT           EXSM_BACKCAST_OUTPUT_ENABLE    DEFAULT
+EXSM_CONFIDENCE_LEVEL          .95                            DEFAULT
+EXSM_INITVL_OPTIMIZE           EXSM_INITVL_OPTIMIZE_ENABLE    DEFAULT
+EXSM_INTERVAL                  EXSM_INTERVAL_DAY              INPUT
+EXSM_NMSE                      3                              DEFAULT
+EXSM_OPTIMIZATION_CRIT         EXSM_OPT_CRIT_LIK              DEFAULT
+EXSM_PREDICTION_STEP           1                              DEFAULT
+EXSM_SETMISSING                EXSM_MISS_AUTO                 DEFAULT
+
+10行が選択されました。
+
+SQL> /
+
+SETTING_NAME                   SETTING_VALUE                  SETTING_TY
+------------------------------ ------------------------------ ----------
+ALGO_NAME                      ALGO_EXPONENTIAL_SMOOTHING     INPUT
+EXSM_ACCUMULATE                EXSM_ACCU_TOTAL                DEFAULT
+EXSM_BACKCAST_OUTPUT           EXSM_BACKCAST_OUTPUT_ENABLE    DEFAULT
+EXSM_CONFIDENCE_LEVEL          .95                            DEFAULT
+EXSM_INITVL_OPTIMIZE           EXSM_INITVL_OPTIMIZE_ENABLE    DEFAULT
+EXSM_INTERVAL                  EXSM_INTERVAL_DAY              INPUT
+EXSM_NMSE                      3                              DEFAULT
+EXSM_OPTIMIZATION_CRIT         EXSM_OPT_CRIT_LIK              DEFAULT
+EXSM_PREDICTION_STEP           1                              DEFAULT
+EXSM_SETMISSING                EXSM_MISS_AUTO                 DEFAULT
+
+10行が選択されました。
+
+SQL>
+SQL>
+SQL> -------------------------
+SQL> -- COMPUTED SETTINGS AND OTHER GLOBAL STATISTICS
+SQL> --
+SQL>
+SQL> SELECT name, ROUND(numeric_value,3) numeric_value, string_value
+  2  FROM DM$VGESM_SALES_FORECAST_1
+  3  ORDER BY name;
+
+NAME                           NUMERIC_VALUE STRING_VALUE
+------------------------------ ------------- --------------------
+-2 LOG-LIKELIHOOD                  -7026.424
+AIC                                14076.848
+AICC                               14077.064
+ALPHA                                  0.005
+ALPHA DISC                             0.995
+AMSE                                  10.445
+BETA                                   0.005
+BETA DISC                              0.995
+BIC                                14140.274
+CONVERGED                                    YES
+GAMMA                                  0.122
+GAMMA DISC                             0.878
+INITIAL ALPHA                          0.005
+INITIAL BETA                           0.005
+INITIAL GAMMA                          0.122
+INITIAL LEVEL                         20.248
+INITIAL SEASON 1                       1.937
+INITIAL SEASON 2                      -1.751
+INITIAL SEASON 3                      -1.036
+INITIAL SEASON 4                       0.686
+INITIAL SEASON 5                       0.431
+INITIAL SEASON 6                       4.986
+INITIAL SEASON 7                      -5.253
+INITIAL TREND                         -0.002
+LAMBDA                                 0.107
+MAE                                48770.119
+MSE                                   10.447
+NUM_ROWS                          918843.000
+SIGMA                                  3.244
+STD                                    3.244
+
+30行が選択されました。
+
+SQL> /
+
+NAME                           NUMERIC_VALUE STRING_VALUE
+------------------------------ ------------- --------------------
+-2 LOG-LIKELIHOOD                  -7026.424
+AIC                                14076.848
+AICC                               14077.064
+ALPHA                                  0.005
+ALPHA DISC                             0.995
+AMSE                                  10.445
+BETA                                   0.005
+BETA DISC                              0.995
+BIC                                14140.274
+CONVERGED                                    YES
+GAMMA                                  0.122
+GAMMA DISC                             0.878
+INITIAL ALPHA                          0.005
+INITIAL BETA                           0.005
+INITIAL GAMMA                          0.122
+INITIAL LEVEL                         20.248
+INITIAL SEASON 1                       1.937
+INITIAL SEASON 2                      -1.751
+INITIAL SEASON 3                      -1.036
+INITIAL SEASON 4                       0.686
+INITIAL SEASON 5                       0.431
+INITIAL SEASON 6                       4.986
+INITIAL SEASON 7                      -5.253
+INITIAL TREND                         -0.002
+LAMBDA                                 0.107
+MAE                                48770.119
+MSE                                   10.447
+NUM_ROWS                          918843.000
+SIGMA                                  3.244
+STD                                    3.244
+
+30行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --   End of script
+SQL> -----------------------------------------------------------------------
+SQL> spool oml4sql-time-series-exponential-smoothing

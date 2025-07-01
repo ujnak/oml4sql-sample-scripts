@@ -1,0 +1,349 @@
+SQL> @oml4sql-r-extensible-association-rules
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   OML R Extensible - Association Rules Algorithm - dmrardemo.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET serveroutput ON
+SQL> SET trimspool ON
+SQL> SET pages 10000
+SQL> SET linesize 140
+SQL> SET LONG 10000
+SQL> SET echo ON
+SQL>
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SET UP THE DATA
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Cleanup old training data view for repeat runs
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP VIEW ar_build_v';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- Create a view for building association rules model
+SQL> -- The data for this sample is composed from a small subset of
+SQL> -- sales transactions in the SH schema - listing the (multiple)
+SQL> -- items bought by a set of customers with ids in the range
+SQL> -- 100001-104500.
+SQL> --
+SQL> CREATE VIEW ar_build_v AS
+  2  SELECT cust_id, prod_name, prod_category, amount_sold
+  3  FROM (SELECT a.cust_id, b.prod_name, b.prod_category,
+  4               a.amount_sold
+  5          FROM sh.sales a, sh.products b
+  6         WHERE a.prod_id = b.prod_id AND
+  7               a.cust_id between 100001 AND 104500);
+
+View AR_BUILD_Vは作成されました。
+
+SQL>
+SQL>
+SQL> --
+SQL> -- We will build two separate models for rules and itemsets, respectively.
+SQL> --
+SQL> -----------------------------------------------------------------------
+SQL> --                          BUILD THE MODEL for RULES
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Cleanup old model with same name for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('RAR_SH_AR_SAMPLE');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> BEGIN
+  2  sys.rqScriptDrop('RAR_BUILD');
+  3  sys.rqScriptDrop('RAR_DETAILS');
+  4  EXCEPTION WHEN OTHERS THEN NULL; END;
+  5  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> ------------
+SQL> -- R scripts
+SQL> --
+SQL> -- The R scripts are created by users using sys.rqScriptCreate to define
+SQL> -- their own approaches in R for building Association Rules models in
+SQL> -- ODM framework.
+SQL>
+SQL> BEGIN
+  2    -- The BUILD script will be invoked during CREATE_MODEL
+  3    -- Our script here uses the apriori algorithm in R's arules package
+  4    -- to mine rules
+  5    sys.rqScriptCreate('RAR_BUILD',
+  6      'function(dat){
+  7       library(arules)
+  8       trans <- as(split(dat[["PROD_NAME"]], dat[["CUST_ID"]]), "transactions")
+  9       r <- apriori(trans, parameter = list(minlen=2, supp=0.1, conf=0.5, target="rules"))
+ 10       as(r, "data.frame")}');
+ 11
+ 12    -- The DETAILS script, along with the FORMAT script below will be
+ 13    -- invoked during CREATE_MODEL. A model view will be generated with
+ 14    -- the output of the DETAILS script. We deliver the mined rules through
+ 15    -- the model view
+ 16    sys.rqScriptCreate('RAR_DETAILS',
+ 17       'function(mod) {mod}');
+ 18  END;
+ 19  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> ---------------
+SQL> -- CREATE MODEL
+SQL> --
+SQL> -- let case_id_column_name be NULL, as the case_id_column_name should be
+SQL> -- identified in the R BUILD script
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- specify settings
+  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  6    v_setlst('RALG_BUILD_FUNCTION')   := 'RAR_BUILD';
+  7    v_setlst('RALG_DETAILS_FUNCTION') := 'RAR_DETAILS';
+  8    v_setlst('RALG_DETAILS_FORMAT')   := 'select cast(''a'' as varchar2(100)) rules, 1 support, 1 confidence, 1 coverage, 1 lift, 1 count from dual';
+  9
+ 10    DBMS_DATA_MINING.CREATE_MODEL2(
+ 11      model_name          => 'RAR_SH_AR_SAMPLE',
+ 12      mining_function     => 'ASSOCIATION',
+ 13      data_query          => 'select * from AR_BUILD_V',
+ 14      case_id_column_name => NULL,
+ 15      set_list            => v_setlst);
+ 16  END;
+ 17  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a40
+SQL> select setting_name, setting_value from Rar_sh_sample_settings
+  2  order by setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ----------------------------------------
+ALGO_EXTENSIBLE_LANG           R
+RALG_BUILD_FUNCTION            RAR_BUILD
+RALG_DETAILS_FORMAT            select cast('a' as varchar2(100)) items,
+                                1 support from dual
+
+RALG_DETAILS_FUNCTION          RAR_DETAILS
+
+4行が選択されました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL METADATA
+SQL> --
+SQL> column model_name format a20
+SQL> column mining_function format a20
+SQL> column algorithm format a20
+SQL> select model_name, mining_function, algorithm from user_mining_models
+  2  where model_name = 'RAR_SH_AR_SAMPLE';
+
+MODEL_NAME           MINING_FUNCTION      ALGORITHM
+-------------------- -------------------- --------------------
+RAR_SH_AR_SAMPLE     ASSOCIATION_RULES    R_EXTENSIBLE
+
+1行が選択されました。
+
+SQL>
+SQL> ------------------------------------
+SQL> -- DISPLAY THE RULES USING MODEL VIEW
+SQL> -- The model view was generated during CREATE_MODEL
+SQL> --
+SQL> column partition_name format a5
+SQL> column rules format A30
+SQL> select * from DM$VDRAR_SH_AR_SAMPLE order by confidence desc;
+
+PARTI RULES                          SUPPORT  CONFIDENCE   COVERAGE       LIFT    COUNT
+----- ------------------------------ ------- ----------- ---------- ---------- --------
+      {Tennis Racquet Cushioned Over       0        .874 .177659574 2.72118016   146.00
+      Grip,Linseed Oil} => {2 Compet
+      ition Grade NFHS Baseballs}
+
+      {Tennis Racquet Cushioned Over       0        .859 .180851064 2.66433702   146.00
+      Grip,2 Competition Grade NFHS
+      Baseballs} => {Linseed Oil}
+
+      {2 Competition Grade NFHS Base       0        .844 .184042553 2.70749078   146.00
+      balls,Linseed Oil} => {Tennis
+      Racquet Cushioned OverGrip}
+
+      {Tennis Racquet Cushioned Over       0        .580 .311702128  1.8059354   170.00
+      Grip} => {2 Competition Grade
+      NFHS Baseballs}
+
+      {2 Competition Grade NFHS Base       0        .573 .321276596 1.77715123   173.00
+      balls} => {Linseed Oil}
+
+      {Linseed Oil} => {2 Competitio       0        .571 .322340426 1.77715123   173.00
+      n Grade NFHS Baseballs}
+
+      {Tennis Racquet Cushioned Over       0        .570 .311702128 1.76821095   167.00
+      Grip} => {Linseed Oil}
+
+      {2 Competition Grade NFHS Base       0        .563 .321276596  1.8059354   170.00
+      balls} => {Tennis Racquet Cush
+      ioned OverGrip}
+
+      {Linseed Oil} => {Tennis Racqu       0        .551 .322340426 1.76821095   167.00
+      et Cushioned OverGrip}
+
+      {Cricket Wickets} => {Catchers       0        .524 .292553191 1.71504593   144.00
+       Mitt}
+
+      {Catchers Mitt} => {Cricket Wi       0        .502 .305319149 1.71504593   144.00
+      ckets}
+
+
+11行が選択されました。
+
+SQL>
+SQL>
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                          BUILD THE MODEL for ITEMSETS
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Cleanup old model with same name for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('RAR_SH_FI_SAMPLE');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> BEGIN
+  2  -- Our script here uses the apriori algorithm in R's arules package to
+  3  -- mine itemsets
+  4    sys.rqScriptCreate('RAR_BUILD',
+  5      'function(dat){
+  6       library(arules)
+  7       trans <- as(split(dat[["PROD_NAME"]], dat[["CUST_ID"]]), "transactions")
+  8       items <- apriori(trans, parameter = list(supp=0.1, target="frequent"))
+  9       df <- as(items, "data.frame")
+ 10       df[, c("items", "support")]}', v_overwrite => TRUE);
+ 11
+ 12    sys.rqScriptCreate('RAR_DETAILS',
+ 13       'function(mod) {mod}', v_overwrite => TRUE);
+ 14  END;
+ 15  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> ---------------
+SQL> -- CREATE MODEL
+SQL> --
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- specify settings
+  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  6    v_setlst('RALG_BUILD_FUNCTION')   := 'RAR_BUILD';
+  7    v_setlst('RALG_DETAILS_FUNCTION') := 'RAR_DETAILS';
+  8    v_setlst('RALG_DETAILS_FORMAT')   := 'select cast(''a'' as varchar2(100)) items, 1 support from dual';
+  9
+ 10    DBMS_DATA_MINING.CREATE_MODEL2(
+ 11      model_name          => 'RAR_SH_FI_SAMPLE',
+ 12      mining_function     => 'ASSOCIATION',
+ 13      data_query          => 'select * from AR_BUILD_V',
+ 14      case_id_column_name => NULL,
+ 15      set_list            => v_setlst);
+ 16  END;
+ 17  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a40
+SQL> select setting_name, setting_value from Rar_sh_sample_settings
+  2  order by setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ----------------------------------------
+ALGO_EXTENSIBLE_LANG           R
+RALG_BUILD_FUNCTION            RAR_BUILD
+RALG_DETAILS_FORMAT            select cast('a' as varchar2(100)) items,
+                                1 support from dual
+
+RALG_DETAILS_FUNCTION          RAR_DETAILS
+
+4行が選択されました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL METADATA
+SQL> --
+SQL> column model_name format a20
+SQL> column mining_function format a20
+SQL> column algorithm format a20
+SQL> select model_name, mining_function, algorithm from user_mining_models
+  2  where model_name = 'RAR_SH_FI_SAMPLE';
+
+MODEL_NAME           MINING_FUNCTION      ALGORITHM
+-------------------- -------------------- --------------------
+RAR_SH_FI_SAMPLE     ASSOCIATION_RULES    R_EXTENSIBLE
+
+1行が選択されました。
+
+SQL>
+SQL> ---------------------------------------
+SQL> -- DISPLAY THE ITEMSETS USING MODEL VIEW
+SQL> --
+SQL> column partition_name format a5
+SQL> column items format a50
+SQL> select * from DM$VDRAR_SH_FI_SAMPLE order by support desc;
+
+PARTI ITEMS                                              SUPPORT
+----- -------------------------------------------------- -------
+      {Linseed Oil}                                            0
+      {2 Competition Grade NFHS Baseballs}                     0
+      {Pro Style Batting Tee}                                  0
+      {Tennis Racquet Cushioned OverGrip}                      0
+      {Speed Trainer Bats and Training Program}                0
+      {Catchers Mitt}                                          0
+      {Cricket Wickets}                                        0
+      {Slugger Youth Series Maple Bat}                         0
+      {Bucket of 24 Synthetic Baseballs}                       0
+      {Team shirt}                                             0
+      {Indoor Cricket Ball}                                    0
+      {2 Competition Grade NFHS Baseballs,Linseed Oil}         0
+      {Tennis Racquet Cushioned OverGrip,2 Competition G       0
+      rade NFHS Baseballs}
+
+      {Tennis Racquet Cushioned OverGrip,Linseed Oil}          0
+      {Tennis Racquet Cushioned OverGrip,2 Competition G       0
+      rade NFHS Baseballs,Linseed Oil}
+
+      {Speed Trainer Bats and Training Program,Pro Style       0
+       Batting Tee}
+
+      {Cricket Wickets,Catchers Mitt}                          0
+      {Linseed Oil,Catchers Mitt}                              0
+
+18行が選択されました。
+
+SQL>
+SQL> spool oml4sql-r-extensible-attribute-importance-via-rf

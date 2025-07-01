@@ -1,0 +1,256 @@
+SQL> @oml4sql-feature-extraction-text-mining-nmf
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Feature Extraction - NMF Algorithm with Text Mining - dmtxtnmf.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET serveroutput ON
+SQL> SET trimspool ON
+SQL> SET pages 10000
+SQL> SET echo ON
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SAMPLE PROBLEM
+SQL> -----------------------------------------------------------------------
+SQL> -- Mine text features using NMF algorithm.
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SET UP AND ANALYZE THE DATA
+SQL> -----------------------------------------------------------------------
+SQL> -- Create a policy for text feature extraction
+SQL> -- The policy will include stemming
+SQL> begin
+  2    ctx_ddl.drop_policy('dmdemo_nmf_policy');
+  3  exception when others then null;
+  4  end;
+  5  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> begin
+  2    ctx_ddl.drop_preference('dmdemo_nmf_lexer');
+  3  exception when others then null;
+  4  end;
+  5  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> begin
+  2    ctx_ddl.create_preference('dmdemo_nmf_lexer', 'BASIC_LEXER');
+  3    ctx_ddl.set_attribute('dmdemo_nmf_lexer', 'index_stems', 'ENGLISH');
+  4  --  ctx_ddl.set_attribute('dmdemo_nmf_lexer', 'index_themes', 'YES');
+  5  end;
+  6  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> begin
+  2    ctx_ddl.create_policy('dmdemo_nmf_policy', lexer=>'dmdemo_nmf_lexer');
+  3  end;
+  4  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Cleanup old model and objects for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('T_NMF_Sample');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> --------------------------------------------------------
+SQL> -- CREATE A NEW MODEL USING V_SETLST (NO SETTINGS TABLE)
+SQL> -- Note the transform makes the 'comments' attribute
+SQL> -- to be treated as unstructured text data
+SQL> --
+SQL> DECLARE
+  2      v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3    xformlist dbms_data_mining_transform.TRANSFORM_LIST;
+  4  BEGIN
+  5      dbms_data_mining_transform.SET_TRANSFORM(
+  6      xformlist, 'comments', null, 'comments', null, 'TEXT(TOKEN_TYPE:STEM)');
+  7  --    xformlist, 'comments', null, 'comments', null, 'TEXT(TOKEN_TYPE:THEME)');
+  8
+  9      v_setlst('PREP_AUTO') := 'ON';
+ 10      v_setlst('ALGO_NAME') := 'ALGO_NONNEGATIVE_MATRIX_FACTOR';
+ 11      v_setlst('ODMS_TEXT_POLICY_NAME') := 'DMDEMO_NMF_POLICY';
+ 12      DBMS_DATA_MINING.CREATE_MODEL2(
+ 13          model_name      => 'T_NMF_Sample',
+ 14          mining_function =>'FEATURE_EXTRACTION',
+ 15          data_query      => 'SELECT * FROM mining_build_text',
+ 16          set_list        => v_setlst,
+ 17          case_id_column_name => 'cust_id',
+ 18          xform_list      => xformlist);
+ 19  END;
+ 20  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'T_NMF_SAMPLE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_NONNEGATIVE_MATRIX_FACTOR
+NMFS_CONV_TOLERANCE            .05
+NMFS_NONNEGATIVE_SCORING       NMFS_NONNEG_SCORING_ENABLE
+NMFS_NUM_ITERATIONS            50
+NMFS_RANDOM_SEED               -1
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+ODMS_TEXT_MAX_FEATURES         3000
+ODMS_TEXT_MIN_DOCUMENTS        1
+ODMS_TEXT_POLICY_NAME          DMDEMO_NMF_POLICY
+PREP_AUTO                      ON
+
+12行が選択されました。
+
+SQL>
+SQL> --------------------------
+SQL> -- DISPLAY MODEL SIGNATURE
+SQL> --
+SQL> column attribute_name format a40
+SQL> column attribute_type format a20
+SQL> SELECT attribute_name, attribute_type
+  2    FROM user_mining_model_attributes
+  3   WHERE model_name = 'T_NMF_SAMPLE'
+  4  ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                           ATTRIBUTE_TYPE
+---------------------------------------- --------------------
+AFFINITY_CARD                            NUMERICAL
+AGE                                      NUMERICAL
+BOOKKEEPING_APPLICATION                  NUMERICAL
+BULK_PACK_DISKETTES                      NUMERICAL
+COMMENTS                                 TEXT
+COUNTRY_NAME                             CATEGORICAL
+CUST_GENDER                              CATEGORICAL
+CUST_INCOME_LEVEL                        CATEGORICAL
+CUST_MARITAL_STATUS                      CATEGORICAL
+EDUCATION                                CATEGORICAL
+FLAT_PANEL_MONITOR                       NUMERICAL
+HOME_THEATER_PACKAGE                     NUMERICAL
+HOUSEHOLD_SIZE                           CATEGORICAL
+OCCUPATION                               CATEGORICAL
+ORA$VECTOR                               VECTOR
+OS_DOC_SET_KANJI                         NUMERICAL
+PRINTER_SUPPLIES                         NUMERICAL
+YRS_RESIDENCE                            NUMERICAL
+Y_BOX_GAMES                              NUMERICAL
+
+19行が選択されました。
+
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY MODEL DETAILS
+SQL> --
+SQL>
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2  WHERE model_name='T_NMF_SAMPLE'
+  3  ORDER BY view_name;
+
+VIEW_NAME
+------------------------------
+VIEW_TYPE
+--------------------------------------------------
+DM$VET_NMF_SAMPLE
+Non-Negative Matrix Factorization H Matrix
+
+DM$VGT_NMF_SAMPLE
+Global Name-Value Pairs
+
+DM$VIT_NMF_SAMPLE
+Non-Negative Matrix Factorization Inverse H Matrix
+
+DM$VNT_NMF_SAMPLE
+Normalization and Missing Value Handling
+
+DM$VST_NMF_SAMPLE
+Computed Settings
+
+DM$VWT_NMF_SAMPLE
+Model Build Alerts
+
+DM$VXT_NMF_SAMPLE
+Text Features
+
+
+7行が選択されました。
+
+SQL>
+SQL> column attribute_name format a30
+SQL> column attribute_value format a20
+SQL> column coefficient format 9.99999
+SQL> set pages 15
+SQL> SET line 120
+SQL> break ON feature_id
+SQL> SELECT * FROM (
+  2  SELECT feature_id,
+  3         nvl2(attribute_subname,
+  4              attribute_name||'.'||attribute_subname,
+  5              attribute_name) attribute_name,
+  6         attribute_value,
+  7         coefficient
+  8    FROM DM$VET_NMF_SAMPLE
+  9  WHERE feature_id < 3
+ 10  ORDER BY 1,2,3,4)
+ 11  WHERE ROWNUM < 21;
+
+FEATURE_ID ATTRIBUTE_NAME                 ATTRIBUTE_VALUE      COEFFICIENT
+---------- ------------------------------ -------------------- -----------
+         1 AFFINITY_CARD                                            .00997
+           AGE                                                      .00982
+           BOOKKEEPING_APPLICATION                                  .01263
+           BULK_PACK_DISKETTES                                      .05693
+           COMMENTS.10                                              .00012
+           COMMENTS.ABOUT                                           .00092
+           COMMENTS.ACCOUNT                                         .00049
+           COMMENTS.ADDRESS                                         .00009
+           COMMENTS.ADVERTISE                                       .00029
+           COMMENTS.AFFINITY                                        .00312
+           COMMENTS.AFTER                                           .00059
+           COMMENTS.AGAIN                                           .00203
+
+FEATURE_ID ATTRIBUTE_NAME                 ATTRIBUTE_VALUE      COEFFICIENT
+---------- ------------------------------ -------------------- -----------
+         1 COMMENTS.ALREADY                                         .00042
+           COMMENTS.AM                                              .00366
+           COMMENTS.AMAZE                                           .00024
+           COMMENTS.ANYTHING                                        .00053
+           COMMENTS.APPLY                                           .00032
+           COMMENTS.ARIZONA                                         .00103
+           COMMENTS.ASK                                             .00056
+           COMMENTS.ATTRACT                                         .00019
+
+20行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               APPLY THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL> -- See dmnmdemo.sql for examples.
+SQL> spool oml4sql-feature-extraction-text-term-extraction

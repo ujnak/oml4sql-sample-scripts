@@ -1,0 +1,626 @@
+SQL> @oml4sql-classification-regression-xgboost
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Classification and Regression - XGBoost Algorithm
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET ECHO ON
+SQL> SET FEEDBACK 1
+SQL> SET NUMWIDTH 10
+SQL> SET LINESIZE 80
+SQL> SET TRIMSPOOL ON
+SQL> SET TAB OFF
+SQL> SET PAGESIZE 100
+SQL> SET LONG 20000
+SQL> -----------------------------------------------------------------------
+SQL> --                (1) Use XGBoost for classification
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SAMPLE PROBLEM
+SQL> -----------------------------------------------------------------------
+SQL> -- Given demographic and purchase data about a set of customers, predict
+SQL> -- customer's response to an affinity card program using XGboost
+SQL> --
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SET UP AND ANALYZE THE DATA
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -------
+SQL> -- DATA
+SQL> -------
+SQL> -- The data for this sample is composed from base tables in SH Schema
+SQL> -- (See Sample Schema Documentation) and presented through these views:
+SQL> -- mining_data_build_v (build data)
+SQL> -- mining_data_test_v  (test data)
+SQL> -- (See dmsh.sql for view definitions).
+SQL> --
+SQL> -- Cleanup old model with the same name
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('XGC_SH_MODEL');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> ---------------------
+SQL> -- CREATE MODEL
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    v_setlst('ALGO_NAME')   := 'ALGO_XGBOOST';
+  5    -- for 0/1 target, choose binary:logistic as objective
+  6    v_setlst('objective')   := 'binary:logistic';
+  7    v_setlst('max_depth')   := '3';
+  8    v_setlst('eta')         := '1';
+  9    -- choose error and auc as eval_metric to evaluate training dataset
+ 10    v_setlst('eval_metric') := 'error,auc';
+ 11    v_setlst('num_round')   := '10';
+ 12
+ 13    DBMS_DATA_MINING.CREATE_MODEL2(
+ 14      model_name          => 'XGC_SH_MODEL',
+ 15      mining_function     => 'CLASSIFICATION',
+ 16      data_query          => 'select * from mining_data_build_v',
+ 17      set_list            => v_setlst,
+ 18      case_id_column_name => 'cust_id',
+ 19      target_column_name  => 'affinity_card');
+ 20  END;
+ 21  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'XGC_SH_MODEL'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_XGBOOST
+CLAS_WEIGHTS_BALANCED          OFF
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+PREP_AUTO                      ON
+booster                        gbtree
+eta                            1
+eval_metric                    error,auc
+max_depth                      3
+ntree_limit                    0
+num_round                      10
+objective                      binary:logistic
+
+13行が選択されました。
+
+SQL>
+SQL> --------------------------
+SQL> -- DISPLAY MODEL SIGNATURE
+SQL> --
+SQL> column attribute_name format a40
+SQL> column attribute_type format a20
+SQL> SELECT attribute_name, attribute_type
+  2    FROM user_mining_model_attributes
+  3   WHERE model_name = 'XGC_SH_MODEL'
+  4  ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                           ATTRIBUTE_TYPE
+---------------------------------------- --------------------
+AFFINITY_CARD                            CATEGORICAL
+AGE                                      NUMERICAL
+BOOKKEEPING_APPLICATION                  NUMERICAL
+BULK_PACK_DISKETTES                      NUMERICAL
+COUNTRY_NAME                             CATEGORICAL
+CUST_GENDER                              CATEGORICAL
+CUST_INCOME_LEVEL                        CATEGORICAL
+CUST_MARITAL_STATUS                      CATEGORICAL
+EDUCATION                                CATEGORICAL
+FLAT_PANEL_MONITOR                       NUMERICAL
+HOME_THEATER_PACKAGE                     NUMERICAL
+HOUSEHOLD_SIZE                           CATEGORICAL
+OCCUPATION                               CATEGORICAL
+OS_DOC_SET_KANJI                         NUMERICAL
+PRINTER_SUPPLIES                         NUMERICAL
+YRS_RESIDENCE                            NUMERICAL
+Y_BOX_GAMES                              NUMERICAL
+
+17行が選択されました。
+
+SQL>
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2    WHERE model_name='XGC_SH_MODEL'
+  3    ORDER BY view_name;
+
+VIEW_NAME
+------------------------------
+VIEW_TYPE
+--------------------------------------------------
+DM$VCXGC_SH_MODEL
+Scoring Cost Matrix
+
+DM$VGXGC_SH_MODEL
+Global Name-Value Pairs
+
+DM$VIXGC_SH_MODEL
+XGBoost Attribute Importance
+
+DM$VSXGC_SH_MODEL
+Computed Settings
+
+DM$VTXGC_SH_MODEL
+Classification Targets
+
+DM$VWXGC_SH_MODEL
+Model Build Alerts
+
+
+6行が選択されました。
+
+SQL>
+SQL> -- Global statistics
+SQL> column name format a30
+SQL> column numeric_value format 9999990.999
+SQL> column string_value format a20
+SQL> select name, numeric_value, string_value
+  2    from DM$VGXGC_SH_MODEL
+  3    ORDER BY name;
+
+NAME                           NUMERIC_VALUE STRING_VALUE
+------------------------------ ------------- --------------------
+NUM_ROWS                            1500.000
+auc                                    0.912
+error                                  0.143
+
+3行が選択されました。
+
+SQL>
+SQL> --attribute importance: top 10 important features
+SQL> column attribute_name format a25
+SQL> column attribute_value format a15
+SQL> column gain format 9.999
+SQL> column cover format 9.999
+SQL> column frequency format 9.999
+SQL>
+SQL> select * from(
+  2  select attribute_name, attribute_value, gain, cover, frequency
+  3  from DM$VIXGC_SH_MODEL
+  4  order by gain desc)
+  5  where rownum <= 10;
+
+ATTRIBUTE_NAME            ATTRIBUTE_VALUE GAIN COVER FREQUENCY
+------------------------- --------------- ---- ----- ---------
+YRS_RESIDENCE                             .296  .141      .164
+HOUSEHOLD_SIZE            2               .120  .028      .016
+HOUSEHOLD_SIZE            9+              .105  .051      .033
+AGE                                       .070  .117      .246
+EDUCATION                 Bach.           .056  .045      .033
+BOOKKEEPING_APPLICATION                   .050  .043      .033
+CUST_MARITAL_STATUS       never married   .044  .076      .049
+EDUCATION                 Masters         .043  .040      .033
+EDUCATION                 Profsc          .036  .029      .016
+HOUSEHOLD_SIZE            1               .035  .036      .016
+
+10行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               TEST THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL> ------------------------------------
+SQL> -- COMPUTE METRICS TO TEST THE MODEL
+SQL> --
+SQL> -- The queries shown below demonstrate the use of new SQL data mining functions
+SQL> -- along with analytic functions to compute the various test metrics.
+SQL> --
+SQL> -- Modelname:             xgc_sh_model
+SQL> -- Target attribute:      affinity_card
+SQL> -- Positive target value: 1
+SQL> -- (Change as appropriate for a different example)
+SQL>
+SQL> -- Compute CONFUSION MATRIX
+SQL> --
+SQL> -- This query demonstates how to generate a confusion matrix using the new
+SQL> -- SQL prediction functions for scoring. The returned columns match the
+SQL> -- schema of the table generated by COMPUTE_CONFUSION_MATRIX procedure.
+SQL> --
+SQL> SELECT affinity_card AS actual_target_value,
+  2         PREDICTION(XGC_SH_MODEL USING *) AS predicted_target_value,
+  3         COUNT(*) AS value
+  4    FROM mining_data_test_v
+  5   GROUP BY affinity_card, PREDICTION(XGC_SH_MODEL USING *)
+  6   ORDER BY 1, 2;
+
+ACTUAL_TARGET_VALUE PREDICTED_TARGET_VALUE      VALUE
+------------------- ---------------------- ----------
+                  0                      0       1032
+                  0                      1        122
+                  1                      0        142
+                  1                      1        204
+
+4行が選択されました。
+
+SQL>
+SQL> -- Compute ACCURACY
+SQL> --
+SQL> column accuracy format 9.99
+SQL>
+SQL> SELECT SUM(correct)/COUNT(*) AS accuracy
+  2    FROM (SELECT DECODE(affinity_card,
+  3                   PREDICTION(XGC_SH_MODEL USING *), 1, 0) AS correct
+  4            FROM mining_data_test_v);
+
+ACCURACY
+--------
+     .82
+
+1行が選択されました。
+
+SQL>
+SQL> -- Compute AUC (Area Under the roc Curve)
+SQL> column auc format 9.99
+SQL> WITH
+  2  pos_prob_and_counts AS (
+  3  SELECT PREDICTION_PROBABILITY(XGC_SH_MODEL, 1 USING *) pos_prob,
+  4         DECODE(affinity_card, 1, 1, 0) pos_cnt
+  5    FROM mining_data_test_v
+  6  ),
+  7  tpf_fpf AS (
+  8  SELECT  pos_cnt,
+  9         SUM(pos_cnt) OVER (ORDER BY pos_prob DESC) /
+ 10           SUM(pos_cnt) OVER () tpf,
+ 11         SUM(1 - pos_cnt) OVER (ORDER BY pos_prob DESC) /
+ 12           SUM(1 - pos_cnt) OVER () fpf
+ 13    FROM pos_prob_and_counts
+ 14  ),
+ 15  trapezoid_areas AS (
+ 16  SELECT 0.5 * (fpf - LAG(fpf, 1, 0) OVER (ORDER BY fpf, tpf)) *
+ 17          (tpf + LAG(tpf, 1, 0) OVER (ORDER BY fpf, tpf)) area
+ 18    FROM tpf_fpf
+ 19   WHERE pos_cnt = 1
+ 20      OR (tpf = 1 AND fpf = 1)
+ 21  )
+ 22  SELECT SUM(area) auc
+ 23    FROM trapezoid_areas;
+
+AUC
+---
+.86
+
+1行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                (2) Use XGBoost for regression
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SAMPLE PROBLEM
+SQL> -----------------------------------------------------------------------
+SQL> -- Given demographic and purchase data about a set of customers, predict
+SQL> -- customer's response to an affinity card program using XGboost
+SQL> --
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SET UP AND ANALYZE THE DATA
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -------
+SQL> -- DATA
+SQL> -------
+SQL> -- The data for this sample is composed from base tables in SH Schema
+SQL> -- (See Sample Schema Documentation) and presented through these views:
+SQL> -- mining_data_build_v (build data)
+SQL> -- mining_data_test_v  (test data)
+SQL> -- (See dmsh.sql for view definitions).
+SQL> --
+SQL> -----------------------------------------------------------------------
+SQL> -- Cleanup old model with the same name
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('XGR_SH_MODEL');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> ---------------------
+SQL> -- CREATE MODEL
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    v_setlst('ALGO_NAME')               := 'ALGO_XGBOOST';
+  5    -- for 0/1 target, choose binary:logistic as objective
+  6    v_setlst('booster')            := 'gblinear';
+  7    v_setlst('alpha')              := '0.0001';
+  8    v_setlst('lambda')             := '1';
+  9    v_setlst('num_round')          := '100';
+ 10
+ 11    DBMS_DATA_MINING.CREATE_MODEL2(
+ 12      model_name          => 'XGR_SH_MODEL',
+ 13      mining_function     => 'REGRESSION',
+ 14      data_query          => 'select * from mining_data_build_v',
+ 15      set_list            => v_setlst,
+ 16      case_id_column_name => 'cust_id',
+ 17      target_column_name  => 'age');
+ 18  END;
+ 19  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'XGR_SH_MODEL'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_XGBOOST
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+PREP_AUTO                      ON
+alpha                          0.0001
+booster                        gblinear
+lambda                         1
+ntree_limit                    0
+num_round                      100
+
+10行が選択されました。
+
+SQL>
+SQL> --------------------------
+SQL> -- DISPLAY MODEL SIGNATURE
+SQL> --
+SQL> column attribute_name format a40
+SQL> column attribute_type format a20
+SQL> SELECT attribute_name, attribute_type
+  2    FROM user_mining_model_attributes
+  3   WHERE model_name = 'XGR_SH_MODEL'
+  4  ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                           ATTRIBUTE_TYPE
+---------------------------------------- --------------------
+AFFINITY_CARD                            NUMERICAL
+AGE                                      NUMERICAL
+BOOKKEEPING_APPLICATION                  NUMERICAL
+BULK_PACK_DISKETTES                      NUMERICAL
+COUNTRY_NAME                             CATEGORICAL
+CUST_GENDER                              CATEGORICAL
+CUST_INCOME_LEVEL                        CATEGORICAL
+CUST_MARITAL_STATUS                      CATEGORICAL
+EDUCATION                                CATEGORICAL
+FLAT_PANEL_MONITOR                       NUMERICAL
+HOME_THEATER_PACKAGE                     NUMERICAL
+HOUSEHOLD_SIZE                           CATEGORICAL
+OCCUPATION                               CATEGORICAL
+OS_DOC_SET_KANJI                         NUMERICAL
+PRINTER_SUPPLIES                         NUMERICAL
+YRS_RESIDENCE                            NUMERICAL
+Y_BOX_GAMES                              NUMERICAL
+
+17行が選択されました。
+
+SQL>
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2    WHERE model_name='XGR_SH_MODEL'
+  3    ORDER BY view_name;
+
+VIEW_NAME
+------------------------------
+VIEW_TYPE
+--------------------------------------------------
+DM$VGXGR_SH_MODEL
+Global Name-Value Pairs
+
+DM$VIXGR_SH_MODEL
+XGBoost Attribute Importance
+
+DM$VSXGR_SH_MODEL
+Computed Settings
+
+DM$VWXGR_SH_MODEL
+Model Build Alerts
+
+
+4行が選択されました。
+
+SQL>
+SQL> -- Global statistics
+SQL> column name format a30
+SQL> column numeric_value format 9999990.999
+SQL> column string_value format a20
+SQL> select name, numeric_value, string_value
+  2    from DM$VGXGR_SH_MODEL
+  3    ORDER BY name;
+
+NAME                           NUMERIC_VALUE STRING_VALUE
+------------------------------ ------------- --------------------
+NUM_ROWS                            1500.000
+rmse                                   9.125
+
+2行が選択されました。
+
+SQL>
+SQL> -- attribute importance
+SQL> -- show top 5
+SQL> column ATTRIBUTE_NAME format a25
+SQL> column ATTRIBUTE_VALUE format a15
+SQL> column weight format 9.999
+SQL> select * from(
+  2  select attribute_name, attribute_value, weight
+  3  from DM$VIXGR_SH_MODEL
+  4  order by abs(weight) desc)
+  5  where rownum <= 5;
+
+ATTRIBUTE_NAME            ATTRIBUTE_VALUE WEIGHT
+------------------------- --------------- ------
+YRS_RESIDENCE                              3.099
+HOME_THEATER_PACKAGE                       2.334
+Y_BOX_GAMES                               -1.810
+CUST_MARITAL_STATUS       never married   -1.135
+HOUSEHOLD_SIZE            1                -.699
+
+5行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               TEST THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL> ------------------------------------
+SQL> -- COMPUTE METRICS TO TEST THE MODEL
+SQL> --
+SQL> -- The queries shown below demonstrate the use of new SQL data mining functions
+SQL> -- along with analytic functions to compute the various test metrics.
+SQL> --
+SQL> -- Modelname:             xgr_sh_model
+SQL> -- Target attribute:      age
+SQL>
+SQL> ------------------------------------
+SQL> -- COMPUTE METRICS TO TEST THE MODEL
+SQL> --
+SQL>
+SQL> -- 1. Root Mean Square Error - Sqrt(Mean((x - x')^2))
+SQL> -- 2. Mean Absolute Error - Mean(|(x - x')|)
+SQL> --
+SQL> column rmse format 9999.9
+SQL> column mae format 9999.9
+SQL> SELECT SQRT(AVG((A.pred - B.age) * (A.pred - B.age))) rmse,
+  2         AVG(ABS(a.pred - B.age)) mae
+  3    FROM (SELECT cust_id, prediction(XGR_SH_MODEL using *) pred
+  4            FROM mining_data_test_v) A,
+  5         mining_data_test_v B
+  6    WHERE A.cust_id = B.cust_id;
+
+   RMSE     MAE
+------- -------
+    8.9     6.5
+
+1行が選択されました。
+
+SQL>
+SQL> --- prediction
+SQL> SELECT CUST_ID, age,
+  2         PREDICTION(XGR_SH_MODEL USING *) pred,
+  3         PREDICTION_DETAILS(XGR_SH_MODEL USING *) det
+  4    FROM mining_data_apply_v
+  5   WHERE CUST_ID < 100010
+  6   ORDER BY CUST_ID;
+
+   CUST_ID        AGE       PRED
+---------- ---------- ----------
+DET
+--------------------------------------------------------------------------------
+    100001         51 27.1384144
+<Details algorithm="XGboost">
+<Attribute name="YRS_RESIDENCE" actualValue="3" weight=".726" rank="1"/>
+<Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".182" rank="2"/>
+<Attribute name="CUST_MARITAL_STATUS" actualValue="widowed" weight=".034" rank="
+3"/>
+<Attribute name="CUST_GENDER" actualValue="F" weight=".01" rank="4"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".007" rank="5"/>
+</Details>
+
+    100002         30 28.1290989
+<Details algorithm="XGboost">
+<Attribute name="YRS_RESIDENCE" actualValue="4" weight=".73" rank="1"/>
+<Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".137" rank="2"/>
+<Attribute name="CUST_GENDER" actualValue="F" weight=".008" rank="3"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".005" rank="4"/>
+<Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="0" rank="5"/>
+</Details>
+
+    100003         23 31.6857395
+<Details algorithm="XGboost">
+<Attribute name="YRS_RESIDENCE" actualValue="6" weight=".89" rank="1"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".004" rank="2"/>
+<Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="0" rank="3"/>
+<Attribute name="OCCUPATION" actualValue="Sales" weight="-.003" rank="4"/>
+<Attribute name="CUST_INCOME_LEVEL" actualValue="K: 250,000 - 299,999" weight="-
+.007" rank="5"/>
+</Details>
+
+    100004         39 32.2862434
+<Details algorithm="XGboost">
+<Attribute name="YRS_RESIDENCE" actualValue="5" weight=".806" rank="1"/>
+<Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".121" rank="2"/>
+<Attribute name="CUST_GENDER" actualValue="F" weight=".007" rank="3"/>
+<Attribute name="CUST_MARITAL_STATUS" actualValue="divorced" weight=".005" rank=
+"4"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".004" rank="5"/>
+</Details>
+
+    100005         35    33.1791
+<Details algorithm="XGboost">
+<Attribute name="YRS_RESIDENCE" actualValue="5" weight=".847" rank="1"/>
+<Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".128" rank="2"/>
+<Attribute name="AFFINITY_CARD" actualValue="1" weight=".011" rank="3"/>
+<Attribute name="EDUCATION" actualValue="Assoc-A" weight=".003" rank="4"/>
+<Attribute name="OCCUPATION" actualValue="Crafts" weight=".002" rank="5"/>
+</Details>
+
+    100006          9  18.381134
+<Details algorithm="XGboost">
+<Attribute name="YRS_RESIDENCE" actualValue="2" weight=".62" rank="1"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="9+" weight=".018" rank="2"/>
+<Attribute name="CUST_GENDER" actualValue="F" weight=".013" rank="3"/>
+<Attribute name="CUST_INCOME_LEVEL" actualValue="G: 130,000 - 149,999" weight=".
+007" rank="4"/>
+<Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="0" rank="5"/>
+</Details>
+
+    100007         29 32.5385361
+<Details algorithm="XGboost">
+<Attribute name="YRS_RESIDENCE" actualValue="5" weight=".817" rank="1"/>
+<Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".123" rank="2"/>
+<Attribute name="CUST_GENDER" actualValue="F" weight=".007" rank="3"/>
+<Attribute name="CUST_MARITAL_STATUS" actualValue="divorced" weight=".005" rank=
+"4"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".004" rank="5"/>
+</Details>
+
+    100008         30 31.1398258
+<Details algorithm="XGboost">
+<Attribute name="YRS_RESIDENCE" actualValue="5" weight=".776" rank="1"/>
+<Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".117" rank="2"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".004" rank="3"/>
+<Attribute name="OCCUPATION" actualValue="Crafts" weight=".001" rank="4"/>
+<Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="0" rank="5"/>
+</Details>
+
+    100009         18 22.6928272
+<Details algorithm="XGboost">
+<Attribute name="YRS_RESIDENCE" actualValue="3" weight=".796" rank="1"/>
+<Attribute name="AFFINITY_CARD" actualValue="1" weight=".018" rank="2"/>
+<Attribute name="CUST_INCOME_LEVEL" actualValue="G: 130,000 - 149,999" weight=".
+006" rank="3"/>
+<Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="0" rank="4"/>
+<Attribute name="OCCUPATION" actualValue="Prof." weight="-.003" rank="5"/>
+</Details>
+
+
+9行が選択されました。
+
+SQL> spool oml4sql-classification-svm

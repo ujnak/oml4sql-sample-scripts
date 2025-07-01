@@ -1,0 +1,685 @@
+SQL> @oml4sql-clustering-ocluster
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Clustering - O-Cluster Algorithm - dmocdemo.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET serveroutput ON
+SQL> SET trimspool ON
+SQL> SET pages 10000
+SQL> SET linesize 120
+SQL> SET echo ON
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SAMPLE PROBLEM
+SQL> -----------------------------------------------------------------------
+SQL> -- Segment the demographic data into 10 clusters and study the individual
+SQL> -- clusters. Rank the clusters on probability.
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SET UP AND ANALYZE THE DATA
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- The data for this sample is composed from base tables in SH Schema
+SQL> -- (See Sample Schema Documentation) and presented through these views:
+SQL> -- mining_data_build_parallel_v (build data)
+SQL> -- mining_data_test_v  (test data)
+SQL> -- mining_data_apply_v (apply data)
+SQL> -- (See dmsh.sql for view definitions).
+SQL> --
+SQL>
+SQL> -----------
+SQL> -- ANALYSIS
+SQL> -----------
+SQL> -- For clustering using OC, perform the following on mining data.
+SQL> --
+SQL> -- 1. Use Data Auto Preparation
+SQL> --    O-Cluster uses a special binning procedure that automatically
+SQL> --    determines the number of bins based on data statistics.
+SQL> --
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL> -- Cleanup old model with the same name for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('OC_SH_Clus_sample');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------
+SQL> -- SPECIFY SETTINGS
+SQL> --
+SQL> -- K-Means is the default clustering algorithm. Override the
+SQL> -- default to set the algorithm to O-Cluster.
+SQL> --
+SQL> ---------------------
+SQL> -- CREATE A NEW MODEL
+SQL> --
+SQL> -- Build a new OC model
+SQL> -- TO_CHAR function is used to transform columns to
+SQL> -- categorical attributes since numeric datatypes
+SQL> -- are treated as numeric attributes.
+SQL> DECLARE
+  2    xformlist dbms_data_mining_transform.TRANSFORM_LIST;
+  3    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  4  BEGIN
+  5    dbms_data_mining_transform.SET_TRANSFORM(
+  6      xformlist, 'AFFINITY_CARD', null, 'TO_CHAR(AFFINITY_CARD)', null);
+  7    dbms_data_mining_transform.SET_TRANSFORM(
+  8      xformlist, 'BOOKKEEPING_APPLICATION', null, 'TO_CHAR(BOOKKEEPING_APPLICATION)', null);
+  9    dbms_data_mining_transform.SET_TRANSFORM(
+ 10      xformlist, 'BULK_PACK_DISKETTES', null, 'TO_CHAR(BULK_PACK_DISKETTES)', null);
+ 11    dbms_data_mining_transform.SET_TRANSFORM(
+ 12      xformlist, 'FLAT_PANEL_MONITOR', null, 'TO_CHAR(FLAT_PANEL_MONITOR)', null);
+ 13    dbms_data_mining_transform.SET_TRANSFORM(
+ 14      xformlist, 'HOME_THEATER_PACKAGE', null, 'TO_CHAR(HOME_THEATER_PACKAGE)', null);
+ 15    dbms_data_mining_transform.SET_TRANSFORM(
+ 16      xformlist, 'OS_DOC_SET_KANJI', null, 'TO_CHAR(OS_DOC_SET_KANJI)', null);
+ 17    dbms_data_mining_transform.SET_TRANSFORM(
+ 18      xformlist, 'PRINTER_SUPPLIES', null, 'TO_CHAR(PRINTER_SUPPLIES)', null);
+ 19    dbms_data_mining_transform.SET_TRANSFORM(
+ 20      xformlist, 'Y_BOX_GAMES', null, 'TO_CHAR(Y_BOX_GAMES)', null);
+ 21
+ 22    v_setlst('ALGO_NAME')         := 'ALGO_O_CLUSTER';
+ 23    v_setlst('CLUS_NUM_CLUSTERS') := '10';
+ 24    v_setlst('PREP_AUTO')         := 'ON';
+ 25    -- Other possible settings are:
+ 26    -- v_setlst('OCLT_SENSITIVITY') := '0.5';
+ 27
+ 28    DBMS_DATA_MINING.CREATE_MODEL2(
+ 29      model_name          => 'OC_SH_Clus_sample',
+ 30      mining_function     => 'CLUSTERING',
+ 31      data_query          => 'select * from mining_data_build_parallel_v',
+ 32      case_id_column_name => 'cust_id',
+ 33      set_list            => v_setlst,
+ 34      xform_list          => xformlist);
+ 35  END;
+ 36  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'OC_SH_CLUS_SAMPLE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_O_CLUSTER
+CLUS_NUM_CLUSTERS              10
+OCLT_SENSITIVITY               .5
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+PREP_AUTO                      ON
+
+7行が選択されました。
+
+SQL>
+SQL> --------------------------
+SQL> -- DISPLAY MODEL SIGNATURE
+SQL> --
+SQL> column attribute_name format a40
+SQL> column attribute_type format a20
+SQL> SELECT attribute_name, attribute_type
+  2    FROM user_mining_model_attributes
+  3   WHERE model_name = 'OC_SH_CLUS_SAMPLE'
+  4  ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                           ATTRIBUTE_TYPE
+---------------------------------------- --------------------
+AFFINITY_CARD                            CATEGORICAL
+AGE                                      NUMERICAL
+BOOKKEEPING_APPLICATION                  CATEGORICAL
+BULK_PACK_DISKETTES                      CATEGORICAL
+COUNTRY_NAME                             CATEGORICAL
+CUST_GENDER                              CATEGORICAL
+CUST_INCOME_LEVEL                        CATEGORICAL
+CUST_MARITAL_STATUS                      CATEGORICAL
+EDUCATION                                CATEGORICAL
+FLAT_PANEL_MONITOR                       CATEGORICAL
+HOME_THEATER_PACKAGE                     CATEGORICAL
+HOUSEHOLD_SIZE                           CATEGORICAL
+OCCUPATION                               CATEGORICAL
+OS_DOC_SET_KANJI                         CATEGORICAL
+PRINTER_SUPPLIES                         CATEGORICAL
+YRS_RESIDENCE                            NUMERICAL
+Y_BOX_GAMES                              CATEGORICAL
+
+17行が選択されました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL METADATA
+SQL> --
+SQL> column mining_function format a20
+SQL> column algorithm format a20
+SQL> SELECT mining_function, algorithm
+  2    FROM user_mining_models
+  3   WHERE model_name = 'OC_SH_CLUS_SAMPLE';
+
+MINING_FUNCTION      ALGORITHM
+-------------------- --------------------
+CLUSTERING           O_CLUSTER
+
+1行が選択されました。
+
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY MODEL DETAILS
+SQL> --
+SQL>
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2    WHERE model_name='OC_SH_CLUS_SAMPLE'
+  3    ORDER BY view_name;
+
+VIEW_NAME                      VIEW_TYPE
+------------------------------ --------------------------------------------------
+DM$VAOC_SH_CLUS_SAMPLE         Clustering Attribute Statistics
+DM$VBOC_SH_CLUS_SAMPLE         Automatic Data Preparation Binning
+DM$VDOC_SH_CLUS_SAMPLE         Clustering Description
+DM$VGOC_SH_CLUS_SAMPLE         Global Name-Value Pairs
+DM$VHOC_SH_CLUS_SAMPLE         Clustering Histograms
+DM$VROC_SH_CLUS_SAMPLE         Clustering Rules
+DM$VSOC_SH_CLUS_SAMPLE         Computed Settings
+DM$VWOC_SH_CLUS_SAMPLE         Model Build Alerts
+
+8行が選択されました。
+
+SQL>
+SQL> -- Binning information
+SQL> column attribute_name format a20
+SQL> column attribute_value format a20
+SQL> column lower format 99999.999
+SQL> column upper format 99999.999
+SQL>
+SQL> select attribute_name, bin_id, lower_bin_boundary lower,
+  2    upper_bin_boundary upper, attribute_value
+  3  from DM$VBOC_SH_CLUS_sample WHERE attribute_name IN ('AGE', 'CUST_GENDER');
+
+ATTRIBUTE_NAME           BIN_ID      LOWER      UPPER ATTRIBUTE_VALUE
+-------------------- ---------- ---------- ---------- --------------------
+AGE                           1      6.000     10.867
+AGE                           2     10.867     15.733
+AGE                           3     15.733     20.600
+AGE                           4     20.600     25.467
+AGE                           5     25.467     30.333
+AGE                           6     30.333     35.200
+AGE                           7     35.200     40.067
+AGE                           8     40.067     44.933
+AGE                           9     44.933     49.800
+AGE                          10     49.800     54.667
+AGE                          11     54.667     59.533
+AGE                          12     59.533     64.400
+AGE                          13     64.400     69.267
+AGE                          14     69.267     74.133
+AGE                          15     74.133     79.000
+CUST_GENDER                   1                       F
+CUST_GENDER                   2                       M
+
+17行が選択されました。
+
+SQL>
+SQL> -- Cluster details are best seen in pieces - based on the kind of
+SQL> -- associations and groupings that are needed to be observed.
+SQL> --
+SQL>
+SQL> -- CLUSTERS
+SQL> -- For each cluster_id, provides the number of records in the cluster,
+SQL> -- the parent cluster id, and the level in the hierarchy.
+SQL> -- NOTE: Unlike K-means, O-Cluster does not return a value for the
+SQL> --       dispersion associated with a cluster.
+SQL> --
+SQL> column pname format a20
+SQL> SELECT cluster_id clu_id, record_count rec_cnt, parent, tree_level
+  2    FROM DM$VDOC_SH_CLUS_SAMPLE
+  3   ORDER BY cluster_id;
+
+    CLU_ID    REC_CNT     PARENT TREE_LEVEL
+---------- ---------- ---------- ----------
+         1       1500                     1
+         2        440          1          2
+         3       1060          1          2
+         4        367          3          3
+         5        693          3          3
+         6        595          5          4
+         7         98          5          4
+         8        381          6          5
+         9        214          6          5
+        10        261          2          3
+        11        179          2          3
+        12        226          4          4
+        13        141          4          4
+        14        259          8          6
+        15        122          8          6
+        16        142         12          5
+        17         84         12          5
+        18        134         10          4
+        19        127         10          4
+
+19行が選択されました。
+
+SQL>
+SQL> -- TAXONOMY
+SQL> --
+SQL> SELECT cluster_id, left_child_id, right_child_id
+  2    FROM DM$VDOC_SH_CLUS_SAMPLE
+  3  ORDER BY cluster_id;
+
+CLUSTER_ID LEFT_CHILD_ID RIGHT_CHILD_ID
+---------- ------------- --------------
+         1             2              3
+         2            10             11
+         3             4              5
+         4            12             13
+         5             6              7
+         6             8              9
+         7
+         8            14             15
+         9
+        10            18             19
+        11
+        12            16             17
+        13
+        14
+        15
+        16
+        17
+        18
+        19
+
+19行が選択されました。
+
+SQL>
+SQL> -- SPLIT PREDICATES
+SQL> -- For each cluster, the split predicate indicates the attribute
+SQL> -- and the condition used to assign records to the cluster's children
+SQL> -- during model build. It provides an important piece of information
+SQL> -- on how the population within a cluster can be divided up into
+SQL> -- two smaller clusters.
+SQL> --
+SQL> column attribute_name format a20
+SQL> column attribute_subname format a20
+SQL> column operator format a2
+SQL> column val format a20
+SQL> SELECT cluster_id, attribute_name, attribute_subname,
+  2         operator, splits.val
+  3  FROM DM$VDOC_SH_CLUS_SAMPLE a,
+  4    XMLTABLE( '/Element' passing a.value
+  5      columns
+  6      val varchar2(20) path '.') splits
+  7  where left_child_id is not NULL AND cluster_id < 5
+  8  ORDER BY cluster_id, val;
+
+CLUSTER_ID ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME    OP VAL
+---------- -------------------- -------------------- -- --------------------
+         1 OCCUPATION                                IN ?
+         1 OCCUPATION                                IN Armed-F
+         1 OCCUPATION                                IN Cleric.
+         1 OCCUPATION                                IN Crafts
+         2 OCCUPATION                                IN ?
+         2 OCCUPATION                                IN Armed-F
+         2 OCCUPATION                                IN Cleric.
+         3 OCCUPATION                                IN Exec.
+         3 OCCUPATION                                IN Farming
+         3 OCCUPATION                                IN Handler
+         3 OCCUPATION                                IN House-s
+         3 OCCUPATION                                IN Machine
+         4 OCCUPATION                                IN Exec.
+         4 OCCUPATION                                IN Farming
+         4 OCCUPATION                                IN Handler
+
+15行が選択されました。
+
+SQL>
+SQL> -- CENTROIDS FOR LEAF CLUSTERS
+SQL> -- For cluster_id 1, this output lists all the attributes that
+SQL> -- constitute the centroid, with the mean (for numericals) or
+SQL> -- mode (for categoricals). Unlike K-Means, O-Cluster does not return
+SQL> -- the variance for numeric attributes.
+SQL> --
+SQL> column mean format 9999999.999
+SQL> column variance format 9999999.999
+SQL> column attribute_value format a20
+SQL> column mode_value format a20
+SQL>
+SQL> SELECT cluster_id, attribute_name, attribute_subname, mean, variance,
+  2      mode_value
+  3  FROM DM$VAOC_SH_CLUS_SAMPLE
+  4  WHERE cluster_id = 1
+  5  ORDER BY attribute_name, attribute_subname;
+
+CLUSTER_ID ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME            MEAN     VARIANCE MODE_VALUE
+---------- -------------------- -------------------- ------------ ------------ --------------------
+         1 AFFINITY_CARD                                                       0
+         1 AGE                                             27.892      185.951
+         1 BOOKKEEPING_APPLICAT                                                1
+           ION
+
+         1 BULK_PACK_DISKETTES                                                 1
+         1 COUNTRY_NAME                                                        United States of Ame
+                                                                               rica
+
+         1 CUST_GENDER                                                         M
+         1 CUST_INCOME_LEVEL                                                   J: 190,000 - 249,999
+         1 CUST_MARITAL_STATUS                                                 married
+         1 EDUCATION                                                           HS-grad
+         1 FLAT_PANEL_MONITOR                                                  1
+         1 HOME_THEATER_PACKAGE                                                1
+         1 HOUSEHOLD_SIZE                                                      3
+         1 OCCUPATION                                                          Exec.
+         1 OS_DOC_SET_KANJI                                                    0
+         1 PRINTER_SUPPLIES                                                    1
+         1 YRS_RESIDENCE                                    4.089        3.690
+         1 Y_BOX_GAMES                                                         0
+
+17行が選択されました。
+
+SQL>
+SQL> -- HISTOGRAM FOR ATTRIBUTE OF A LEAF CLUSTER
+SQL> -- For cluster 1, provide the histogram for the AGE attribute.
+SQL> -- Histogram count is represented in frequency, rather than actual count.
+SQL> column count format 9999.99
+SQL> column bin_id format 9999999
+SQL> column label format a20
+SQL>
+SQL> SELECT cluster_id, attribute_name, attribute_subname,
+  2          bin_id, label, count
+  3  FROM DM$VHOC_SH_CLUS_SAMPLE
+  4  WHERE cluster_id = 1 AND attribute_name = 'AGE'
+  5  ORDER BY bin_id;
+
+CLUSTER_ID ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME      BIN_ID LABEL                   COUNT
+---------- -------------------- -------------------- -------- -------------------- --------
+         1 AGE                                              1 [6; 10.8667]           129.00
+         1 AGE                                              2 (10.8667; 15.7333]     176.00
+         1 AGE                                              3 (15.7333; 20.6]        196.00
+         1 AGE                                              4 (20.6; 25.4667]        216.00
+         1 AGE                                              5 (25.4667; 30.3333]     187.00
+         1 AGE                                              6 (30.3333; 35.2]        182.00
+         1 AGE                                              7 (35.2; 40.0667]        152.00
+         1 AGE                                              8 (40.0667; 44.9333]      80.00
+         1 AGE                                              9 (44.9333; 49.8]         68.00
+         1 AGE                                             10 (49.8; 54.6667]         56.00
+         1 AGE                                             11 (54.6667; 59.5333]      26.00
+         1 AGE                                             12 (59.5333; 64.4]         19.00
+         1 AGE                                             13 (64.4; 69.2667]          9.00
+         1 AGE                                             14 (69.2667; 74.1333]       1.00
+         1 AGE                                             15 (74.1333; 79]            3.00
+
+15行が選択されました。
+
+SQL>
+SQL> -- RULES FOR LEAF CLUSTERS
+SQL> -- See dmkmdemo.sql for explanation on output columns.
+SQL> column numeric_value format 999999.999
+SQL> column confidence format 999999.999
+SQL> column rule_confidence format 999999.999
+SQL> column support format 9999
+SQL> column rule_support format 9999
+SQL>
+SQL> SELECT distinct cluster_id, rule_support, rule_confidence
+  2  FROM DM$VROC_SH_CLUS_SAMPLE ORDER BY cluster_id;
+
+CLUSTER_ID RULE_SUPPORT RULE_CONFIDENCE
+---------- ------------ ---------------
+         1         1216            .811
+         2          364            .827
+         3          875            .825
+         4          294            .801
+         5          616            .889
+         6          547            .919
+         7           79            .806
+         8          289            .759
+         9          170            .794
+        10          226            .866
+        11          138            .771
+        12          193            .854
+        13          126            .894
+        14          196            .757
+        15           92            .754
+        16          109            .768
+        17           69            .821
+        18          103            .769
+        19           96            .756
+
+19行が選択されました。
+
+SQL>
+SQL> -- RULE DETAILS FOR LEAF CLUSTERS
+SQL> -- See dmkmdemo.sql for explanation on output columns.
+SQL> SELECT cluster_id, attribute_name, attribute_subname, operator,
+  2          numeric_value, attribute_value, support, confidence
+  3  FROM DM$VROC_SH_CLUS_SAMPLE
+  4  WHERE cluster_id < 3
+  5  ORDER BY cluster_id, attribute_name, attribute_subname, operator,
+  6    numeric_value, attribute_value;
+
+CLUSTER_ID ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME    OP NUMERIC_VALUE ATTRIBUTE_VALUE      SUPPORT  CONFIDENCE
+---------- -------------------- -------------------- -- ------------- -------------------- ------- -----------
+         1 AFFINITY_CARD                             IN               0                       1500        .000
+         1 AFFINITY_CARD                             IN               1                       1500        .000
+         1 AGE                                       <=               54.6667                 1442        .333
+         1 AGE                                       >=               6                       1442        .333
+         1 BOOKKEEPING_APPLICAT                      =                1                       1321        .500
+           ION
+
+         1 BULK_PACK_DISKETTES                       IN               0                       1500        .000
+         1 BULK_PACK_DISKETTES                       IN               1                       1500        .000
+         1 COUNTRY_NAME                              IN               Argentina               1390        .895
+         1 COUNTRY_NAME                              IN               United States of Ame    1390        .895
+                                                                      rica
+
+         1 CUST_GENDER                               IN               F                       1500        .000
+         1 CUST_GENDER                               IN               M                       1500        .000
+         1 CUST_INCOME_LEVEL                         IN               B: 30,000 - 49,999      1423        .167
+         1 CUST_INCOME_LEVEL                         IN               C: 50,000 - 69,999      1423        .167
+         1 CUST_INCOME_LEVEL                         IN               E: 90,000 - 109,999     1423        .167
+         1 CUST_INCOME_LEVEL                         IN               F: 110,000 - 129,999    1423        .167
+         1 CUST_INCOME_LEVEL                         IN               G: 130,000 - 149,999    1423        .167
+         1 CUST_INCOME_LEVEL                         IN               H: 150,000 - 169,999    1423        .167
+         1 CUST_INCOME_LEVEL                         IN               I: 170,000 - 189,999    1423        .167
+         1 CUST_INCOME_LEVEL                         IN               J: 190,000 - 249,999    1423        .167
+         1 CUST_INCOME_LEVEL                         IN               K: 250,000 - 299,999    1423        .167
+         1 CUST_INCOME_LEVEL                         IN               L: 300,000 and above    1423        .167
+         1 CUST_MARITAL_STATUS                       IN               divorced                1384        .400
+         1 CUST_MARITAL_STATUS                       IN               married                 1384        .400
+         1 CUST_MARITAL_STATUS                       IN               never married           1384        .400
+         1 EDUCATION                                 IN               < Bach.                 1216        .688
+         1 EDUCATION                                 IN               Assoc-V                 1216        .688
+         1 EDUCATION                                 IN               Bach.                   1216        .688
+         1 EDUCATION                                 IN               HS-grad                 1216        .688
+         1 EDUCATION                                 IN               Masters                 1216        .688
+         1 FLAT_PANEL_MONITOR                        IN               0                       1500        .000
+         1 FLAT_PANEL_MONITOR                        IN               1                       1500        .000
+         1 HOME_THEATER_PACKAGE                      IN               0                       1500        .000
+         1 HOME_THEATER_PACKAGE                      IN               1                       1500        .000
+         1 HOUSEHOLD_SIZE                            IN               1                       1381        .333
+         1 HOUSEHOLD_SIZE                            IN               2                       1381        .333
+         1 HOUSEHOLD_SIZE                            IN               3                       1381        .333
+         1 HOUSEHOLD_SIZE                            IN               9+                      1381        .333
+         1 OCCUPATION                                IN               ?                       1375        .333
+         1 OCCUPATION                                IN               Cleric.                 1375        .333
+         1 OCCUPATION                                IN               Crafts                  1375        .333
+         1 OCCUPATION                                IN               Exec.                   1375        .333
+         1 OCCUPATION                                IN               Handler                 1375        .333
+         1 OCCUPATION                                IN               Machine                 1375        .333
+         1 OCCUPATION                                IN               Other                   1375        .333
+         1 OCCUPATION                                IN               Prof.                   1375        .333
+         1 OCCUPATION                                IN               Sales                   1375        .333
+         1 OCCUPATION                                IN               Transp.                 1375        .333
+         1 OS_DOC_SET_KANJI                          =                0                       1497        .500
+         1 PRINTER_SUPPLIES                          =                1                       1500        .000
+         1 YRS_RESIDENCE                             <=               7.46667                 1420        .533
+         1 YRS_RESIDENCE                             >=               .933333                 1420        .533
+         1 Y_BOX_GAMES                               IN               0                       1500        .000
+         1 Y_BOX_GAMES                               IN               1                       1500        .000
+         2 AFFINITY_CARD                             =                0                        364        .007
+         2 AGE                                       <=               54.6667                  423        .002
+         2 AGE                                       >=               6                        423        .002
+         2 BOOKKEEPING_APPLICAT                      =                1                        392        .000
+           ION
+
+         2 BULK_PACK_DISKETTES                       IN               0                        440        .000
+         2 BULK_PACK_DISKETTES                       IN               1                        440        .000
+         2 COUNTRY_NAME                              IN               Argentina                404        .001
+         2 COUNTRY_NAME                              IN               United States of Ame     404        .001
+                                                                      rica
+
+         2 CUST_GENDER                               IN               F                        440        .004
+         2 CUST_GENDER                               IN               M                        440        .004
+         2 CUST_INCOME_LEVEL                         IN               B: 30,000 - 49,999       402        .001
+         2 CUST_INCOME_LEVEL                         IN               E: 90,000 - 109,999      402        .001
+         2 CUST_INCOME_LEVEL                         IN               F: 110,000 - 129,999     402        .001
+         2 CUST_INCOME_LEVEL                         IN               G: 130,000 - 149,999     402        .001
+         2 CUST_INCOME_LEVEL                         IN               H: 150,000 - 169,999     402        .001
+         2 CUST_INCOME_LEVEL                         IN               I: 170,000 - 189,999     402        .001
+         2 CUST_INCOME_LEVEL                         IN               J: 190,000 - 249,999     402        .001
+         2 CUST_INCOME_LEVEL                         IN               K: 250,000 - 299,999     402        .001
+         2 CUST_INCOME_LEVEL                         IN               L: 300,000 and above     402        .001
+         2 CUST_MARITAL_STATUS                       IN               divorced                 404        .001
+         2 CUST_MARITAL_STATUS                       IN               married                  404        .001
+         2 CUST_MARITAL_STATUS                       IN               never married            404        .001
+         2 EDUCATION                                 IN               < Bach.                  388        .011
+         2 EDUCATION                                 IN               Assoc-A                  388        .011
+         2 EDUCATION                                 IN               Assoc-V                  388        .011
+         2 EDUCATION                                 IN               Bach.                    388        .011
+         2 EDUCATION                                 IN               HS-grad                  388        .011
+         2 FLAT_PANEL_MONITOR                        IN               0                        440        .000
+         2 FLAT_PANEL_MONITOR                        IN               1                        440        .000
+         2 HOME_THEATER_PACKAGE                      IN               0                        440        .002
+         2 HOME_THEATER_PACKAGE                      IN               1                        440        .002
+         2 HOUSEHOLD_SIZE                            IN               1                        389        .002
+         2 HOUSEHOLD_SIZE                            IN               2                        389        .002
+         2 HOUSEHOLD_SIZE                            IN               3                        389        .002
+         2 HOUSEHOLD_SIZE                            IN               9+                       389        .002
+         2 OCCUPATION                                IN               ?                        418        .103
+         2 OCCUPATION                                IN               Cleric.                  418        .103
+         2 OCCUPATION                                IN               Crafts                   418        .103
+         2 OS_DOC_SET_KANJI                          =                0                        440        .001
+         2 PRINTER_SUPPLIES                          =                1                        440        .000
+         2 YRS_RESIDENCE                             <=               7.46667                  424        .003
+         2 YRS_RESIDENCE                             >=               .933333                  424        .003
+         2 Y_BOX_GAMES                               IN               0                        440        .002
+         2 Y_BOX_GAMES                               IN               1                        440        .002
+
+97行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               TEST THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- There is no specific set of testing parameters for Clustering.
+SQL> -- Examination and analysis of clusters is the main method to prove
+SQL> -- the efficacy of a clustering model.
+SQL> --
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               APPLY THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL> -- For a descriptive mining function like Clustering, "Scoring" involves
+SQL> -- assigning the probability with which a given case belongs to a given
+SQL> -- cluster.
+SQL>
+SQL> -------------------------------------------------
+SQL> -- SCORE NEW DATA USING SQL DATA MINING FUNCTIONS
+SQL> --
+SQL> ------------------
+SQL> -- BUSINESS CASE 1
+SQL> -- List the clusters into which the customers in this
+SQL> -- given dataset have been grouped.
+SQL> --
+SQL> SELECT CLUSTER_ID(oc_sh_clus_sample USING *) AS clus, COUNT(*) AS cnt
+  2    FROM mining_data_apply_v
+  3  GROUP BY CLUSTER_ID(oc_sh_clus_sample USING *)
+  4  ORDER BY cnt DESC;
+
+      CLUS        CNT
+---------- ----------
+        14        273
+         9        225
+        11        172
+        15        143
+        18        135
+        13        128
+        19        128
+        16        118
+         7        115
+        17         63
+
+10行が選択されました。
+
+SQL>
+SQL> -- See dmkmdemo.sql for more examples
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 2
+SQL> -- Assign 5 customers to clusters, and provide explanations for the assingments.
+SQL> --
+SQL> set long 20000
+SQL> set line 200
+SQL> set pagesize 100
+SQL> column cust_id format 999999999
+SQL> SELECT cust_id,
+  2         cluster_details(oc_sh_clus_sample USING *) cluster_details
+  3    FROM mining_data_apply_v
+  4   WHERE cust_id <= 100005
+  5   ORDER BY cust_id;
+
+   CUST_ID CLUSTER_DETAILS
+---------- --------------------------------------------------------------------------------
+    100001 <Details algorithm="O-Cluster Clustering" cluster="14">
+           <Attribute name="CUST_GENDER" actualValue="F" weight=".781" rank="1"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="0" weight=".191" rank="2"/>
+           <Attribute name="CUST_INCOME_LEVEL" actualValue="G: 130,000 - 149,999" weight=".
+           183" rank="3"/>
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight=".164" rank="4"/>
+           <Attribute name="AGE" actualValue="51" operator="between" range="(4.98E+001:5.46
+           7E+001]" weight=".096" rank="5"/>
+           </Details>
+
+    100002 <Details algorithm="O-Cluster Clustering" cluster="7">
+           <Attribute name="CUST_INCOME_LEVEL" actualValue="L: 300,000 and above" weight=".
+           92" rank="1"/>
+           <Attribute name="OCCUPATION" actualValue="Prof." weight=".379" rank="2"/>
+           </Details>
+
+    100003 <Details algorithm="O-Cluster Clustering" cluster="9">
+           <Attribute name="OCCUPATION" actualValue="Sales" weight=".321" rank="1"/>
+           <Attribute name="CUST_INCOME_LEVEL" actualValue="K: 250,000 - 299,999" weight=".
+           297" rank="2"/>
+           </Details>
+
+    100004 <Details algorithm="O-Cluster Clustering" cluster="9">
+           <Attribute name="CUST_INCOME_LEVEL" actualValue="K: 250,000 - 299,999" weight=".
+           443" rank="1"/>
+           <Attribute name="OCCUPATION" actualValue="Sales" weight=".306" rank="2"/>
+           </Details>
+
+    100005 <Details algorithm="O-Cluster Clustering" cluster="11">
+           <Attribute name="OCCUPATION" actualValue="Crafts" weight=".879" rank="1"/>
+           </Details>
+
+
+5行が選択されました。
+
+SQL> spool oml4sql-cross-validation-decision-tree

@@ -1,0 +1,1151 @@
+SQL> @oml4sql-feature-extraction-text-mining-esa
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Feature Extraction - ESA Algorithm for Text Mining
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            Prerequisites
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Install the Wiki ESA model
+SQL> --   https://oss.oracle.com/machine-learning/
+SQL> -- Run the dmsh.sql script
+SQL> --   https://github.com/oracle-samples/oracle-db-examples/blob/main/machine-learning/sql/23ai/dmsh.sql
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            EXAMPLES IN THIS SCRIPT
+SQL> -----------------------------------------------------------------------
+SQL> -- Create an ESA model with CREATE_MODEL PL/SQL procedure, which uses a
+SQL> -- separate settings table as input.
+SQL>
+SQL> -- Walk thorugh 3 ESA use cases with the model
+SQL>
+SQL> -- Create an ESA model with CREATE_MODEL2, which provides settings
+SQL> -- as part of the procedure.
+SQL>
+SQL> -- (23ai Feature) Create an ESA model with dense projections, which is
+SQL> -- similar to a doc2vec approach, by specifying the ESAS_EMBEDDINGS
+SQL> -- parameter as ESAS_EMBEDDINGS_ENABLED.
+SQL>
+SQL> -- (23ai Feature) Use the dense projection scoring results to create a
+SQL> -- clustering model. You can use such projections to improve the quality
+SQL> -- of, e.g., classification and clustering models - a common use case
+SQL> -- for dense projections.
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL>
+SQL> SET ECHO ON
+SQL> SET FEEDBACK 1
+SQL> SET NUMWIDTH 10
+SQL> SET LINESIZE 80
+SQL> SET TRIMSPOOL ON
+SQL> SET TAB OFF
+SQL> SET PAGESIZE 100
+SQL>
+SQL> SET serveroutput ON
+SQL> SET pages 10000
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SET UP AND ANALYZE THE DATA
+SQL> -----------------------------------------------------------------------
+SQL> -- Create a policy for text feature extraction
+SQL> -- The policy will include stemming
+SQL> BEGIN ctx_ddl.drop_policy('dmdemo_esa_policy');
+  2  EXCEPTION when others then null; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> BEGIN ctx_ddl.drop_preference('dmdemo_esa_lexer');
+  2  EXCEPTION when others then null; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> BEGIN
+  2    ctx_ddl.create_preference('dmdemo_esa_lexer', 'BASIC_LEXER');
+  3    ctx_ddl.set_attribute('dmdemo_esa_lexer', 'index_stems', 'ENGLISH');
+  4  --  ctx_ddl.set_attribute('dmdemo_esa_lexer', 'index_themes', 'YES');
+  5  END;
+  6  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> BEGIN
+  2    ctx_ddl.create_policy('dmdemo_esa_policy', lexer=>'dmdemo_esa_lexer');
+  3  END;
+  4  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Cleanup old model and objects for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('ESA_text_sample');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> -- Create a build data view with case ID and text column
+SQL> CREATE OR REPLACE VIEW mining_build_text_parallel AS
+  2    SELECT /*+ parallel (4)*/ min(cust_id) as cust_id, comments
+  3    FROM   mining_build_text
+  4    WHERE  length(comments) >= 70
+  5    GROUP BY comments;
+
+View MINING_BUILD_TEXT_PARALLELは作成されました。
+
+SQL>
+SQL> ---------------------
+SQL> -- CREATE A NEW MODEL
+SQL> -- Note that the transform makes the column 'comments'
+SQL> -- to be treated as unstructured text data
+SQL> --
+SQL> DECLARE
+  2    xformlist dbms_data_mining_transform.TRANSFORM_LIST;
+  3    v_setlst  DBMS_DATA_MINING.SETTING_LIST;
+  4  BEGIN
+  5    dbms_data_mining_transform.SET_TRANSFORM(
+  6      xformlist, 'comments', null, 'comments', 'comments',
+  7       -- 'TEXT(POLICY_NAME:DMDEMO_ESA_POLICY)(TOKEN_TYPE:STEM)');
+  8      'TEXT(POLICY_NAME:DMDEMO_ESA_POLICY)(TOKEN_TYPE:THEME)');
+  9
+ 10    -- specify settings
+ 11    v_setlst('ALGO_NAME')               := 'ALGO_EXPLICIT_SEMANTIC_ANALYS';
+ 12    v_setlst('PREP_AUTO')               := 'ON';
+ 13    v_setlst('ODMS_TEXT_POLICY_NAME')   := 'DMDEMO_ESA_POLICY';
+ 14    -- lower than the default value of 100 due to the small size of data
+ 15    v_setlst('ESAS_MIN_ITEMS')          := '5';
+ 16    -- lower than the default value of 3 due to the small size of data
+ 17    v_setlst('ODMS_TEXT_MIN_DOCUMENTS') := '2';
+ 18    --v_setlst('ODMS_TEXT_MAX_FEATURES') := '10000';
+ 19    --v_setlst('ESAS_TOPN_FEATURES')     := '500';
+ 20    --v_setlst('ESAS_VALUE_THRESHOLD')   := '0.0001';
+ 21
+ 22    DBMS_DATA_MINING.CREATE_MODEL2(
+ 23      model_name          => 'ESA_text_sample',
+ 24      mining_function     => 'FEATURE_EXTRACTION',
+ 25      data_query          => 'SELECT * FROM mining_build_text_parallel',
+ 26      case_id_column_name => 'cust_id',
+ 27      set_list            => v_setlst,
+ 28      xform_list          => xformlist);
+ 29  END;
+ 30  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> column setting_type format a10
+SQL>
+SQL> SELECT setting_name, setting_value, setting_type AS type
+  2  FROM   user_mining_model_settings
+  3  WHERE  model_name = 'ESA_TEXT_SAMPLE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE                  TYPE
+------------------------------ ------------------------------ -------
+ALGO_NAME                      ALGO_EXPLICIT_SEMANTIC_ANALYS  INPUT
+ESAS_MIN_ITEMS                 5                              INPUT
+ESAS_TOPN_FEATURES             1000                           DEFAULT
+ESAS_VALUE_THRESHOLD           .00000001                      DEFAULT
+ODMS_DETAILS                   ODMS_ENABLE                    DEFAULT
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO        DEFAULT
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE          DEFAULT
+ODMS_TEXT_MAX_FEATURES         300000                         DEFAULT
+ODMS_TEXT_MIN_DOCUMENTS        2                              INPUT
+ODMS_TEXT_POLICY_NAME          DMDEMO_ESA_POLICY              INPUT
+PREP_AUTO                      ON                             INPUT
+
+11行が選択されました。
+
+SQL>
+SQL> --------------------------
+SQL> -- DISPLAY MODEL SIGNATURE
+SQL> --
+SQL> column attribute_name format a30
+SQL> column attribute_type format a20
+SQL> column data_type format a20
+SQL>
+SQL> SELECT attribute_name, attribute_type, data_type
+  2  FROM   user_mining_model_attributes
+  3  WHERE  model_name='ESA_TEXT_SAMPLE'
+  4  ORDER BY attribute_name;
+行が選択されていません
+SQL>
+SQL>
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL>
+SQL> SELECT view_name, view_type
+  2  FROM   user_mining_model_views
+  3  WHERE  model_name='ESA_TEXT_SAMPLE'
+  4  ORDER BY view_name;
+
+VIEW_NAME
+------------------------------
+VIEW_TYPE
+--------------------------------------------------
+DM$VAESA_TEXT_SAMPLE
+Explicit Semantic Analysis Matrix
+
+DM$VFESA_TEXT_SAMPLE
+Explicit Semantic Analysis Features
+
+DM$VGESA_TEXT_SAMPLE
+Global Name-Value Pairs
+
+DM$VNESA_TEXT_SAMPLE
+Normalization and Missing Value Handling
+
+DM$VSESA_TEXT_SAMPLE
+Computed Settings
+
+DM$VWESA_TEXT_SAMPLE
+Model Build Alerts
+
+DM$VXESA_TEXT_SAMPLE
+Text Features
+
+
+7行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               APPLY THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL> --
+SQL> -- Unlike other feature extraction functions, ESA does not discover new features.
+SQL> -- It treats the rows of the training data as predefined features.
+SQL> -- Test data are expressed via these pre-defined features as a basis.
+SQL> --
+SQL>
+SQL> -------------------------------------------------
+SQL> -- SCORE NEW DATA USING SQL FUNCTIONS
+SQL> --
+SQL> ------------------
+SQL> -- BUSINESS CASE 1
+SQL> -- List the customer comments (features) most relevant to the input text.
+SQL> -- The comments are sorted according to their relevancy.
+SQL> --
+SQL> column value format 9.99999
+SQL> column comments format a200
+SQL>
+SQL> SELECT cust_id,
+  2         1-feature_compare(ESA_TEXT_SAMPLE
+  3                           using 'card discount' comments AND
+  4                           using comments) similarity,
+  5         comments
+  6  FROM   mining_build_text_parallel
+  7  ORDER BY similarity desc;
+
+   CUST_ID SIMILARITY
+---------- ----------
+COMMENTS
+--------------------------------------------------------------------------------
+    101559
+I don't like your new Affinity Card program.  Too little, too late.  I am very h
+appy with your competitor's stores.
+
+    101662
+My sister told me about your store and I was impressed. Now I use it for all my
+shopping here.
+
+    101547
+I used to shop at your store, but have stopped now. I tried to return some elect
+ronic items and your store manager was a pain to deal with.
+
+    101502
+Affinity card is great. I think it is a hassle to have to remember to bring it i
+n every time though.
+
+    101505
+Why didn't you start a program like this before? Everyone else has been offering
+ discounts like this for years.
+
+    101551
+Can I use my Affinity card to buy bulk purchases and ship them to my mother in A
+rizona?
+
+    101597
+I love the discounts. But I mostly end upbuying  things I do not need.
+
+    101613
+I just purchased a computer from your store last month.  Why didn't you offer th
+is discount then?
+
+    101584
+Dear store manager, please do not send me any more Affinity cards. I do not shop
+ at your store very often and I feel that your new card imposes an invasion on m
+y privacy.
+
+    101525
+My brother uses the affinity card a lot. I think the competitor has better price
+s without it.
+
+    101684
+How much would it cost to upgrade my computer to the latest model you advertised
+ this week?
+
+    101512
+The new affinity card is great. Thank you. I do  have to say that it is a hassle
+ to remember to bring it  with me when I shop as I only shop at your store  for
+sale items. Could you keep my record in your computer?
+
+    101550
+The more times that I shop at your store, the more times I am impressed.  Don't
+change anything
+
+    101523
+A great program but I have to complain just a bit. Why do you need to know how m
+any children I have, where I shop, etc.?  Give us a discount for shopping at you
+r store, but don't ask too many personal questions.
+
+    101501
+Shopping at your store is a hassle. I rarely shop there and usually forget to br
+ing your new loyalty card and hence never get the items at the sale price.  Can
+a store manager look up my account on-line?
+
+    101529
+Thanks a lot for my new affinity card. I love the discounts and have since start
+ed shopping at your store for everything.
+
+    101516
+Don't send me any more promotions.  I get too much lousy junk mail already
+
+    101515
+I purchased the new mouse pads and love them. I also purchased one for my sister
+ and one for my brother.
+
+    101506
+Forget it. I'm not giving you all my personal information.  I wish you'd give up
+ and respect a customer's privacy.
+
+    101538
+Can I apply my discount to a purchase I made last month? Excellent program.  Tha
+nks
+
+    101503
+I purchased a new computer recently, but the manuals weren't included.  Could yo
+u ship them to me directly?
+
+    101513
+Thanks but even with your discounts, your products are too expensive. Sorry.
+
+    101509
+Affinity card makese sense only for bulk purchases. For all others, driving so f
+ar is not worth the discount. Either offer free shipping or build a store close
+by.
+
+    101544
+I love shopping with my Affinity Card! Thank you. I used it to purchase a new fl
+at panel monitor. It is amazing. Thank you again!
+
+    101548
+I am unhappy with the service at your store. Do not consider me a loyal customer
+ just because I use your Affinity Card
+
+    101522
+If I forget my affinity card, can I still shop here and get the discount?
+
+    101553
+Affinity card is a great idea. But your store is still too expensive. I am tired
+ of your lousy junk mail.
+
+    101528
+A lousy idea.  I threw your card away. If you want to know what I buy, I'll shop
+ elsewhere.
+
+    101527
+I purchased a new computer from your store recently and then received the new di
+scount membership card.  Could I speak with a store manager about getting discou
+nts for my past purchases?
+
+    101534
+I am not going to waste my time filling up this three page form. Lousy idea.
+
+    101542
+I wanted to write you to let you know that I've purchased several items at your
+store recently and have been very satisfied with my purchases. Keep up  the good
+ work.
+
+    101694
+Thank you! But I am very unhappy with all the junk mail you keep sending.
+
+    101664
+Even with the new 10% card, your prices are still too expensive. I am tired of y
+our gimmicks.
+
+    101549
+Does this discount work if you live in Australia?I've moved and I would like to
+purchase a few items as gifts but want the discount.  Have you ever considered o
+ffering free shipping?
+
+    101510
+Could you send an Affinity Card to my mother in France?  Let me know and I'll se
+nd you here address.
+
+    101641
+This Affinity Card is great.I am delighted that you sent me one as I've only sho
+pped at your store once. I was so pleased to be included in your program that I
+immediately purchased a new flat panel monitor.
+
+    101560
+I run a small convenience store. Any chance that I would be eligible for larger
+discounts if I purchase a large quantity of items (bulk purchase)?
+
+    101507
+It is a good way to attract new shoppers. After shopping at your store for more
+than a month, I am ready to move on though. Not enough variety
+
+
+38行が選択されました。
+
+SQL>
+SQL> -- Another similar example
+SQL> SELECT cust_id,
+  2         1-feature_compare(ESA_TEXT_SAMPLE
+  3                           using 'computer manual' comments AND
+  4                           using comments) similarity,
+  5         comments
+  6  FROM mining_build_text_parallel
+  7  ORDER BY similarity DESC
+SQL> -- Another example with longer text
+SQL> -- The input is the following comment
+SQL>
+SQL> SELECT comments
+  2  FROM   mining_test_text_parallel
+  3  WHERE  cust_id = 103030;
+
+COMMENTS
+--------------------------------------------------------------------------------
+Great program.  Love the discount. Signed happy customer.
+
+1行が選択されました。
+
+SQL>
+SQL> -- the most relevant comments from build data
+SQL> SELECT s.value, m.comments
+  2  FROM   (SELECT feature_set(ESA_TEXT_SAMPLE, 5 using *) fset
+  3          FROM (SELECT comments FROM mining_test_text_parallel
+  4                WHERE cust_id = 103030)) t,
+  5         TABLE(t.fset) s,
+  6         mining_build_text_parallel m
+  7  WHERE  s.feature_id = m.cust_id
+  8  ORDER BY s.value desc;
+行が選択されていません
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 2
+SQL> -- List the attributes that represent customer comments (cust_id=101613).
+SQL> -- The attributes are sorted according to their coefficients.
+SQL> --
+SQL> column coefficient format 9.99999
+SQL> column attribute_subname format a30
+SQL>
+SQL> -- comments for cust_id=101613
+SQL> SELECT comments
+  2  FROM   mining_build_text_parallel
+  3  WHERE  cust_id = 101613;
+
+COMMENTS
+--------------------------------------------------------------------------------
+I just purchased a computer from your store last month.  Why didn't you offer th
+is discount then?
+
+
+1行が選択されました。
+
+SQL>
+SQL> -- attributes representing the comments in the model
+SQL> SELECT attribute_subname, coefficient
+  2  FROM   dm$vaESA_TEXT_SAMPLE
+  3  WHERE  feature_id = 101613
+  4  ORDER BY coefficient desc;
+行が選択されていません
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 3
+SQL> -- Compare customer comments using the model
+SQL> --
+SQL> -- create a test data view with case ID and text column
+SQL> CREATE OR REPLACE VIEW mining_test_text_only AS
+  2  SELECT cust_id, comments
+  3  FROM   mining_test_text_parallel
+  4  WHERE  cust_id < 103005;
+
+View MINING_TEST_TEXT_ONLYは作成されました。
+
+SQL>
+SQL> column comments format a50
+SQL> -- test data
+SQL> SELECT cust_id, comments
+  2  FROM mining_test_text_only
+  3  ORDER BY cust_id;
+
+   CUST_ID COMMENTS
+---------- --------------------------------------------------
+    103001 Shopping at your store is a hassle. I rarely shop
+           there and usually forget to bring your new loyalty
+            card and hence never get the items at the sale pr
+           ice.  Can a store manager look up my account on-li
+           ne?
+
+    103002 I am unhappy with the service at your store. Do no
+           t consider me a loyal customer just because I use
+           your Affinity Card
+
+    103003 How much would it cost to upgrade my computer to t
+           he latest model you advertised this week?
+
+    103004 I purchased a new computer from your store recentl
+           y and then received the new discount membership ca
+           rd.  Could I speak with a store manager about gett
+           ing discounts for my past purchases?
+
+
+4行が選択されました。
+
+SQL>
+SQL> -- test data relatedness based on the model
+SQL> -- smaller values correspond to more related data rows
+SQL>
+SQL> column comp format 9.99999
+SQL>
+SQL> SELECT a.cust_id id1, b.cust_id id2,
+  2         feature_compare(ESA_TEXT_SAMPLE using a.comments and using b.comments) comp
+  3  FROM  mining_test_text_only a, mining_test_text_only b
+  4  WHERE a.cust_id < b.cust_id
+  5  ORDER BY comp;
+
+       ID1        ID2 COMP
+---------- ---------- ----
+    103003     103004
+    103002     103004
+    103001     103002
+    103002     103003
+    103001     103003
+    103001     103004
+
+6行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                         CREATE MODEL WITH CREATE_MODEL2
+SQL> -----------------------------------------------------------------------
+SQL> -- This improves on the CREATE_MODEL procedure by allowing you to use a query
+SQL> -- rather than a database table as input. You also no longer need to declare
+SQL> -- and populate a settings table.
+SQL> -- Other than using CREATE_MODEL2, this model is identical to the first one.
+SQL>
+SQL> -- Cleanup old model and objects for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('ESA_text_sample2');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> DECLARE
+  2    xformlist dbms_data_mining_transform.TRANSFORM_LIST;
+  3    v_setlst  DBMS_DATA_MINING.SETTING_LIST;
+  4
+  5  BEGIN
+  6    v_setlst('PREP_AUTO')               := 'ON';
+  7    v_setlst('ALGO_NAME')               := 'ALGO_EXPLICIT_SEMANTIC_ANALYS';
+  8    v_setlst('ODMS_TEXT_POLICY_NAME')   := 'DMDEMO_ESA_POLICY';
+  9    v_setlst('ESAS_MIN_ITEMS')          := '5';
+ 10    v_setlst('ODMS_TEXT_MIN_DOCUMENTS') := '2';
+ 11
+ 12    dbms_data_mining_transform.SET_TRANSFORM(
+ 13      xformlist, 'comments', null, 'comments', 'comments',
+ 14        'TEXT(POLICY_NAME:DMDEMO_ESA_POLICY)(TOKEN_TYPE:STEM)');
+ 15
+ 16    DBMS_DATA_MINING.CREATE_MODEL2(
+ 17      model_name          => 'ESA_text_sample2',
+ 18      mining_function     => 'FEATURE_EXTRACTION',
+ 19      data_query          => 'SELECT * FROM mining_build_text_parallel',
+ 20      case_id_column_name => 'cust_id',
+ 21      set_list            => v_setlst,
+ 22      xform_list          => xformlist);
+ 23  END;
+ 24  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- Score using the model
+SQL>
+SQL> column value format 9.99999
+SQL> column comments format a200
+SQL>
+SQL> SELECT s.feature_id, s.value
+  2  FROM
+  3    (SELECT cust_id, comments, feature_set(ESA_TEXT_SAMPLE2, 5 using comments) fset
+  4     FROM   mining_build_text_parallel) t,
+  5            TABLE(t.fset) s
+  6  ORDER BY s.value desc;
+
+FEATURE_ID VALUE
+---------- -----
+####       .95786
+####       .95780
+####       .95606
+####       .94951
+####       .94920
+####       .94149
+####       .93827
+####       .93520
+####       .93473
+####       .93176
+####       .93147
+####       .92382
+####       .91866
+####       .91652
+####       .91120
+####       .90781
+####       .90518
+####       .90285
+####       .90009
+####       .89591
+####       .89493
+####       .89114
+####       .88631
+####       .88614
+####       .87728
+####       .87647
+####       .87288
+####       .86964
+####       .86737
+####       .86588
+####       .85479
+####       .85114
+####       .84994
+####       .83741
+####       .83431
+####       .83315
+####       .68255
+####       .60148
+####       .55046
+####       .54178
+####       .41872
+####       .41835
+####       .40964
+####       .36622
+####       .36126
+####       .35971
+####       .34941
+####       .34099
+####       .33513
+####       .33076
+####       .33049
+####       .33025
+####       .32309
+####       .32238
+####       .31228
+####       .31002
+####       .30904
+####       .30605
+####       .30504
+####       .30465
+####       .29431
+####       .27939
+####       .27526
+####       .27344
+####       .27274
+####       .27232
+####       .27221
+####       .25664
+####       .24807
+####       .24605
+####       .24537
+####       .24236
+####       .23712
+####       .23232
+####       .23145
+####       .22992
+####       .22635
+####       .22211
+####       .21722
+####       .21711
+####       .21675
+####       .21352
+####       .21226
+####       .21205
+####       .20668
+####       .20407
+####       .20279
+####       .20248
+####       .19803
+####       .19608
+####       .19472
+####       .19112
+####       .18542
+####       .18424
+####       .18350
+####       .18250
+####       .17926
+####       .17765
+####       .17749
+####       .17539
+####       .17439
+####       .17379
+####       .17300
+####       .16983
+####       .16527
+####       .16513
+####       .16331
+####       .16319
+####       .16055
+####       .15750
+####       .15735
+####       .15447
+####       .15388
+####       .15386
+####       .15235
+####       .15047
+####       .14979
+####       .14948
+####       .14842
+####       .14646
+####       .14481
+####       .14475
+####       .14405
+####       .14374
+####       .14356
+####       .14314
+####       .14187
+####       .14044
+####       .14021
+####       .13960
+####       .13849
+####       .13725
+####       .13632
+####       .13413
+####       .13330
+####       .13204
+####       .13143
+####       .13107
+####       .13102
+####       .12786
+####       .12576
+####       .12415
+####       .12255
+####       .12000
+####       .11989
+####       .11727
+####       .11688
+####       .11682
+####       .11680
+####       .11652
+####       .11646
+####       .11644
+####       .11619
+####       .11584
+####       .11424
+####       .11384
+####       .11370
+####       .11333
+####       .11260
+####       .11218
+####       .11040
+####       .10851
+####       .10823
+####       .10767
+####       .10671
+####       .10605
+####       .10383
+####       .10377
+####       .10356
+####       .10206
+####       .09763
+####       .09665
+####       .09510
+####       .09361
+####       .09209
+####       .08672
+####       .08469
+####       .08424
+####       .08384
+####       .08365
+####       .08289
+####       .08229
+####       .07959
+####       .07888
+####       .07583
+####       .07522
+####       .07463
+####       .07318
+####       .06993
+####       .06659
+
+190行が選択されました。
+
+SQL>
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                    CREATE MODEL WITH DENSE PROJECTIONS
+SQL> -----------------------------------------------------------------------
+SQL> -- Create another model with CREATE_MODEL2, this time specifying the
+SQL> -- ESAS_EMBEDDINGS parameter and setting it to ESAS_EMBEDDINGS_ENABLE.
+SQL> -- Doing so means that scoring this model will produce dense projections with
+SQL> -- embeddings, similar to a doc2vec approach.
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('ESA_text_sample_dense');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> DECLARE
+  2    xformlist dbms_data_mining_transform.TRANSFORM_LIST;
+  3    v_setlst  DBMS_DATA_MINING.SETTING_LIST;
+  4
+  5  BEGIN
+  6    v_setlst('PREP_AUTO')               := 'ON';
+  7    v_setlst('ALGO_NAME')               := 'ALGO_EXPLICIT_SEMANTIC_ANALYS';
+  8    v_setlst('ODMS_TEXT_POLICY_NAME')   := 'DMDEMO_ESA_POLICY';
+  9    v_setlst('ESAS_MIN_ITEMS')          := '5';
+ 10    v_setlst('ODMS_TEXT_MIN_DOCUMENTS') := '2';
+ 11    v_setlst('ESAS_EMBEDDINGS')         := 'ESAS_EMBEDDINGS_ENABLE';
+ 12    v_setlst('ESAS_EMBEDDING_SIZE')     := '1024';
+ 13
+ 14    dbms_data_mining_transform.SET_TRANSFORM(
+ 15      xformlist, 'comments', null, 'comments', 'comments',
+ 16        'TEXT(POLICY_NAME:DMDEMO_ESA_POLICY)(TOKEN_TYPE:STEM)');
+ 17
+ 18    DBMS_DATA_MINING.CREATE_MODEL2(
+ 19      model_name          => 'ESA_text_sample_dense',
+ 20      mining_function     => 'FEATURE_EXTRACTION',
+ 21      data_query          => 'SELECT * FROM mining_build_text_parallel',
+ 22      case_id_column_name => 'cust_id',
+ 23      set_list            => v_setlst,
+ 24      xform_list          => xformlist);
+ 25  END;
+ 26  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> -- Note the ESAS_EMBEDDINGS and ESAS_EMBEDDINGS_SIZE settings.
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> column setting_type format a10
+SQL>
+SQL> SELECT setting_name, setting_value, setting_type AS type
+  2  FROM   user_mining_model_settings
+  3  WHERE  model_name = 'ESA_TEXT_SAMPLE_DENSE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE                  TYPE
+------------------------------ ------------------------------ -------
+ALGO_NAME                      ALGO_EXPLICIT_SEMANTIC_ANALYS  INPUT
+ESAS_EMBEDDINGS                ESAS_EMBEDDINGS_ENABLE         INPUT
+ESAS_EMBEDDING_SIZE            1024                           INPUT
+ESAS_MIN_ITEMS                 5                              INPUT
+ESAS_TOPN_FEATURES             1000                           DEFAULT
+ESAS_VALUE_THRESHOLD           .00000001                      DEFAULT
+ODMS_DETAILS                   ODMS_ENABLE                    DEFAULT
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO        DEFAULT
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE          DEFAULT
+ODMS_TEXT_MAX_FEATURES         300000                         DEFAULT
+ODMS_TEXT_MIN_DOCUMENTS        2                              INPUT
+ODMS_TEXT_POLICY_NAME          DMDEMO_ESA_POLICY              INPUT
+PREP_AUTO                      ON                             INPUT
+
+13行が選択されました。
+
+SQL>
+SQL> --------------------------
+SQL> -- DISPLAY MODEL SIGNATURE
+SQL> --
+SQL> column attribute_name format a30
+SQL> column attribute_type format a20
+SQL> column data_type format a20
+SQL>
+SQL> SELECT attribute_name, attribute_type, data_type
+  2  FROM   user_mining_model_attributes
+  3  WHERE  model_name='ESA_TEXT_SAMPLE_DENSE'
+  4  ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                 ATTRIBUTE_TYPE       DATA_TYPE
+------------------------------ -------------------- --------------------
+COMMENTS                       TEXT                 VARCHAR2
+ORA$VECTOR                     VECTOR               VECTOR
+
+2行が選択されました。
+
+SQL>
+SQL> --------------------------
+SQL> -- Get a list of model views
+SQL> --
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL>
+SQL> SELECT view_name, view_type
+  2  FROM   user_mining_model_views
+  3  WHERE  model_name='ESA_TEXT_SAMPLE_DENSE'
+  4  ORDER BY view_name;
+
+VIEW_NAME
+------------------------------
+VIEW_TYPE
+--------------------------------------------------
+DM$VGESA_TEXT_SAMPLE_DENSE
+Global Name-Value Pairs
+
+DM$VNESA_TEXT_SAMPLE_DENSE
+Normalization and Missing Value Handling
+
+DM$VSESA_TEXT_SAMPLE_DENSE
+Computed Settings
+
+DM$VWESA_TEXT_SAMPLE_DENSE
+Model Build Alerts
+
+DM$VXESA_TEXT_SAMPLE_DENSE
+Text Features
+
+
+5行が選択されました。
+
+SQL>
+SQL> -------------------------
+SQL> -- STORE SCORING RESULTS IN TABLE
+SQL> --
+SQL>
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE esa_dense_results';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> column value format 9.99999
+SQL> column comments format a200
+SQL>
+SQL> CREATE TABLE esa_dense_results AS
+  2  SELECT cust_id, s.feature_id, s.value, comments
+  3  FROM   (SELECT cust_id, comments,
+  4                 feature_set(ESA_TEXT_SAMPLE_DENSE using comments) fset
+  5          FROM   mining_build_text_parallel) t,
+  6         TABLE(t.fset) s;
+
+Table ESA_DENSE_RESULTSは作成されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --              PASS PROJECTIONS INTO CLUSTERING MODEL
+SQL> -----------------------------------------------------------------------
+SQL> -- A common use case for the dense projections created by the scoring results
+SQL> -- of the model above is to use them to train other models, such as
+SQL> -- classification or clustering. The expectation is that the addition of these
+SQL> -- results may improve model accuracy.
+SQL> -- Here we create a clustering model using the dense projections.
+SQL>
+SQL> -------------------------
+SQL> -- Prepare ESA dense results to create clustering model
+SQL> --
+SQL>
+SQL> CREATE OR REPLACE VIEW esa_dense_results_v AS
+  2    SELECT cust_id,
+  3           comments,
+  4           CAST(COLLECT(dm_nested_numerical(feature_id, value))
+  5              AS dm_nested_numericals) AS nest
+  6    FROM esa_dense_results
+  7    GROUP BY cust_id, comments;
+
+View ESA_DENSE_RESULTS_Vは作成されました。
+
+SQL>
+SQL> ---------------------------
+SQL> -- CREATE CLUSTERING MODEL
+SQL> -- Use the table augmented with the dense projection to create a
+SQL> -- clustering model
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('CLUSTERING_EXAMPLE');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> DECLARE
+  2    xformlist DBMS_DATA_MINING_TRANSFORM.TRANSFORM_LIST;
+  3    v_setlst  DBMS_DATA_MINING.SETTING_LIST;
+  4
+  5  BEGIN
+  6    v_setlst('PREP_AUTO')    := 'ON';
+  7    v_setlst('ALGO_NAME')    := 'ALGO_KMEANS';
+  8    v_setlst('KMNS_DETAILS') := 'KMNS_DETAILS_HIERARCHY';
+  9
+ 10    DBMS_DATA_MINING.CREATE_MODEL2(
+ 11      model_name          => 'CLUSTERING_EXAMPLE',
+ 12      mining_function     => 'CLUSTERING',
+ 13      data_query          => 'SELECT * FROM esa_dense_results_v',
+ 14      case_id_column_name => 'cust_id',
+ 15      set_list =>v_setlst);
+ 16  END;
+ 17  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL>
+SQL> SELECT setting_name, setting_value
+  2  FROM   user_mining_model_settings
+  3  WHERE  model_name = 'CLUSTERING_EXAMPLE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_KMEANS
+CLUS_NUM_CLUSTERS              10
+KMNS_CONV_TOLERANCE            .001
+KMNS_DETAILS                   KMNS_DETAILS_HIERARCHY
+KMNS_DISTANCE                  KMNS_EUCLIDEAN
+KMNS_ITERATIONS                20
+KMNS_MIN_PCT_ATTR_SUPPORT      .1
+KMNS_NUM_BINS                  11
+KMNS_RANDOM_SEED               0
+KMNS_SPLIT_CRITERION           KMNS_VARIANCE
+KMNS_WINSORIZE                 KMNS_WINSORIZE_DISABLE
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+PREP_AUTO                      ON
+
+15行が選択されました。
+
+SQL>
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL>
+SQL> SELECT view_name, view_type
+  2  FROM   user_mining_model_views
+  3  WHERE  model_name='CLUSTERING_EXAMPLE'
+  4  ORDER BY view_name;
+
+VIEW_NAME
+------------------------------
+VIEW_TYPE
+--------------------------------------------------
+DM$VACLUSTERING_EXAMPLE
+Clustering Attribute Statistics
+
+DM$VCCLUSTERING_EXAMPLE
+k-Means Scoring Centroids
+
+DM$VDCLUSTERING_EXAMPLE
+Clustering Description
+
+DM$VGCLUSTERING_EXAMPLE
+Global Name-Value Pairs
+
+DM$VHCLUSTERING_EXAMPLE
+Clustering Histograms
+
+DM$VNCLUSTERING_EXAMPLE
+Normalization and Missing Value Handling
+
+DM$VRCLUSTERING_EXAMPLE
+Clustering Rules
+
+DM$VSCLUSTERING_EXAMPLE
+Computed Settings
+
+DM$VWCLUSTERING_EXAMPLE
+Model Build Alerts
+
+
+9行が選択されました。
+
+SQL>
+SQL> -- CLUSTERS
+SQL> -- For each cluster_id, provide the number of records in the cluster,
+SQL> -- the parent cluster id, the level in the hierarchy, and dispersion,
+SQL> -- which is a measure of individual cluster quality, and computationally,
+SQL> -- the sum of square errors.
+SQL> --
+SQL> SELECT cluster_id CLU_ID, RECORD_COUNT REC_CNT, parent, TREE_LEVEL,
+  2         ROUND(TO_NUMBER(dispersion),3) dispersion
+  3  FROM   DM$VDCLUSTERING_EXAMPLE
+  4  ORDER BY CLUSTER_ID;
+
+    CLU_ID    REC_CNT     PARENT TREE_LEVEL DISPERSION
+---------- ---------- ---------- ---------- ----------
+         1         38                     1      2.527
+         2         37          1          2      2.595
+         3          1          1          2          0
+         4         36          2          3      2.667
+         5          1          2          3          0
+         6         35          4          4      2.743
+         7          1          4          4          0
+         8         33          6          5      2.816
+         9          2          6          5      1.535
+        10         31          8          6       2.89
+        11          2          8          6       1.67
+        12         29         10          7      3.008
+        13          2         10          7      1.179
+        14          8         12          8      2.711
+        15         21         12          8      3.122
+        16          5         15          9      3.231
+        17         16         15          9      3.087
+        18          8         17         10       2.72
+        19          8         17         10      3.455
+
+19行が選択されました。
+
+SQL>
+SQL> SELECT CLUSTER_ID CLU_ID, RECORD_COUNT REC_CNT, ROUND(TO_NUMBER(dispersion),3) DISPERSION
+  2  FROM   DM$VDCLUSTERING_EXAMPLE
+  3  WHERE  LEFT_CHILD_ID IS NULL AND RIGHT_CHILD_ID IS NULL
+  4  ORDER BY CLUSTER_ID;
+
+    CLU_ID    REC_CNT DISPERSION
+---------- ---------- ----------
+         3          1          0
+         5          1          0
+         7          1          0
+         9          2      1.535
+        11          2       1.67
+        13          2      1.179
+        14          8      2.711
+        16          5      3.231
+        18          8       2.72
+        19          8      3.455
+
+10行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --   End of script
+SQL> -----------------------------------------------------------------------
+SQL> spool oml4sql-feature-extraction-text-mining-nmf

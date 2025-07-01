@@ -1,0 +1,247 @@
+SQL> @oml4sql-time-series-mset
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Time Series - Multivariate State Estimation Technique Algorithm - dmmsetdemo.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET ECHO ON
+SQL> SET FEEDBACK 1
+SQL> SET NUMWIDTH 10
+SQL> SET LINESIZE 80
+SQL> SET TRIMSPOOL ON
+SQL> SET TAB OFF
+SQL> SET PAGESIZE 100
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --  MSET-SPRT algorithm for multi-variate time-series anomaly detection
+SQL> -----------------------------------------------------------------------
+SQL> --                      SAMPLE PROBLEM
+SQL> --  Given the two-variate time series data, the daily sold
+SQL> --  quantity and amount from January 1, 1998 to December 31, 1999,
+SQL> --  predict the anomalies of sold data from January 1, 2000 to
+SQL> --  December 31 2001.
+SQL> -----------------------------------------------------------------------
+SQL> --                     (1)   SET UP THE DATA
+SQL> --  The data for this sample is from SH Schema, specifically, subtables
+SQL> --  of sh.sales.
+SQL> --  Two views are created based on sh.sales:
+SQL> --  mset_build_sh_data (build data)
+SQL> --  mset_test_sh_data  (test data)
+SQL> -----------------------------------------------------------------------
+SQL> -- Cleanup old model with the same name
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('MSET_SH_MODEL');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- Create training multivariate time series data from year 1998 and 1999
+SQL> CREATE OR replace VIEW mset_build_sh_data
+  2    AS SELECT time_id, sum(quantity_sold) quantity,
+  3    sum(amount_sold) amount from (SELECT * FROM sh.sales WHERE
+  4    time_id <= '30-DEC-99') GROUP BY time_id ORDER BY time_id;
+
+View MSET_BUILD_SH_DATAは作成されました。
+
+SQL>
+SQL> -- Create testing multivariate time series data from year 2000-2001
+SQL> CREATE OR replace VIEW mset_test_sh_data
+  2    AS SELECT time_id, sum(quantity_sold) quantity, sum(amount_sold)
+  3      amount FROM (SELECT * FROM sh.sales WHERE time_id > '30-DEC-99')
+  4      GROUP BY time_id ORDER BY time_id;
+
+View MSET_TEST_SH_DATAは作成されました。
+
+SQL>
+SQL> -----------------------------------------------------------------
+SQL> --                (2)  Build the MSET model
+SQL> -----------------------------------------------------------------
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- Select MSET-SPRT as the algorithm
+  5    v_setlst('ALGO_NAME') := 'ALGO_MSET_SPRT';
+  6    -- Turn on automatic data preparation
+  7    v_setlst('PREP_AUTO') := 'ON';
+  8    -- Set memory vector
+  9    v_setlst('MSET_MEMORY_VECTORS') := '100';
+ 10    -- Set alpha
+ 11    v_setlst('MSET_ALPHA_PROB') := '0.1';
+ 12    -- Set alert count
+ 13    v_setlst('MSET_ALERT_COUNT') := '3';
+ 14    -- Set alert window
+ 15    v_setlst('MSET_ALERT_WINDOW') := '5';
+ 16    -- Examples of other possible settings are:
+ 17    -- v_setlst('MSET_BETA_PROB')     := '0.1';
+ 18    -- v_setlst('MSET_ADB_HEIGHT')    := '0.01';
+ 19    -- v_setlst('MSET_STD_TOLERANCE') := '3';
+ 20    -- v_setlst('MSET_HELDASIDE')     := '500';
+ 21
+ 22    dbms_data_mining.create_model2(
+ 23      model_name          => 'MSET_SH_MODEL',
+ 24      mining_function     => 'CLASSIFICATION',
+ 25      data_query          => 'select * from mset_build_sh_data',
+ 26      case_id_column_name => 'time_id',
+ 27      target_column_name  => '',
+ 28      set_list            => v_setlst);
+ 29  END;
+ 30  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'MSET_SH_MODEL'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_MSET_SPRT
+MSET_ADB_HEIGHT                .05
+MSET_ALERT_COUNT               3
+MSET_ALERT_WINDOW              5
+MSET_ALPHA_PROB                0.1
+MSET_BETA_PROB                 .1
+MSET_HELDASIDE                 10000
+MSET_MEMORY_VECTORS            100
+MSET_STD_TOLERANCE             3
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_RANDOM_SEED               0
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+PREP_AUTO                      ON
+
+14行が選択されました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SIGNITURE
+SQL> column attribute_name format a40
+SQL> column attribute_type format a20
+SQL> SELECT attribute_name, attribute_type
+  2  FROM   user_mining_model_attributes
+  3    WHERE  model_name = 'MSET_SH_MODEL'
+  4    ORDER BY attribute_name;
+行が選択されていません
+SQL>
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2    WHERE model_name='MSET_SH_MODEL'
+  3    ORDER BY view_name;
+
+VIEW_NAME
+------------------------------
+VIEW_TYPE
+--------------------------------------------------
+DM$VCMSET_SH_MODEL
+Scoring Cost Matrix
+
+DM$VGMSET_SH_MODEL
+Global Name-Value Pairs
+
+DM$VNMSET_SH_MODEL
+Normalization and Missing Value Handling
+
+DM$VSMSET_SH_MODEL
+Computed Settings
+
+DM$VTMSET_SH_MODEL
+Classification Targets
+
+DM$VWMSET_SH_MODEL
+Model Build Alerts
+
+
+6行が選択されました。
+
+SQL>
+SQL> -- get global diagnostics
+SQL> column name format a20
+SQL> column numeric_value format a20
+SQL> column string_value format a15
+SQL> SELECT name,
+  2  to_char(numeric_value, '99999') numeric_value,
+  3  string_value FROM DM$VGMSET_SH_MODEL
+  4    ORDER BY name;
+
+NAME                 NUMERIC_VALUE        STRING_VALUE
+-------------------- -------------------- ---------------
+NUM_ROWS                  0
+
+1行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                         (3)   TEST THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL> -- Predicting anomalies of daily sold data from year 2000 to 2001
+SQL> -----------------------------------------------------------------------
+SQL> -- display predictions and probabilities of a sample list of data
+SQL> col prob format 0.999
+SQL> col pred format 9999
+SQL> col time_id format a20
+SQL> SELECT time_id, prediction(mset_sh_model using *) over
+  2    (ORDER BY time_id) pred, prediction_probability (mset_sh_model using *)
+  3    over (ORDER BY time_id) prob
+  4    FROM (SELECT * FROM mset_test_sh_data  WHERE time_id > '15-DEC-01' AND
+  5    time_id <= '25-DEC-01' ) ORDER BY time_id;
+行が選択されていません
+SQL>
+SQL> -- display all dates of year 2000 to 2001 when anomalies occur
+SQL> SELECT time_id, pred FROM (SELECT time_id, prediction(mset_sh_model using *)
+  2    over (ORDER BY time_id) pred FROM mset_test_sh_data) WHERE pred = 0;
+行が選択されていません
+SQL>
+SQL> -- display total anomaly count for year 2000 to 2001
+SQL> col min(prob) format 0.999
+SQL> col max(prob) format 0.999
+SQL> SELECT pred, count(pred), min(prob), max(prob) FROM (
+  2    SELECT prediction(mset_sh_model using *) over (ORDER BY time_id) pred,
+  3    prediction_probability(mset_sh_model using *) over (ORDER BY time_id)
+  4    prob FROM mset_test_sh_data ) GROUP BY pred ORDER BY pred;
+
+ PRED COUNT(PRED) MIN(PROB) MAX(PROB)
+----- ----------- --------- ---------
+                0
+
+1行が選択されました。
+
+SQL>
+SQL> -- display anomly rate: number of anomaly/total number of data
+SQL> col anomalyrate format 9.999
+SQL> SELECT 1-sum(correct)/count(*) AS anomalyrate
+  2    FROM (SELECT decode(prediction(mset_sh_model using *) over
+  3    (ORDER BY time_id), 1, 1) AS correct FROM mset_test_sh_data );
+
+ANOMALYRATE
+-----------
+
+
+1行が選択されました。
+
+SQL>
+SQL> -- display prediction details
+SQL> SET long 1000
+SQL> col anomalydetails format a80
+SQL> SELECT time_id, prediction(mset_sh_model using *) over (ORDER BY time_id)
+  2    pred, prediction_details(mset_sh_model using *) over (ORDER BY time_id)
+  3    anomalyDetails FROM mset_test_sh_data  WHERE time_id > '15-DEC-01' AND
+  4    time_id <= '25-DEC-01' ORDER BY time_id;
+行が選択されていません
+SQL>
+SQL>
+SQL> spool oml4sql-time-series-regression

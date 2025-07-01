@@ -1,0 +1,682 @@
+SQL> @oml4sql-survival-analysis-xgboost
+SQL> -----------------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Survival Analysis Modeling using XGBoost
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affiliates.
+SQL> --   The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --   https://oss.oracle.com/licenses/upl/
+SQL>
+SQL> -----------------------------------------------------------------------------
+SQL> -- For more information...
+SQL>
+SQL> -- Oracle ADW Documentation:
+SQL> -- https://docs.oracle.com/en/cloud/paas/autonomous-data-warehouse-cloud/index.html
+SQL>
+SQL> -- OML Folder on Github:
+SQL> -- https://github.com/oracle/oracle-db-examples/tree/master/machine-learning
+SQL>
+SQL> -- OML Web Page:
+SQL> -- https://www.oracle.com/machine-learning
+SQL>
+SQL> -- OML Regression:
+SQL> -- https://www.oracle.com/goto/ml-regression
+SQL>
+SQL> -- OML XGBoost:
+SQL> -- https://http://www.oracle.com/goto/ml-xgboost
+SQL>
+SQL> -----------------------------------------------------------------------------
+SQL> --                   EXAMPLES IN THIS SCRIPT
+SQL> -----------------------------------------------------------------------------
+SQL> -- Create a Survival Analysis XGBoost Model using CREATE_MODEL2
+SQL> -- Walk through XGB algorithm settings with the model
+SQL> -- Survival analysis with AFT model
+SQL>
+SQL> -----------------------------------------------------------------------------
+SQL> --         Examples of Setting Overrides for XGBoost
+SQL> -----------------------------------------------------------------------------
+SQL>
+SQL> -- If the user does not override the default settings, relevant settings
+SQL> -- are determined by the algorithm.
+SQL>
+SQL> -- A complete list of settings can be found in the documentation link:
+SQL> -- https://docs.oracle.com/en/database/oracle/oracle-database/21/arpls/
+SQL> -- DBMS_DATA_MINING.html#GUID-443B3D58-8B74-422E-8E51-C8F609249B2C
+SQL>
+SQL> -- Set evaluation metric:
+SQL> --   v_setlst('eval_metric') := 'cox-nloglik';
+SQL> --   v_setlst('eval_metric') := 'aft-nloglik';
+SQL> --   v_setlst('eval_metric') := 'c-index';
+SQL> --   v_setlst('eval_metric') := 'ndcg';
+SQL>
+SQL> -- Regularization parameters for all boosters:
+SQL> --   v_setlst('alpha')  := '0.1';
+SQL> --   v_setlst('eta')    := '0.3';
+SQL> --   v_setlst('lambda') := '0.3';
+SQL>
+SQL> -- Subsampling methods:
+SQL> --   v_setlst('max_depth')         := '6';
+SQL> --   v_setlst('min_child_weight')  := '1';
+SQL> --   v_setlst('colsample_bytree')  := '0.9';
+SQL>
+SQL> -- Set a tree method:
+SQL> --   v_setlst('tree_method')  := 'hist';
+SQL> --   v_setlst('tree_method')  := 'exact';
+SQL> --   v_setlst('tree_method')  := 'approx';
+SQL> --   v_setlst('tree_method')  := 'gpu_exact';
+SQL> --   v_setlst('tree_method')  := 'gpu_hist';
+SQL>
+SQL> -- Number of iteration rounds:
+SQL> --   v_setlst('num_round') := '100';
+SQL>
+SQL> -- For XGBoost survival tasks, the objective is:
+SQL> --   v_setlst('objective') := 'survival:aft';
+SQL> --   v_setlst('objective') := 'survival:cox';
+SQL> --   v_setlst('objective') := 'survival:cox-nloglik';
+SQL> --   v_setlst('objective') := 'survival:cox-gamma';
+SQL>
+SQL> -- Specify loss distribution:
+SQL> --   v_setlst('aft_loss_distribution') := 'normal';
+SQL> --   v_setlst('aft_loss_distribution') := 'logistic';
+SQL> --   v_setlst('aft_loss_distribution') := 'extreme';
+SQL>
+SQL> -----------------------------------------------------------------------------
+SQL> --         Create a data table with left and right bound columns
+SQL> -----------------------------------------------------------------------------
+SQL>
+SQL> -- The data table 'SURVIVAL_DATA' contains both exact data point and
+SQL> -- right-censored data point. The left bound column is set by
+SQL> -- parameter target_column_name. The right bound column is set
+SQL> -- by setting aft_right_bound_column_name.
+SQL>
+SQL> -- For right censored data point, the right bound is infinity,
+SQL> -- which is represented as NULL in the right bound column.
+SQL>
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE SURVIVAL_DATA';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> CREATE TABLE SURVIVAL_DATA (INST NUMBER, LBOUND NUMBER, AGE NUMBER,
+  2                              SEX NUMBER, PHECOG NUMBER, PHKARNO NUMBER,
+  3                              PATKARNO NUMBER, MEALCAL NUMBER, WTLOSS NUMBER,
+  4                              RBOUND NUMBER);
+
+Table SURVIVAL_DATAは作成されました。
+
+SQL> INSERT INTO SURVIVAL_DATA VALUES(26, 235, 63, 2, 0, 100,  90,  413,  0,   NULL);
+
+1行挿入しました。
+
+SQL> INSERT INTO SURVIVAL_DATA VALUES(22, 444, 75, 2, 2,  70,  70,  438,  8,   444);
+
+1行挿入しました。
+
+SQL> INSERT INTO SURVIVAL_DATA VALUES(16, 806, 44, 1, 1,  80,  80, 1025,  1,   NULL);
+
+1行挿入しました。
+
+SQL> INSERT INTO SURVIVAL_DATA VALUES(16, 551, 77, 2, 2,  80,  60,  750, 28,   NULL);
+
+1行挿入しました。
+
+SQL> INSERT INTO SURVIVAL_DATA VALUES(3,  202, 50, 2, 0, 100, 100,  635,  1,   NULL);
+
+1行挿入しました。
+
+SQL> INSERT INTO SURVIVAL_DATA VALUES(7,  583, 68, 1, 1,  60,  70, 1025,  7,   583);
+
+1行挿入しました。
+
+SQL> INSERT INTO SURVIVAL_DATA VALUES(32, 135, 60, 1, 1,  90,  70, 1275,  0,   135);
+
+1行挿入しました。
+
+SQL> INSERT INTO SURVIVAL_DATA VALUES(21, 237, 69, 1, 1,  80,  70, NULL, NULL, NULL);
+
+1行挿入しました。
+
+SQL> INSERT INTO SURVIVAL_DATA VALUES(26, 356, 53, 2, 1,  90,  90, NULL,   2,  NULL);
+
+1行挿入しました。
+
+SQL> INSERT INTO SURVIVAL_DATA VALUES(13, 387, 56, 1, 2,  80,  60, 1075, NULL, 387);
+
+1行挿入しました。
+
+SQL>
+SQL> -----------------------------------------------------------------------------
+SQL> --             Build an XGBoost survival model with survival:aft
+SQL> -----------------------------------------------------------------------------
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('XGB_SURVIVAL_MODEL');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> DECLARE
+  2      v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4      v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
+  5      v_setlst('max_depth')                    := '6';
+  6      v_setlst('eval_metric')                  := 'aft-nloglik';
+  7      v_setlst('num_round')                    := '100';
+  8      v_setlst('objective')                    := 'survival:aft';
+  9      v_setlst('aft_right_bound_column_name')  := 'rbound';
+ 10      v_setlst('aft_loss_distribution')        := 'normal';
+ 11      v_setlst('aft_loss_distribution_scale')  := '1.20';
+ 12      v_setlst('eta')                          := '0.05';
+ 13      v_setlst('lambda')                       := '0.01';
+ 14      v_setlst('alpha')                        := '0.02';
+ 15      v_setlst('tree_method')                  := 'hist';
+ 16
+ 17      DBMS_DATA_MINING.CREATE_MODEL2(
+ 18          MODEL_NAME          => 'XGB_SURVIVAL_MODEL',
+ 19          MINING_FUNCTION     => 'REGRESSION',
+ 20          DATA_QUERY          => 'SELECT * FROM SURVIVAL_DATA',
+ 21          TARGET_COLUMN_NAME  => 'LBOUND',
+ 22          CASE_ID_COLUMN_NAME =>  NULL,
+ 23          SET_LIST            =>  v_setlst);
+ 24  END;
+ 25  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -----------------------------------------------------------------------------
+SQL> --                    Get Prediction Details
+SQL> -----------------------------------------------------------------------------
+SQL> --  NULL value in rbound (aft_right_bound_column_name) column
+SQL> --    is intepreted as infinity.
+SQL>
+SQL> COLUMN PRED FORMAT 99999
+SQL> SET LONG 20000
+SQL> SET LINES 100
+SQL>
+SQL> SELECT LBOUND, RBOUND,
+  2         ROUND(PREDICTION(XGB_SURVIVAL_MODEL  USING *),3) PRED
+  3  FROM   SURVIVAL_DATA;
+
+    LBOUND     RBOUND   PRED
+---------- ---------- ------
+       235              2256
+       444        444    485
+       806              4323
+       551              3468
+       202              3101
+       583        583    589
+       135        135    158
+       237              2416
+       356              2834
+       387        387    365
+
+10行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------------
+SQL> --              Nest data into numerical values
+SQL> -----------------------------------------------------------------------------
+SQL>
+SQL> CREATE OR REPLACE VIEW SURVIVAL_NUMERIC AS
+  2  SELECT LBOUND, RBOUND, WTLOSS,
+  3         DM_NESTED_NUMERICALS(
+  4           DM_NESTED_NUMERICAL('INST', INST),
+  5           DM_NESTED_NUMERICAL('AGE', AGE),
+  6           DM_NESTED_NUMERICAL('SEX', SEX),
+  7           DM_NESTED_NUMERICAL('PHECOG', PHECOG),
+  8           DM_NESTED_NUMERICAL('PHKARNO', PHKARNO),
+  9           DM_NESTED_NUMERICAL('PATKARNO', PATKARNO),
+ 10           DM_NESTED_NUMERICAL('MEALCAL', MEALCAL)) NNUM
+ 11  FROM  SURVIVAL_DATA;
+
+View SURVIVAL_NUMERICは作成されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------------
+SQL> -- Build an XGBoost model using nested numeric data
+SQL> -----------------------------------------------------------------------------
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('XGB_SURVIVAL_MODEL');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> DECLARE
+  2      v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4      v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
+  5      v_setlst('max_depth')                    := '6';
+  6      v_setlst('eval_metric')                  := 'aft-nloglik';
+  7      v_setlst('num_round')                    := '100';
+  8      v_setlst('objective')                    := 'survival:aft';
+  9      v_setlst('aft_right_bound_column_name')  := 'rbound';
+ 10      v_setlst('aft_loss_distribution')        := 'normal';
+ 11      v_setlst('aft_loss_distribution_scale')  := '1.20';
+ 12      v_setlst('eta')                          := '0.05';
+ 13      v_setlst('lambda')                       := '0.01';
+ 14      v_setlst('alpha')                        := '0.02';
+ 15      v_setlst('tree_method')                  := 'hist';
+ 16
+ 17      DBMS_DATA_MINING.CREATE_MODEL2(
+ 18          MODEL_NAME          => 'XGB_SURVIVAL_MODEL',
+ 19          MINING_FUNCTION     => 'REGRESSION',
+ 20          DATA_QUERY          => 'SELECT * FROM SURVIVAL_NUMERIC',
+ 21          TARGET_COLUMN_NAME  => 'LBOUND',
+ 22          CASE_ID_COLUMN_NAME =>  NULL,
+ 23          SET_LIST            =>  v_setlst);
+ 24  END;
+ 25  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -----------------------------------------------------------------------------
+SQL> --                    Get Prediction Details
+SQL> -----------------------------------------------------------------------------
+SQL> -- NULL value in rbound (aft_right_bound_column_name) column
+SQL> --   is intepreted as infinity.
+SQL>
+SQL> COLUMN PRED FORMAT 99999
+SQL> SET LONG 20000
+SQL> SET LINES 100
+SQL>
+SQL> SELECT LBOUND, RBOUND,
+  2         ROUND(PREDICTION(XGB_SURVIVAL_MODEL  USING *),3) PRED
+  3  FROM   SURVIVAL_NUMERIC;
+
+    LBOUND     RBOUND   PRED
+---------- ---------- ------
+       235              2256
+       444        444    485
+       806              4323
+       551              3468
+       202              3101
+       583        583    589
+       135        135    158
+       237              2416
+       356              2834
+       387        387    365
+
+10行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------------
+SQL> --    Build an XGBoost model with no eval_metric specified
+SQL> -----------------------------------------------------------------------------
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('XGB_SURVIVAL_MODEL');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> DECLARE
+  2      v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  begin
+  4      v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
+  5      v_setlst('max_depth')                    := '6';
+  6      v_setlst('num_round')                    := '100';
+  7      v_setlst('objective')                    := 'survival:aft';
+  8      v_setlst('aft_right_bound_column_name')  := 'rbound';
+  9      v_setlst('aft_loss_distribution')        := 'normal';
+ 10      v_setlst('aft_loss_distribution_scale')  := '1.20';
+ 11      v_setlst('eta')                          := '0.05';
+ 12      v_setlst('lambda')                       := '0.01';
+ 13      v_setlst('alpha')                        := '0.02';
+ 14      v_setlst('tree_method')                  := 'hist';
+ 15
+ 16      DBMS_DATA_MINING.CREATE_MODEL2(
+ 17          MODEL_NAME          => 'XGB_SURVIVAL_MODEL',
+ 18          MINING_FUNCTION     => 'REGRESSION',
+ 19          DATA_QUERY          => 'SELECT * FROM SURVIVAL_DATA',
+ 20          TARGET_COLUMN_NAME  => 'LBOUND',
+ 21          CASE_ID_COLUMN_NAME =>  NULL,
+ 22          SET_LIST            =>  v_setlst);
+ 23  END;
+ 24  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -----------------------------------------------------------------------------
+SQL> --                    Get Prediction Details
+SQL> -----------------------------------------------------------------------------
+SQL>
+SQL> SELECT LBOUND, RBOUND,
+  2         ROUND(PREDICTION(XGB_SURVIVAL_MODEL  USING *),3) PRED
+  3  FROM   SURVIVAL_DATA;
+
+    LBOUND     RBOUND   PRED
+---------- ---------- ------
+       235              2256
+       444        444    485
+       806              4323
+       551              3468
+       202              3101
+       583        583    589
+       135        135    158
+       237              2416
+       356              2834
+       387        387    365
+
+10行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------------
+SQL> --    Build an XGBoost model with aft_loss_distribution = logistic
+SQL> -----------------------------------------------------------------------------
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('XGB_SURVIVAL_MODEL');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> DECLARE
+  2      v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4      v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
+  5      v_setlst('max_depth')                    := '6';
+  6      v_setlst('eval_metric')                  := 'aft-nloglik';
+  7      v_setlst('num_round')                    := '100';
+  8      v_setlst('objective')                    := 'survival:aft';
+  9      v_setlst('aft_right_bound_column_name')  := 'rbound';
+ 10      v_setlst('aft_loss_distribution')        := 'logistic';
+ 11      v_setlst('aft_loss_distribution_scale')  := '1.20';
+ 12      v_setlst('eta')                          := '0.05';
+ 13      v_setlst('lambda')                       := '0.01';
+ 14      v_setlst('alpha')                        := '0.02';
+ 15      v_setlst('tree_method')                  := 'hist';
+ 16
+ 17      DBMS_DATA_MINING.CREATE_MODEL2(
+ 18          MODEL_NAME          => 'XGB_SURVIVAL_MODEL',
+ 19          MINING_FUNCTION     => 'REGRESSION',
+ 20          DATA_QUERY          => 'SELECT * FROM SURVIVAL_DATA',
+ 21          TARGET_COLUMN_NAME  => 'LBOUND',
+ 22          CASE_ID_COLUMN_NAME =>  NULL,
+ 23          SET_LIST            =>  v_setlst);
+ 24  END;
+ 25  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -----------------------------------------------------------------------------
+SQL> --                    Get Prediction Details
+SQL> -----------------------------------------------------------------------------
+SQL>
+SQL> SELECT LBOUND, RBOUND,
+  2         ROUND(PREDICTION(XGB_SURVIVAL_MODEL USING *),3) PRED
+  3  FROM   SURVIVAL_DATA;
+
+    LBOUND     RBOUND   PRED
+---------- ---------- ------
+       235                 1
+       444        444      1
+       806                 1
+       551                 1
+       202                 1
+       583        583      1
+       135        135      1
+       237                 1
+       356                 1
+       387        387      1
+
+10行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------------
+SQL> --    Build an XGBoost model with aft_loss_distribution = extreme
+SQL> -----------------------------------------------------------------------------
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('XGB_SURVIVAL_MODEL');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> DECLARE
+  2      v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4      v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
+  5      v_setlst('max_depth')                    := '6';
+  6      v_setlst('eval_metric')                  := 'aft-nloglik';
+  7      v_setlst('num_round')                    := '100';
+  8      v_setlst('objective')                    := 'survival:aft';
+  9      v_setlst('aft_right_bound_column_name')  := 'rbound';
+ 10      v_setlst('aft_loss_distribution')        := 'extreme';
+ 11      v_setlst('aft_loss_distribution_scale')  := '1.20';
+ 12      v_setlst('eta')                          := '0.05';
+ 13      v_setlst('lambda')                       := '0.01';
+ 14      v_setlst('alpha')                        := '0.02';
+ 15      v_setlst('tree_method')                  := 'hist';
+ 16
+ 17      DBMS_DATA_MINING.CREATE_MODEL2(
+ 18          MODEL_NAME          => 'XGB_SURVIVAL_MODEL',
+ 19          MINING_FUNCTION     => 'REGRESSION',
+ 20          DATA_QUERY          => 'SELECT * FROM SURVIVAL_DATA',
+ 21          TARGET_COLUMN_NAME  => 'LBOUND',
+ 22          CASE_ID_COLUMN_NAME =>  NULL,
+ 23          SET_LIST            =>  v_setlst);
+ 24  END;
+ 25  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -----------------------------------------------------------------------------
+SQL> --                    Get Prediction Details
+SQL> -----------------------------------------------------------------------------
+SQL>
+SQL> SELECT LBOUND, RBOUND,
+  2         ROUND(PREDICTION(XGB_SURVIVAL_MODEL  USING *),3) PRED
+  3  FROM   SURVIVAL_DATA;
+
+    LBOUND     RBOUND   PRED
+---------- ---------- ------
+       235               126
+       444        444     94
+       806               114
+       551               107
+       202               143
+       583        583     80
+       135        135     59
+       237               125
+       356               117
+       387        387     80
+
+10行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------------
+SQL> --    Build an XGBoost model with aft_loss_distribution_scale = 0
+SQL> -----------------------------------------------------------------------------
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('XGB_SURVIVAL_MODEL');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> DECLARE
+  2      v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4      v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
+  5      v_setlst('max_depth')                    := '6';
+  6      v_setlst('eval_metric')                  := 'aft-nloglik';
+  7      v_setlst('num_round')                    := '100';
+  8      v_setlst('objective')                    := 'survival:aft';
+  9      v_setlst('aft_right_bound_column_name')  := 'rbound';
+ 10      v_setlst('aft_loss_distribution')        := 'extreme';
+ 11      v_setlst('aft_loss_distribution_scale')  := '0';
+ 12      v_setlst('eta')                          := '0.05';
+ 13      v_setlst('lambda')                       := '0.01';
+ 14      v_setlst('alpha')                        := '0.02';
+ 15      v_setlst('tree_method')                  := 'hist';
+ 16
+ 17      DBMS_DATA_MINING.CREATE_MODEL2(
+ 18          MODEL_NAME          => 'XGB_SURVIVAL_MODEL',
+ 19          MINING_FUNCTION     => 'REGRESSION',
+ 20          DATA_QUERY          => 'SELECT * FROM SURVIVAL_DATA',
+ 21          TARGET_COLUMN_NAME  => 'LBOUND',
+ 22          CASE_ID_COLUMN_NAME =>  NULL,
+ 23          SET_LIST            =>  v_setlst);
+ 24  END;
+ 25  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -----------------------------------------------------------------------------
+SQL> --                    Get Prediction Details
+SQL> -----------------------------------------------------------------------------
+SQL>
+SQL> SELECT LBOUND, RBOUND,
+  2         ROUND(PREDICTION(XGB_SURVIVAL_MODEL  USING *),3) PRED
+  3  From   SURVIVAL_DATA;
+
+    LBOUND     RBOUND   PRED
+---------- ---------- ------
+       235                74
+       444        444     74
+       806                74
+       551                74
+       202                74
+       583        583     74
+       135        135     74
+       237                74
+       356                74
+       387        387     74
+
+10行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------------
+SQL> --          Create a table with only one numerical column
+SQL> -----------------------------------------------------------------------------
+SQL>
+SQL> DROP TABLE SURVIVAL_DATA;
+
+Table SURVIVAL_DATAが削除されました。
+
+SQL> CREATE TABLE SURVIVAL_DATA (LBOUND NUMBER, RBOUND NUMBER);
+
+Table SURVIVAL_DATAは作成されました。
+
+SQL> INSERT INTO SURVIVAL_DATA VALUES(235, NULL);
+
+1行挿入しました。
+
+SQL> INSERT INTO SURVIVAL_DATA VALUES(444, 444);
+
+1行挿入しました。
+
+SQL> INSERT INTO SURVIVAL_DATA VALUES(806, NULL);
+
+1行挿入しました。
+
+SQL> INSERT INTO SURVIVAL_DATA VALUES(551, NULL);
+
+1行挿入しました。
+
+SQL> INSERT INTO SURVIVAL_DATA VALUES(202, NULL);
+
+1行挿入しました。
+
+SQL> INSERT INTO SURVIVAL_DATA VALUES(583, 583);
+
+1行挿入しました。
+
+SQL> INSERT INTO SURVIVAL_DATA VALUES(135, 135);
+
+1行挿入しました。
+
+SQL> INSERT INTO SURVIVAL_DATA VALUES(237, NULL);
+
+1行挿入しました。
+
+SQL> INSERT INTO SURVIVAL_DATA VALUES(356, NULL);
+
+1行挿入しました。
+
+SQL> INSERT INTO SURVIVAL_DATA VALUES(387, 387);
+
+1行挿入しました。
+
+SQL>
+SQL> -----------------------------------------------------------------------------
+SQL> --        Build an XGBoost model using numerical table
+SQL> -----------------------------------------------------------------------------
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('XGB_SURVIVAL_MODEL');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> DECLARE
+  2      v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4      v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
+  5      v_setlst('max_depth')                    := '6';
+  6      v_setlst('eval_metric')                  := 'aft-nloglik';
+  7      v_setlst('num_round')                    := '100';
+  8      v_setlst('objective')                    := 'survival:aft';
+  9      v_setlst('aft_right_bound_column_name')  := 'rbound';
+ 10      v_setlst('aft_loss_distribution')        := 'normal';
+ 11      v_setlst('aft_loss_distribution_scale')  := '1.20';
+ 12      v_setlst('eta')                          := '0.05';
+ 13      v_setlst('lambda')                       := '0.01';
+ 14      v_setlst('alpha')                        := '0.02';
+ 15      v_setlst('tree_method')                  := 'hist';
+ 16
+ 17      DBMS_DATA_MINING.CREATE_MODEL2(
+ 18          MODEL_NAME          => 'XGB_SURVIVAL_MODEL',
+ 19          MINING_FUNCTION     => 'REGRESSION',
+ 20          DATA_QUERY          => 'SELECT * FROM SURVIVAL_DATA',
+ 21          TARGET_COLUMN_NAME  => 'LBOUND',
+ 22          CASE_ID_COLUMN_NAME =>  NULL,
+ 23          SET_LIST            =>  v_setlst);
+ 24  END;
+ 25  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -----------------------------------------------------------------------------
+SQL> --                    Get Prediction Details
+SQL> -----------------------------------------------------------------------------
+SQL>
+SQL> SELECT LBOUND, RBOUND,
+  2         ROUND(PREDICTION(XGB_SURVIVAL_MODEL  USING *),3) PRED
+  3  FROM   SURVIVAL_DATA;
+
+    LBOUND     RBOUND   PRED
+---------- ---------- ------
+       235               394
+       444        444    394
+       806               394
+       551               394
+       202               394
+       583        583    394
+       135        135    394
+       237               394
+       356               394
+       387        387    394
+
+10行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --   End of script
+SQL> -----------------------------------------------------------------------
+SQL> spool oml4sql-time-series-esm-auto-model-search

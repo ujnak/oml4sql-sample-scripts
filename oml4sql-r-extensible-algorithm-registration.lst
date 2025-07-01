@@ -1,0 +1,413 @@
+SQL> @oml4sql-r-extensible-algorithm-registration
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   OML R Extensible - Algorithm Registration - dmralgregdemo.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET ECHO ON
+SQL> SET FEEDBACK 1
+SQL> SET NUMWIDTH 10
+SQL> SET LINESIZE 80
+SQL> SET TRIMSPOOL ON
+SQL> SET TAB OFF
+SQL> SET PAGESIZE 100
+SQL> SET LONG 10000
+SQL>
+SQL> column algorithm_name format a15
+SQL> column mining_function format a15
+SQL> column algorithm_type format a15
+SQL> column description format a11
+SQL> column algorithm_metadata format a20
+SQL>
+SQL> /*
+SQL>connect sys/knl_test7 as sysdba;
+SQL>GRANT rqadmin TO dmuser;
+SQL>connect dmuser/dmuser
+SQL>*/
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                        R Algorithm Registration DEMO 1
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explaination:
+SQL> -- This demo shows how to register a new GLM algorithm and use it to create models.
+SQL>
+SQL> -- Cleanup old output tables/scripts/models for repeat runs -------------------
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('GLM_RDEMO_CLASSIFICATION');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> BEGIN
+  2    DBMS_DATA_MINING.drop_algorithm(
+  3      ALGORITHM_NAME => 't1',
+  4      CASCADE => TRUE);
+  5  EXCEPTION WHEN OTHERS THEN NULL; END;
+  6  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- Algorithm Registration -----------------------------------------------------
+SQL>
+SQL> BEGIN
+  2    DBMS_DATA_MINING.register_algorithm(
+  3      ALGORITHM_NAME         => 't1',
+  4      algorithm_metadata     =>
+  5      '{"function_language":"R",
+  6        "mining_function" : { "mining_function_name" : "CLASSIFICATION",
+  7                              "build_function" : {"function_body":
+  8  "function(dat, formula, keep.model) { set.seed(1234); mod <- glm(formula = formula(formula), data=dat, family=binomial(logit), model = as.logical(keep.model)); mod}"},
+  9
+ 10                              "score_function" : {"function_body":
+ 11  "function(mod, dat) { res <- predict(mod, newdata = dat, type=''response''); res2=data.frame(1-res, res); names(res2) <- c(''0'', ''1''); res2}"}},
+ 12        "algo_setting" : [{"name" : "ralg_parameter_keep.model", "data_type" : "integer","value" : "0", "optional" : "TRUE", "min_value" : {"min_value": "0", "inclusive": "TRUE"}, "max_value" : {"max_value": "1", "inclusive": "TRUE"}}]
+ 13  }',
+ 14      algorithm_description  => 't1');
+ 15  END;
+ 16  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL BUILD
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Build the model using the R build function script user has already registered.
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- Model Settings -----------------------------------------------------------
+  5    v_setlst('ALGO_EXTENSIBLE_LANG') := 'R';
+  6    v_setlst('ALGO_NAME') := 't1';
+  7    v_setlst('R_FORMULA') := 'AGE + EDUCATION + HOUSEHOLD_SIZE + OCCUPATION';
+  8    v_setlst('ralg_parameter_keep.model') := '1';
+  9
+ 10    DBMS_DATA_MINING.CREATE_MODEL2(
+ 11      model_name          => 'GLM_RDEMO_CLASSIFICATION',
+ 12      mining_function     => 'CLASSIFICATION',
+ 13      data_query          => 'select * from mining_data_build_v',
+ 14      case_id_column_name => 'CUST_ID',
+ 15      target_column_name  => 'AFFINITY_CARD',
+ 16      set_list            => v_setlst);
+ 17  END;
+ 18  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL SCORE
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Score the model using the R score function script user has already registered.
+SQL>
+SQL> SELECT CUST_ID, AFFINITY_CARD as AFFINITY_CARD_act,
+  2  PREDICTION(GLM_RDEMO_CLASSIFICATION USING *) AFFINITY_CARD_pred,
+  3  round(PREDICTION_PROBABILITY(GLM_RDEMO_CLASSIFICATION USING *), 3)
+  4  as AFFINITY_CARD_prob
+  5  FROM mining_data_apply_v where CUST_ID <= 100010
+  6  order by CUST_ID;
+
+   CUST_ID AFFINITY_CARD_ACT AFFINITY_CARD_PRED AFFINITY_CARD_PROB
+---------- ----------------- ------------------ ------------------
+    100001                 0                  0               .778
+    100002                 0                  0               .821
+    100003                 0                  0               .948
+    100004                 0                  0               .917
+    100005                 1                  1                .64
+    100006                 0                  0                .97
+    100007                 0                  0               .992
+    100008                 0                  0               .937
+    100009                 1                  1               .575
+    100010                 0                  0               .785
+
+10行が選択されました。
+
+SQL>
+SQL>
+SQL> ------------------------ Drop Models and Algorithms ---------------------------
+SQL>
+SQL> BEGIN
+  2    DBMS_DATA_MINING.drop_algorithm(
+  3      ALGORITHM_NAME => 't1',
+  4      CASCADE => TRUE);
+  5  EXCEPTION WHEN OTHERS THEN NULL; END;
+  6  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                        R Algorithm Registration DEMO 2
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explaination:
+SQL> -- This demo shows how to register a new DT algorithm and use it to create models.
+SQL>
+SQL> -- Cleanup old output tables/scripts/models for repeat runs -------------------
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('DT_RDEMO_CLASSIFICATION');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> BEGIN
+  2    DBMS_DATA_MINING.drop_algorithm(
+  3      ALGORITHM_NAME => 't1');
+  4  EXCEPTION WHEN OTHERS THEN NULL; END;
+  5  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- Algorithm Registration -----------------------------------------------------
+SQL>
+SQL> BEGIN
+  2    DBMS_DATA_MINING.register_algorithm(
+  3      ALGORITHM_NAME         => 't1',
+  4      algorithm_metadata     =>
+  5      '{"function_language":"R",
+  6        "mining_function" : { "mining_function_name" : "CLASSIFICATION",
+  7                              "build_function" : {"function_body":
+  8  "function(dat, form) {require(rpart); set.seed(1234); mod <- rpart(formula = formula(form), method=''class'', data=dat); mod}"},
+  9                              "weight_function" : {"function_body":
+ 10  "function(mod, dat, clas) {require(rpart); v0 <- as.data.frame(predict(mod, newdata=dat, type = ''prob''));res <- data.frame(lapply(seq_along(dat),function(x, dat) {if(is.numeric(dat[[x]])) dat[,x] <- as.numeric(NA) else dat[,x] <- as.factor(NA); vv <- as.data.frame(predict(mod, newdata = dat, type = ''prob'')); v0[[clas]] / vv[[clas]]}, dat = dat)); names(res) <- names(dat); res}"},
+ 11                              "detail_function" : [{"function_body":
+ 12  "function(object, x) {mod.frm <- object$frame; data.frame(node = row.names(mod.frm), split = mod.frm$var, n = mod.frm$n,ln = mod.frm$yval2[,2], rn = mod.frm$yval2[,3])}",
+ 13                                                   "view_columns": [{"NAME": "node", "TYPE": "VARCHAR2(100)"}, {"NAME": "split", "TYPE": "VARCHAR2(2000)"}, {"NAME": "NodeCnt", "TYPE": "number"}, {"NAME": "LeftNodeCnt", "TYPE": "number"},{"NAME": "RightNodeCnt", "TYPE": "number"}]},
+ 14                                                   {"function_body":
+ 15  "function(object, x) {mod.frm <- object$frame; data.frame(node = row.names(mod.frm), split = mod.frm$var, n = mod.frm$n,ln = mod.frm$yval2[,2], rn = mod.frm$yval2[,3])}",
+ 16                                                   "view_columns": [{"NAME": "node", "TYPE": "VARCHAR2(100)"}, {"NAME": "split", "TYPE": "VARCHAR2(2000)"}, {"NAME": "NodeCnt", "TYPE": "number"}, {"NAME": "LeftNodeCnt", "TYPE": "number"},{"NAME": "RightNodeCnt", "TYPE": "number"}]}],
+ 17                              "score_function" : {"function_body":
+ 18  "function(mod, dat) {require(rpart);res <- data.frame(predict(mod, newdata=dat, type = ''prob'')); names(res) <- c(''0'', ''1''); res}"}}}',
+ 19      algorithm_description  => 't1');
+ 20  END;
+ 21  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL BUILD
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Build the model using the R build script user has already registered.
+SQL>
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- Model Settings -----------------------------------------------------------
+  5    v_setlst('ALGO_EXTENSIBLE_LANG') := 'R';
+  6    v_setlst('ALGO_NAME') := 't1';
+  7    v_setlst('R_FORMULA') := 'AGE + EDUCATION + HOUSEHOLD_SIZE + OCCUPATION';
+  8
+  9    DBMS_DATA_MINING.CREATE_MODEL2(
+ 10      model_name          => 'DT_RDEMO_CLASSIFICATION',
+ 11      mining_function     => 'CLASSIFICATION',
+ 12      data_query          => 'select * from mining_data_build_v',
+ 13      case_id_column_name => 'CUST_ID',
+ 14      target_column_name  => 'AFFINITY_CARD',
+ 15      set_list            => v_setlst);
+ 16  END;
+ 17  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL DETAIL
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Display the model details using R detail function user has already registered
+SQL>
+SQL> column SPLIT format a12
+SQL> select to_number(node) as node, split, nodecnt, leftnodecnt, rightnodecnt
+  2  from DM$V0DT_RDEMO_CLASSIFICATION
+  3  order by node, split;
+
+      NODE SPLIT           NODECNT LEFTNODECNT RIGHTNODECNT
+---------- ------------ ---------- ----------- ------------
+         1 HOUSEHOLD_SI       1500        1120          380
+           ZE
+
+         2 <leaf>              794         743           51
+         3 EDUCATION           706         377          329
+         6 OCCUPATION          463         313          150
+         7 <leaf>              243          64          179
+        12 <leaf>              346         260           86
+        13 AGE                 117          53           64
+        26 <leaf>               28          21            7
+        27 <leaf>               89          32           57
+
+9行が選択されました。
+
+SQL>
+SQL> column SPLIT format a12
+SQL> select to_number(node) as node, split, nodecnt, leftnodecnt, rightnodecnt
+  2  from DM$V1DT_RDEMO_CLASSIFICATION
+  3  order by node, split;
+
+      NODE SPLIT           NODECNT LEFTNODECNT RIGHTNODECNT
+---------- ------------ ---------- ----------- ------------
+         1 HOUSEHOLD_SI       1500        1120          380
+           ZE
+
+         2 <leaf>              794         743           51
+         3 EDUCATION           706         377          329
+         6 OCCUPATION          463         313          150
+         7 <leaf>              243          64          179
+        12 <leaf>              346         260           86
+        13 AGE                 117          53           64
+        26 <leaf>               28          21            7
+        27 <leaf>               89          32           57
+
+9行が選択されました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL SCORE
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Score the model using the R score and weight function scripts user registered.
+SQL>
+SQL> column pred_det format a65
+SQL> SELECT CUST_ID, PREDICTION_DETAILS(DT_RDEMO_CLASSIFICATION, '1' USING *) pred_det
+  2  FROM mining_data_apply_v where EDUCATION = 'Bach.' and HOUSEHOLD_SIZE = '3'
+  3  and CUST_ID <= 100080 order by CUST_ID;
+
+   CUST_ID PRED_DET
+---------- -----------------------------------------------------------------
+    100009 <Details algorithm="R Extensible" class="1">
+           <Attribute name="YRS_RESIDENCE" actualValue="3" weight="11.468" r
+           ank="1"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="1" weight="1" rank="2"
+           />
+           <Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="1" ran
+           k="3"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="4"/>
+           <Attribute name="OCCUPATION" actualValue="Prof." weight="1" rank=
+           "5"/>
+           </Details>
+
+    100026 <Details algorithm="R Extensible" class="1">
+           <Attribute name="YRS_RESIDENCE" actualValue="3" weight="11.468" r
+           ank="1"/>
+           <Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="2.964"
+            rank="2"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight="1" rank="3"
+           />
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="4"/>
+           <Attribute name="OCCUPATION" actualValue="Sales" weight="1" rank=
+           "5"/>
+           </Details>
+
+    100036 <Details algorithm="R Extensible" class="1">
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight="1" rank="1"
+           />
+           <Attribute name="YRS_RESIDENCE" actualValue="6" weight="1" rank="
+           2"/>
+           <Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="1" ran
+           k="3"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="4"/>
+           <Attribute name="OCCUPATION" actualValue="Exec." weight="1" rank=
+           "5"/>
+           </Details>
+
+    100042 <Details algorithm="R Extensible" class="1">
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight="1" rank="1"
+           />
+           <Attribute name="YRS_RESIDENCE" actualValue="1" weight="1" rank="
+           2"/>
+           <Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="1" ran
+           k="3"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="4"/>
+           <Attribute name="OCCUPATION" actualValue="Prof." weight="1" rank=
+           "5"/>
+           </Details>
+
+    100056 <Details algorithm="R Extensible" class="1">
+           <Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="1.15"
+           rank="1"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight="1" rank="2"
+           />
+           <Attribute name="YRS_RESIDENCE" actualValue="4" weight="1" rank="
+           3"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="4"/>
+           <Attribute name="OCCUPATION" actualValue="TechSup" weight="1" ran
+           k="5"/>
+           </Details>
+
+    100057 <Details algorithm="R Extensible" class="1">
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight="1" rank="1"
+           />
+           <Attribute name="YRS_RESIDENCE" actualValue="4" weight="1" rank="
+           2"/>
+           <Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="1" ran
+           k="3"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="4"/>
+           <Attribute name="OCCUPATION" actualValue="Prof." weight="1" rank=
+           "5"/>
+           </Details>
+
+    100066 <Details algorithm="R Extensible" class="1">
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight="1" rank="1"
+           />
+           <Attribute name="YRS_RESIDENCE" actualValue="6" weight="1" rank="
+           2"/>
+           <Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="1" ran
+           k="3"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="4"/>
+           <Attribute name="OCCUPATION" actualValue="Prof." weight="1" rank=
+           "5"/>
+           </Details>
+
+    100075 <Details algorithm="R Extensible" class="1">
+           <Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="2.964"
+            rank="1"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight="1" rank="2"
+           />
+           <Attribute name="YRS_RESIDENCE" actualValue="4" weight="1" rank="
+
+   CUST_ID PRED_DET
+---------- -----------------------------------------------------------------
+           3"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="4"/>
+           <Attribute name="OCCUPATION" actualValue="Crafts" weight="1" rank
+           ="5"/>
+           </Details>
+
+
+8行が選択されました。
+
+SQL>
+SQL> ------------------------ Drop Models and Algorithms ---------------------------
+SQL>
+SQL> BEGIN
+  2    DBMS_DATA_MINING.drop_algorithm(
+  3      ALGORITHM_NAME => 't1',
+  4      CASCADE => TRUE);
+  5  EXCEPTION WHEN OTHERS THEN NULL; END;
+  6  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> spool oml4sql-r-extensible-association-rules

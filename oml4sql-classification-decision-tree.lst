@@ -1,0 +1,1071 @@
+SQL> @oml4sql-classification-decision-tree
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Classification - Decision Tree Algorithm - dmdtdemo.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET serveroutput ON
+SQL> SET trimspool ON
+SQL> SET pages 10000
+SQL> SET linesize 420
+SQL> SET echo ON
+SQL> SET long 2000000000
+警告: このLONG設定によってJavaメモリーの問題が発生する可能性があります。この設定を引き下げるか、Javaが使用できるメモリーを増やす(あるいはその両方)ことをお薦めします。
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SAMPLE PROBLEM
+SQL> -----------------------------------------------------------------------
+SQL> -- Given demographic data about a set of customers, predict the
+SQL> -- customer response to an affinity card program using a classifier
+SQL> -- based on Decision Trees algorithm.
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SET UP AND ANALYZE THE DATA
+SQL> -----------------------------------------------------------------------
+SQL> -- The data for this sample is composed from base tables in SH Schema
+SQL> -- (See Sample Schema Documentation) and presented through these views:
+SQL> -- mining_data_build_parallel_v (build data)
+SQL> -- mining_data_test_parallel_v  (test data)
+SQL> -- mining_data_apply_parallel_v (apply data)
+SQL> -- (See dmsh.sql for view definitions).
+SQL>
+SQL> -----------
+SQL> -- ANALYSIS
+SQL> -----------
+SQL> -- These are the factors to consider for data analysis in decision trees:
+SQL> --
+SQL> -- 1. Missing Value Treatment for Predictors
+SQL> --
+SQL> --    See dmsvcdem.sql for a definition of missing values, and the
+SQL> --    steps to be taken for missing value imputation.
+SQL> --
+SQL> --    Decision Tree implementation in ODM handles missing predictor
+SQL> --    values (by penalizing predictors which have missing values)
+SQL> --    and missing target values (by simply discarding records with
+SQL> --    missing target values).
+SQL> --
+SQL> -- 2. Outlier Treatment for Predictors for Build data
+SQL> --
+SQL> --    See dmsvcdem.sql for a discussion on outlier treatment.
+SQL> --    For ODM decision trees, outlier treatment is not really necessary.
+SQL> --
+SQL> -- 3. Binning high cardinality data
+SQL> --    No data preparation for the types we accept is necessary - even
+SQL> --    for high cardinality predictors.  Preprocessing to reduce the
+SQL> --    cardinality (e.g., binning) can improve the performance of the build.
+SQL> --
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Cleanup old model with same name for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('DT_SH_Clas_sample');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> --------------------------------
+SQL> -- PREPARE BUILD (TRAINING) DATA
+SQL> --
+SQL> -- The decision tree algorithm is very capable of handling data which
+SQL> -- has not been specially prepared.  For this example, no data preparation
+SQL> -- will be performed.
+SQL> --
+SQL>
+SQL> -------------------
+SQL> -- SPECIFY SETTINGS
+SQL> --
+SQL> -- Cleanup old settings table objects for repeat runs
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE dt_sh_sample_cost';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> --------------------------
+SQL> -- CREATE A SETTINGS TABLE
+SQL> --
+SQL> -- The default classification algorithm is Naive Bayes. In order to override
+SQL> -- this, create and populate a settings table to be used as input for
+SQL> -- CREATE_MODEL.
+SQL> --
+SQL> -- CREATE AND POPULATE A COST MATRIX TABLE
+SQL> --
+SQL> -- A cost matrix is used to influence the weighting of misclassification
+SQL> -- during model creation (and scoring).
+SQL> -- See Oracle Data Mining Concepts Guide for more details.
+SQL> --
+SQL> CREATE TABLE dt_sh_sample_cost (
+  2    actual_target_value           NUMBER,
+  3    predicted_target_value        NUMBER,
+  4    cost                          NUMBER);
+
+Table DT_SH_SAMPLE_COSTは作成されました。
+
+SQL> INSERT INTO dt_sh_sample_cost VALUES (0,0,0);
+
+1行挿入しました。
+
+SQL> INSERT INTO dt_sh_sample_cost VALUES (0,1,1);
+
+1行挿入しました。
+
+SQL> INSERT INTO dt_sh_sample_cost VALUES (1,0,8);
+
+1行挿入しました。
+
+SQL> INSERT INTO dt_sh_sample_cost VALUES (1,1,0);
+
+1行挿入しました。
+
+SQL>
+SQL> ---------------------
+SQL> -- CREATE A NEW MODEL
+SQL> --
+SQL> -- Build a DT model
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- Populate settings table
+  5    v_setlst('ALGO_NAME')            := 'ALGO_DECISION_TREE';
+  6    v_setlst('CLAS_COST_TABLE_NAME') := 'dt_sh_sample_cost';
+  7
+  8    -- Examples of other possible settings are:
+  9    --v_setlst('TREE_IMPURITY_METRIC')   := 'TREE_IMPURITY_ENTROPY';
+ 10    --v_setlst('TREE_TERM_MAX_DEPTH')    := '5';
+ 11    --v_setlst('TREE_TERM_MINREC_SPLIT') := '5';
+ 12    --v_setlst('TREE_TERM_MINPCT_SPLIT') := '2';
+ 13    --v_setlst('TREE_TERM_MINREC_NODE')  := '5';
+ 14    --v_setlst('TREE_TERM_MINPCT_NODE')  := '0.05';
+ 15
+ 16    DBMS_DATA_MINING.CREATE_MODEL2(
+ 17      model_name          => 'DT_SH_Clas_sample',
+ 18      mining_function     => 'CLASSIFICATION',
+ 19      data_query          => 'SELECT * FROM mining_data_build_parallel_v',
+ 20      set_list            => v_setlst,
+ 21      case_id_column_name => 'cust_id',
+ 22      target_column_name  => 'affinity_card');
+ 23  END;
+ 24  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'DT_SH_CLAS_SAMPLE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_DECISION_TREE
+CLAS_COST_TABLE_NAME           dt_sh_sample_cost
+CLAS_MAX_SUP_BINS              32
+CLAS_WEIGHTS_BALANCED          OFF
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+PREP_AUTO                      ON
+TREE_IMPURITY_METRIC           TREE_IMPURITY_GINI
+TREE_TERM_MAX_DEPTH            7
+TREE_TERM_MINPCT_NODE          .05
+TREE_TERM_MINPCT_SPLIT         .1
+TREE_TERM_MINREC_NODE          10
+TREE_TERM_MINREC_SPLIT         20
+
+14行が選択されました。
+
+SQL>
+SQL> --------------------------
+SQL> -- DISPLAY MODEL SIGNATURE
+SQL> --
+SQL> column attribute_name format a40
+SQL> column attribute_type format a20
+SQL> SELECT attribute_name, attribute_type
+  2    FROM user_mining_model_attributes
+  3   WHERE model_name = 'DT_SH_CLAS_SAMPLE'
+  4  ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                           ATTRIBUTE_TYPE
+---------------------------------------- --------------------
+AFFINITY_CARD                            CATEGORICAL
+AGE                                      NUMERICAL
+CUST_MARITAL_STATUS                      CATEGORICAL
+EDUCATION                                CATEGORICAL
+HOME_THEATER_PACKAGE                     NUMERICAL
+HOUSEHOLD_SIZE                           CATEGORICAL
+OCCUPATION                               CATEGORICAL
+YRS_RESIDENCE                            NUMERICAL
+
+8行が選択されました。
+
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY MODEL DETAILS
+SQL> -- NOTE: The "&quot" characters in this XML output are owing to
+SQL> --       SQL*Plus behavior. Cut and paste this XML into a file,
+SQL> --       and open the file in a browser to see correctly formatted XML.
+SQL> --
+SQL> column dt_details format a320
+SQL> SELECT
+  2   dbms_data_mining.get_model_details_xml('DT_SH_Clas_sample')
+  3   AS DT_DETAILS
+  4  FROM dual;
+
+DT_DETAILS
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+<PMML version="2.1">
+  <Header copyright="Copyright (c) 2004, Oracle Corporation. All rights reserved."/>
+  <DataDictionary numberOfFields="8">
+    <DataField name="AFFINITY_CARD" optype="categorical"/>
+    <DataField name="AGE" optype="continuous"/>
+    <DataField name="CUST_MARITAL_STATUS" optype="categorical"/>
+    <DataField name="EDUCATION" optype="categorical"/>
+    <DataField name="HOME_THEATER_PACKAGE" optype="continuous"/>
+    <DataField name="HOUSEHOLD_SIZE" optype="categorical"/>
+    <DataField name="OCCUPATION" optype="categorical"/>
+    <DataField name="YRS_RESIDENCE" optype="continuous"/>
+  </DataDictionary>
+  <TreeModel modelName="DT_SH_CLAS_SAMPLE" functionName="classification" splitCharacteristic="binarySplit">
+    <Extension name="buildSettings">
+      <Setting name="TREE_IMPURITY_METRIC" value="TREE_IMPURITY_GINI"/>
+      <Setting name="TREE_TERM_MAX_DEPTH" value="7"/>
+      <Setting name="TREE_TERM_MINPCT_NODE" value=".05"/>
+      <Setting name="TREE_TERM_MINPCT_SPLIT" value=".1"/>
+      <Setting name="TREE_TERM_MINREC_NODE" value="10"/>
+      <Setting name="TREE_TERM_MINREC_SPLIT" value="20"/>
+      <costMatrix>
+        <costElement>
+          <actualValue>0</actualValue>
+          <predictedValue>0</predictedValue>
+          <cost>0</cost>
+        </costElement>
+        <costElement>
+          <actualValue>0</actualValue>
+          <predictedValue>1</predictedValue>
+          <cost>1</cost>
+        </costElement>
+        <costElement>
+          <actualValue>1</actualValue>
+          <predictedValue>0</predictedValue>
+          <cost>8</cost>
+        </costElement>
+        <costElement>
+          <actualValue>1</actualValue>
+          <predictedValue>1</predictedValue>
+          <cost>0</cost>
+        </costElement>
+      </costMatrix>
+    </Extension>
+    <MiningSchema>
+      <MiningField name="AFFINITY_CARD" usageType="predicted"/>
+      <MiningField name="AGE" usageType="active"/>
+      <MiningField name="CUST_MARITAL_STATUS" usageType="active"/>
+      <MiningField name="EDUCATION" usageType="active"/>
+      <MiningField name="HOME_THEATER_PACKAGE" usageType="active"/>
+      <MiningField name="HOUSEHOLD_SIZE" usageType="active"/>
+      <MiningField name="OCCUPATION" usageType="active"/>
+      <MiningField name="YRS_RESIDENCE" usageType="active"/>
+    </MiningSchema>
+    <Node id="0" score="0" recordCount="1500">
+      <True/>
+      <ScoreDistribution value="0" recordCount="1120"/>
+      <ScoreDistribution value="1" recordCount="380"/>
+      <Node id="1" score="0" recordCount="706">
+        <CompoundPredicate booleanOperator="surrogate">
+          <SimpleSetPredicate field="HOUSEHOLD_SIZE" booleanOperator="isIn">
+            <Array type="string">&quot;3&quot; &quot;4-5&quot; </Array>
+          </SimpleSetPredicate>
+          <SimpleSetPredicate field="CUST_MARITAL_STATUS" booleanOperator="isIn">
+            <Array type="string">&quot;married&quot; </Array>
+          </SimpleSetPredicate>
+        </CompoundPredicate>
+        <ScoreDistribution value="0" recordCount="377"/>
+        <ScoreDistribution value="1" recordCount="329"/>
+        <Node id="10" score="1" recordCount="243">
+          <CompoundPredicate booleanOperator="surrogate">
+            <SimpleSetPredicate field="EDUCATION" booleanOperator="isIn">
+              <Array type="string">&quot;Assoc-A&quot; &quot;Bach.&quot; &quot;Masters&quot; &quot;PhD&quot; &quot;Profsc&quot; </Array>
+            </SimpleSetPredicate>
+            <SimpleSetPredicate field="OCCUPATION" booleanOperator="isIn">
+              <Array type="string">&quot;Armed-F&quot; &quot;Exec.&quot; &quot;Prof.&quot; &quot;Protec.&quot; </Array>
+            </SimpleSetPredicate>
+          </CompoundPredicate>
+          <ScoreDistribution value="1" recordCount="179"/>
+          <ScoreDistribution value="0" recordCount="64"/>
+        </Node>
+        <Node id="11" score="0" recordCount="463">
+          <CompoundPredicate booleanOperator="surrogate">
+            <SimpleSetPredicate field="EDUCATION" booleanOperator="isIn">
+              <Array type="string">&quot;10th&quot; &quot;11th&quot; &quot;12th&quot; &quot;1st-4th&quot; &quot;5th-6th&quot; &quot;7th-8th&quot; &quot;9th&quot; &quot;&lt; Bach.&quot; &quot;Assoc-V&quot; &quot;HS-grad&quot; &quot;Presch.&quot; </Array>
+            </SimpleSetPredicate>
+            <SimpleSetPredicate field="OCCUPATION" booleanOperator="isIn">
+              <Array type="string">&quot;?&quot; &quot;Cleric.&quot; &quot;Crafts&quot; &quot;Farming&quot; &quot;Handler&quot; &quot;House-s&quot; &quot;Machine&quot; &quot;Other&quot; &quot;Sales&quot; &quot;TechSup&quot; &quot;Transp.&quot; </Array>
+            </SimpleSetPredicate>
+          </CompoundPredicate>
+          <ScoreDistribution value="0" recordCount="313"/>
+          <ScoreDistribution value="1" recordCount="150"/>
+        </Node>
+      </Node>
+      <Node id="2" score="0" recordCount="794">
+        <CompoundPredicate booleanOperator="surrogate">
+          <SimpleSetPredicate field="HOUSEHOLD_SIZE" booleanOperator="isIn">
+            <Array type="string">&quot;1&quot; &quot;2&quot; &quot;6-8&quot; &quot;9+&quot; </Array>
+          </SimpleSetPredicate>
+          <SimpleSetPredicate field="CUST_MARITAL_STATUS" booleanOperator="isIn">
+            <Array type="string">&quot;divorced&quot; &quot;never married&quot; &quot;separated&quot; &quot;widowed&quot; </Array>
+          </SimpleSetPredicate>
+        </CompoundPredicate>
+        <ScoreDistribution value="0" recordCount="743"/>
+        <ScoreDistribution value="1" recordCount="51"/>
+        <Node id="3" score="0" recordCount="449">
+          <CompoundPredicate booleanOperator="surrogate">
+            <SimplePredicate field="YRS_RESIDENCE" operator="lessOrEqual" value="3.5"/>
+            <SimplePredicate field="AGE" operator="lessOrEqual" value="22.5"/>
+          </CompoundPredicate>
+          <ScoreDistribution value="0" recordCount="441"/>
+          <ScoreDistribution value="1" recordCount="8"/>
+          <Node id="12" score="0" recordCount="248">
+            <CompoundPredicate booleanOperator="surrogate">
+              <SimplePredicate field="AGE" operator="lessOrEqual" value="14.5"/>
+              <SimplePredicate field="YRS_RESIDENCE" operator="lessOrEqual" value="2.5"/>
+            </CompoundPredicate>
+            <ScoreDistribution value="0" recordCount="248"/>
+          </Node>
+          <Node id="4" score="0" recordCount="201">
+            <CompoundPredicate booleanOperator="surrogate">
+              <SimplePredicate field="AGE" operator="greaterThan" value="14.5"/>
+              <SimplePredicate field="YRS_RESIDENCE" operator="greaterThan" value="2.5"/>
+            </CompoundPredicate>
+            <ScoreDistribution value="0" recordCount="193"/>
+            <ScoreDistribution value="1" recordCount="8"/>
+            <Node id="5" score="0" recordCount="130">
+              <SimpleSetPredicate field="HOUSEHOLD_SIZE" booleanOperator="isIn">
+                <Array type="string">&quot;1&quot; &quot;2&quot; </Array>
+              </SimpleSetPredicate>
+              <ScoreDistribution value="0" recordCount="122"/>
+              <ScoreDistribution value="1" recordCount="8"/>
+              <Node id="6" score="0" recordCount="90">
+                <SimpleSetPredicate field="CUST_MARITAL_STATUS" booleanOperator="isIn">
+                  <Array type="string">&quot;never married&quot; &quot;widowed&quot; </Array>
+                </SimpleSetPredicate>
+                <ScoreDistribution value="0" recordCount="83"/>
+                <ScoreDistribution value="1" recordCount="7"/>
+                <Node id="13" score="0" recordCount="71">
+                  <CompoundPredicate booleanOperator="surrogate">
+                    <SimplePredicate field="AGE" operator="lessOrEqual" value="22.5"/>
+                    <SimplePredicate field="HOME_THEATER_PACKAGE" operator="lessOrEqual" value=".5"/>
+                  </CompoundPredicate>
+                  <ScoreDistribution value="0" recordCount="64"/>
+                  <ScoreDistribution value="1" recordCount="7"/>
+                </Node>
+                <Node id="14" score="0" recordCount="19">
+                  <CompoundPredicate booleanOperator="surrogate">
+                    <SimplePredicate field="AGE" operator="greaterThan" value="22.5"/>
+                    <SimplePredicate field="HOME_THEATER_PACKAGE" operator="greaterThan" value=".5"/>
+                  </CompoundPredicate>
+                  <ScoreDistribution value="0" recordCount="19"/>
+                </Node>
+              </Node>
+              <Node id="15" score="0" recordCount="34">
+                <SimpleSetPredicate field="CUST_MARITAL_STATUS" booleanOperator="isIn">
+                  <Array type="string">&quot;divorced&quot; &quot;married&quot; &quot;separated&quot; </Array>
+                </SimpleSetPredicate>
+                <ScoreDistribution value="0" recordCount="34"/>
+              </Node>
+            </Node>
+            <Node id="16" score="0" recordCount="71">
+              <SimpleSetPredicate field="HOUSEHOLD_SIZE" booleanOperator="isIn">
+                <Array type="string">&quot;6-8&quot; &quot;9+&quot; </Array>
+              </SimpleSetPredicate>
+              <ScoreDistribution value="0" recordCount="71"/>
+            </Node>
+          </Node>
+        </Node>
+        <Node id="7" score="0" recordCount="345">
+          <CompoundPredicate booleanOperator="surrogate">
+            <SimplePredicate field="YRS_RESIDENCE" operator="greaterThan" value="3.5"/>
+            <SimplePredicate field="AGE" operator="greaterThan" value="22.5"/>
+          </CompoundPredicate>
+          <ScoreDistribution value="0" recordCount="302"/>
+          <ScoreDistribution value="1" recordCount="43"/>
+          <Node id="8" score="0" recordCount="239">
+            <CompoundPredicate booleanOperator="surrogate">
+              <SimpleSetPredicate field="EDUCATION" booleanOperator="isIn">
+                <Array type="string">&quot;10th&quot; &quot;11th&quot; &quot;12th&quot; &quot;1st-4th&quot; &quot;5th-6th&quot; &quot;7th-8th&quot; &quot;9th&quot; &quot;&lt; Bach.&quot; &quot;Assoc-V&quot; &quot;HS-grad&quot; &quot;Presch.&quot; </Array>
+              </SimpleSetPredicate>
+              <SimpleSetPredicate field="OCCUPATION" booleanOperator="isIn">
+                <Array type="string">&quot;?&quot; &quot;Cleric.&quot; &quot;Crafts&quot; &quot;Farming&quot; &quot;Handler&quot; &quot;House-s&quot; &quot;Machine&quot; &quot;Other&quot; &quot;Sales&quot; &quot;TechSup&quot; &quot;Transp.&quot; </Array>
+              </SimpleSetPredicate>
+            </CompoundPredicate>
+            <ScoreDistribution value="0" recordCount="223"/>
+            <ScoreDistribution value="1" recordCount="16"/>
+            <Node id="9" score="0" recordCount="213">
+              <SimplePredicate field="YRS_RESIDENCE" operator="lessOrEqual" value="6.5"/>
+              <ScoreDistribution value="0" recordCount="202"/>
+              <ScoreDistribution value="1" recordCount="11"/>
+              <Node id="18" score="0" recordCount="173">
+                <SimpleSetPredicate field="OCCUPATION" booleanOperator="isIn">
+                  <Array type="string">&quot;?&quot; &quot;Armed-F&quot; &quot;Cleric.&quot; &quot;Crafts&quot; &quot;Exec.&quot; &quot;Farming&quot; &quot;Machine&quot; &quot;Prof.&quot; &quot;Protec.&quot; &quot;Sales&quot; &quot;TechSup&quot; &quot;Transp.&quot; </Array>
+                </SimpleSetPredicate>
+                <ScoreDistribution value="0" recordCount="162"/>
+                <ScoreDistribution value="1" recordCount="11"/>
+              </Node>
+              <Node id="19" score="0" recordCount="40">
+                <SimpleSetPredicate field="OCCUPATION" booleanOperator="isIn">
+                  <Array type="string">&quot;Handler&quot; &quot;House-s&quot; &quot;Other&quot; </Array>
+                </SimpleSetPredicate>
+                <ScoreDistribution value="0" recordCount="40"/>
+              </Node>
+            </Node>
+            <Node id="20" score="0" recordCount="26">
+              <SimplePredicate field="YRS_RESIDENCE" operator="greaterThan" value="6.5"/>
+              <ScoreDistribution value="0" recordCount="21"/>
+              <ScoreDistribution value="1" recordCount="5"/>
+            </Node>
+          </Node>
+          <Node id="17" score="0" recordCount="106">
+            <CompoundPredicate booleanOperator="surrogate">
+              <SimpleSetPredicate field="EDUCATION" booleanOperator="isIn">
+                <Array type="string">&quot;Assoc-A&quot; &quot;Bach.&quot; &quot;Masters&quot; &quot;PhD&quot; &quot;Profsc&quot; </Array>
+              </SimpleSetPredicate>
+              <SimpleSetPredicate field="OCCUPATION" booleanOperator="isIn">
+                <Array type="string">&quot;Armed-F&quot; &quot;Exec.&quot; &quot;Prof.&quot; &quot;Protec.&quot; </Array>
+              </SimpleSetPredicate>
+            </CompoundPredicate>
+            <ScoreDistribution value="0" recordCount="79"/>
+            <ScoreDistribution value="1" recordCount="27"/>
+          </Node>
+        </Node>
+      </Node>
+    </Node>
+  </TreeModel>
+</PMML>
+
+SQL>
+SQL> --------------------------
+SQL> -- DISPLAY MODEL VIEWS
+SQL> --
+SQL>
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2    WHERE model_name='DT_SH_CLAS_SAMPLE'
+  3    ORDER BY view_name;
+
+VIEW_NAME                      VIEW_TYPE
+------------------------------ --------------------------------------------------
+DM$VCDT_SH_CLAS_SAMPLE         Scoring Cost Matrix
+DM$VGDT_SH_CLAS_SAMPLE         Global Name-Value Pairs
+DM$VIDT_SH_CLAS_SAMPLE         Decision Tree Statistics
+DM$VMDT_SH_CLAS_SAMPLE         Decision Tree Build Cost Matrix
+DM$VODT_SH_CLAS_SAMPLE         Decision Tree Nodes
+DM$VPDT_SH_CLAS_SAMPLE         Decision Tree Hierarchy
+DM$VSDT_SH_CLAS_SAMPLE         Computed Settings
+DM$VTDT_SH_CLAS_SAMPLE         Classification Targets
+DM$VWDT_SH_CLAS_SAMPLE         Model Build Alerts
+
+9行が選択されました。
+
+SQL>
+SQL> column ATTRIBUTE_NAME format a12
+SQL> column VAL format a12
+SQL> column split_type format a12
+SQL> column OPERATOR format a12
+SQL>
+SQL> -- Information about the splits in the hierarchy
+SQL> SELECT * FROM (
+  2  select parent, split_type, node, attribute_name, operator, split.val
+  3  from DM$VPDT_SH_CLAS_sample a,
+  4  XMLTABLE( '/Element' passing a.value
+  5      columns
+  6      val varchar2(20) path '.') split
+  7    order by 1,2,3,4,5,6)
+  8  WHERE ROWNUM < 20;
+
+    PARENT SPLIT_TYPE         NODE ATTRIBUTE_NA OPERATOR     VAL
+---------- ------------ ---------- ------------ ------------ ------------
+         0 Main                  1 HOUSEHOLD_SI IN           3
+                                   ZE
+
+         0 Main                  1 HOUSEHOLD_SI IN           4-5
+                                   ZE
+
+         0 Main                  2 HOUSEHOLD_SI IN           1
+                                   ZE
+
+         0 Main                  2 HOUSEHOLD_SI IN           2
+                                   ZE
+
+         0 Main                  2 HOUSEHOLD_SI IN           6-8
+                                   ZE
+
+         0 Main                  2 HOUSEHOLD_SI IN           9+
+                                   ZE
+
+         0 Surrogate             1 CUST_MARITAL IN           married
+                                   _STATUS
+
+         0 Surrogate             2 CUST_MARITAL IN           divorced
+                                   _STATUS
+
+         0 Surrogate             2 CUST_MARITAL IN           never marrie
+                                   _STATUS                   d
+
+         0 Surrogate             2 CUST_MARITAL IN           separated
+                                   _STATUS
+
+         0 Surrogate             2 CUST_MARITAL IN           widowed
+                                   _STATUS
+
+         1 Main                 10 EDUCATION    IN           Assoc-A
+         1 Main                 10 EDUCATION    IN           Bach.
+         1 Main                 10 EDUCATION    IN           Masters
+         1 Main                 10 EDUCATION    IN           PhD
+         1 Main                 10 EDUCATION    IN           Profsc
+         1 Main                 11 EDUCATION    IN           10th
+         1 Main                 11 EDUCATION    IN           11th
+         1 Main                 11 EDUCATION    IN           12th
+
+19行が選択されました。
+
+SQL>
+SQL> -- Information about node statistics
+SQL> select node, node_support, predicted_target_value, target_value,
+  2    target_support
+  3  from DM$VIDT_SH_CLAS_SAMPLE order by 1,2,3,4,5;
+
+      NODE NODE_SUPPORT PREDICTED_TARGET_VALUE TARGET_VALUE TARGET_SUPPORT
+---------- ------------ ---------------------- ------------ --------------
+         0         1500                      0            0           1120
+         0         1500                      0            1            380
+         1          706                      0            0            377
+         1          706                      0            1            329
+         2          794                      0            0            743
+         2          794                      0            1             51
+         3          449                      0            0            441
+         3          449                      0            1              8
+         4          201                      0            0            193
+         4          201                      0            1              8
+         5          130                      0            0            122
+         5          130                      0            1              8
+         6           90                      0            0             83
+         6           90                      0            1              7
+         7          345                      0            0            302
+         7          345                      0            1             43
+         8          239                      0            0            223
+         8          239                      0            1             16
+         9          213                      0            0            202
+         9          213                      0            1             11
+        10          243                      1            0             64
+        10          243                      1            1            179
+        11          463                      0            0            313
+        11          463                      0            1            150
+        12          248                      0            0            248
+        13           71                      0            0             64
+        13           71                      0            1              7
+        14           19                      0            0             19
+        15           34                      0            0             34
+        16           71                      0            0             71
+        17          106                      0            0             79
+        17          106                      0            1             27
+        18          173                      0            0            162
+        18          173                      0            1             11
+        19           40                      0            0             40
+        20           26                      0            0             21
+        20           26                      0            1              5
+
+37行が選択されました。
+
+SQL>
+SQL> -- Information about the nodes in the decision tree
+SQL> SELECT * FROM (
+  2  select node, node_support, predicted_target_value, parent,
+  3    attribute_name, operator, split.val
+  4  from DM$VODT_SH_CLAS_SAMPLE a,
+  5  XMLTABLE( '/Element' passing a.value
+  6      columns
+  7      val varchar2(20) path '.') split
+  8    order by 1,2,3,4,5,6,7)
+  9  WHERE ROWNUM < 20;
+
+      NODE NODE_SUPPORT PREDICTED_TARGET_VALUE     PARENT ATTRIBUTE_NA OPERATOR     VAL
+---------- ------------ ---------------------- ---------- ------------ ------------ ------------
+         1          706                      0          0 HOUSEHOLD_SI IN           3
+                                                          ZE
+
+         1          706                      0          0 HOUSEHOLD_SI IN           4-5
+                                                          ZE
+
+         2          794                      0          0 HOUSEHOLD_SI IN           1
+                                                          ZE
+
+         2          794                      0          0 HOUSEHOLD_SI IN           2
+                                                          ZE
+
+         2          794                      0          0 HOUSEHOLD_SI IN           6-8
+                                                          ZE
+
+         2          794                      0          0 HOUSEHOLD_SI IN           9+
+                                                          ZE
+
+         3          449                      0          2 YRS_RESIDENC <=           3.5E+000
+                                                          E
+
+         4          201                      0          3 AGE          >            1.45E+001
+         5          130                      0          4 HOUSEHOLD_SI IN           1
+                                                          ZE
+
+         5          130                      0          4 HOUSEHOLD_SI IN           2
+                                                          ZE
+
+         6           90                      0          5 CUST_MARITAL IN           never marrie
+                                                          _STATUS                   d
+
+         6           90                      0          5 CUST_MARITAL IN           widowed
+                                                          _STATUS
+
+         7          345                      0          2 YRS_RESIDENC >            3.5E+000
+                                                          E
+
+         8          239                      0          7 EDUCATION    IN           10th
+         8          239                      0          7 EDUCATION    IN           11th
+         8          239                      0          7 EDUCATION    IN           12th
+         8          239                      0          7 EDUCATION    IN           1st-4th
+         8          239                      0          7 EDUCATION    IN           5th-6th
+         8          239                      0          7 EDUCATION    IN           7th-8th
+
+19行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               TEST THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> --------------------
+SQL> -- PREPARE TEST DATA
+SQL> --
+SQL> -- If the data for model creation has been prepared, then the data used
+SQL> -- for testing the model must be prepared to the same scale in order to
+SQL> -- obtain meaningful results.
+SQL> -- In this case, no data preparation is necessary since model creation
+SQL> -- was performed on the raw (unprepared) input.
+SQL> --
+SQL>
+SQL> ------------------------------------
+SQL> -- COMPUTE METRICS TO TEST THE MODEL
+SQL> --
+SQL> -- Other demo programs demonstrate how to use the PL/SQL API to
+SQL> -- compute a number of metrics, including lift and ROC.  This demo
+SQL> -- only computes a confusion matrix and accuracy, but it does so
+SQL> -- using the SQL data mining functions.
+SQL> --
+SQL> -- In this example, we experiment with using the cost matrix
+SQL> -- that was provided to the create routine.  In this example, the
+SQL> -- cost matrix reduces the problematic misclassifications, but also
+SQL> -- negatively impacts the overall model accuracy.
+SQL>
+SQL> -- DISPLAY CONFUSION MATRIX WITHOUT APPLYING COST MATRIX
+SQL> --
+SQL> SELECT affinity_card AS actual_target_value,
+  2         PREDICTION(DT_SH_Clas_sample USING *) AS predicted_target_value,
+  3         COUNT(*) AS value
+  4    FROM mining_data_test_parallel_v
+  5  GROUP BY affinity_card, PREDICTION(DT_SH_Clas_sample USING *)
+  6  ORDER BY 1,2;
+
+ACTUAL_TARGET_VALUE PREDICTED_TARGET_VALUE      VALUE
+------------------- ---------------------- ----------
+                  0                      0       1074
+                  0                      1         80
+                  1                      0        192
+                  1                      1        154
+
+SQL>
+SQL> -- DISPLAY CONFUSION MATRIX APPLYING THE COST MATRIX
+SQL> --
+SQL> SELECT affinity_card AS actual_target_value,
+  2         PREDICTION(DT_SH_Clas_sample COST MODEL USING *)
+  3           AS predicted_target_value,
+  4         COUNT(*) AS value
+  5    FROM mining_data_test_parallel_v
+  6  GROUP BY affinity_card, PREDICTION(DT_SH_Clas_sample COST MODEL USING *)
+  7  ORDER BY 1,2;
+
+ACTUAL_TARGET_VALUE PREDICTED_TARGET_VALUE      VALUE
+------------------- ---------------------- ----------
+                  0                      0        694
+                  0                      1        460
+                  1                      0         28
+                  1                      1        318
+
+SQL>
+SQL> -- DISPLAY ACCURACY WITHOUT APPLYING COST MATRIX
+SQL> --
+SQL> SELECT ROUND(SUM(correct)/COUNT(*),4) AS accuracy
+  2    FROM (SELECT DECODE(affinity_card,
+  3                 PREDICTION(DT_SH_Clas_sample USING *), 1, 0) AS correct
+  4            FROM mining_data_test_parallel_v);
+
+  ACCURACY
+----------
+     .8187
+
+SQL>
+SQL> -- DISPLAY ACCURACY APPLYING THE COST MATRIX
+SQL> --
+SQL> SELECT ROUND(SUM(correct)/COUNT(*),4) AS accuracy
+  2    FROM (SELECT DECODE(affinity_card,
+  3                   PREDICTION(DT_SH_Clas_sample COST MODEL USING *),
+  4                   1, 0) AS correct
+  5            FROM mining_data_test_parallel_v);
+
+  ACCURACY
+----------
+     .6747
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               APPLY THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 1
+SQL> -- Find the 10 customers who live in Italy that are least expensive
+SQL> -- to be convinced to use an affinity card.
+SQL> --
+SQL> SELECT cust_id FROM
+  2  (SELECT cust_id,
+  3          rank() over (order by PREDICTION_COST(DT_SH_Clas_sample,
+  4                       1 COST MODEL USING *) ASC, cust_id) rnk
+  5     FROM mining_data_apply_parallel_v
+  6    WHERE country_name = 'Italy')
+  7  where rnk <= 10
+  8  order by rnk;
+
+   CUST_ID
+----------
+    100081
+    100179
+    100185
+    100324
+    100344
+    100554
+    100662
+    100733
+    101250
+    101306
+
+10行が選択されました。
+
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 2
+SQL> -- Find the average age of customers who are likely to use an
+SQL> -- affinity card.
+SQL> -- Include the build-time cost matrix in the prediction.
+SQL> -- Only take into account CUST_MARITAL_STATUS, EDUCATION, and
+SQL> -- HOUSEHOLD_SIZE as predictors.
+SQL> -- Break out the results by gender.
+SQL> --
+SQL> column cust_gender format a12
+SQL> SELECT cust_gender, COUNT(*) AS cnt, ROUND(AVG(age)) AS avg_age
+  2    FROM mining_data_apply_parallel_v
+  3   WHERE PREDICTION(dt_sh_clas_sample COST MODEL
+  4                   USING cust_marital_status, education, household_size) = 1
+  5  GROUP BY cust_gender
+  6  ORDER BY cust_gender;
+
+CUST_GENDER         CNT    AVG_AGE
+------------ ---------- ----------
+F                    74         28
+M                   576         33
+
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 3
+SQL> -- List ten customers (ordered by their id) along with likelihood and cost
+SQL> -- to use or reject the affinity card (Note: while this example has a
+SQL> -- binary target, such a query is useful in multi-class classification -
+SQL> -- Low, Med, High for example).
+SQL> --
+SQL> column prediction format 9
+SQL> column probability format 9.999999999
+SQL> column cost format 9.999999999
+SQL> SELECT T.cust_id, S.prediction, S.probability, S.cost
+  2    FROM (SELECT cust_id,
+  3                 PREDICTION_SET(dt_sh_clas_sample COST MODEL USING *) pset
+  4            FROM mining_data_apply_parallel_v
+  5           WHERE cust_id < 100011) T,
+  6         TABLE(T.pset) S
+  7  ORDER BY cust_id, S.prediction;
+
+   CUST_ID PREDICTION PROBABILITY COST
+---------- ---------- ----------- ----
+    100001          0 1.000000000 .000000000
+    100001          1  .000000000 1.000000000
+    100002          0  .745283019 2.037735849
+    100002          1  .254716981 .745283019
+    100003          0  .936416185 .508670520
+    100003          1  .063583815 .936416185
+    100004          0  .936416185 .508670520
+    100004          1  .063583815 .936416185
+    100005          0  .263374486 5.893004115
+    100005          1  .736625514 .263374486
+    100006          0 1.000000000 .000000000
+    100006          1  .000000000 1.000000000
+    100007          0 1.000000000 .000000000
+    100007          1  .000000000 1.000000000
+    100008          0  .936416185 .508670520
+    100008          1  .063583815 .936416185
+    100009          0  .263374486 5.893004115
+    100009          1  .736625514 .263374486
+    100010          0  .676025918 2.591792657
+    100010          1  .323974082 .676025918
+
+20行が選択されました。
+
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 4
+SQL> -- Find the segmentation (resulting tree node and rule) for customers who
+SQL> -- work in Tech support and are under 25.
+SQL> --
+SQL> set long 20000
+SQL> set line 300
+SQL> set pagesize 100
+SQL> column education format a30
+SQL> SELECT cust_id, education,
+  2         PREDICTION_DETAILS(dt_sh_clas_sample USING *) prediction_details
+  3    FROM mining_data_apply_parallel_v
+  4   WHERE occupation = 'TechSup' AND age < 25
+  5  ORDER BY cust_id;
+
+   CUST_ID EDUCATION                      PREDICTION_DETAILS
+---------- ------------------------------ --------------------------------------------------------------------------------
+    100099 HS-grad                        <Details algorithm="Decision Tree" class="0" node="11">
+                                          <Attribute name="EDUCATION" actualValue="HS-grad" weight=".142" rank="1"/>
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight="-.213" rank="2"/>
+                                          </Details>
+
+    100125 Bach.                          <Details algorithm="Decision Tree" class="0" node="13">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="1" weight=".167" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="1" weight=".046" rank="2"/>
+                                          <Attribute name="CUST_MARITAL_STATUS" actualValue="never married" weight="-.016"
+                                           rank="3"/>
+                                          <Attribute name="AGE" actualValue="17" weight="-.043" rank="4"/>
+                                          </Details>
+
+    100152 HS-grad                        <Details algorithm="Decision Tree" class="0" node="11">
+                                          <Attribute name="EDUCATION" actualValue="HS-grad" weight=".142" rank="1"/>
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="4-5" weight="-.213" rank="2"/>
+                                          </Details>
+
+    100187 < Bach.                        <Details algorithm="Decision Tree" class="0" node="12">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="1" weight=".189" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="3" weight=".046" rank="2"/>
+                                          <Attribute name="AGE" actualValue="14" weight=".018" rank="3"/>
+                                          </Details>
+
+    100202 < Bach.                        <Details algorithm="Decision Tree" class="0" node="13">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".167" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="3" weight=".046" rank="2"/>
+                                          <Attribute name="CUST_MARITAL_STATUS" actualValue="never married" weight="-.016"
+                                           rank="3"/>
+                                          <Attribute name="AGE" actualValue="22" weight="-.043" rank="4"/>
+                                          </Details>
+
+    100234 < Bach.                        <Details algorithm="Decision Tree" class="0" node="12">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".189" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="2" weight=".046" rank="2"/>
+                                          <Attribute name="AGE" actualValue="9" weight=".018" rank="3"/>
+                                          </Details>
+
+    100259 < Bach.                        <Details algorithm="Decision Tree" class="0" node="11">
+                                          <Attribute name="EDUCATION" actualValue="&lt; Bach." weight=".142" rank="1"/>
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight="-.213" rank="2"/>
+                                          </Details>
+
+    100304 Assoc-A                        <Details algorithm="Decision Tree" class="0" node="13">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".167" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="3" weight=".046" rank="2"/>
+                                          <Attribute name="CUST_MARITAL_STATUS" actualValue="never married" weight="-.016"
+                                           rank="3"/>
+                                          <Attribute name="AGE" actualValue="19" weight="-.043" rank="4"/>
+                                          </Details>
+
+    100320 < Bach.                        <Details algorithm="Decision Tree" class="0" node="12">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".189" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="2" weight=".046" rank="2"/>
+                                          <Attribute name="AGE" actualValue="13" weight=".018" rank="3"/>
+                                          </Details>
+
+    100349 < Bach.                        <Details algorithm="Decision Tree" class="0" node="12">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="1" weight=".189" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="1" weight=".046" rank="2"/>
+                                          <Attribute name="AGE" actualValue="13" weight=".018" rank="3"/>
+                                          </Details>
+
+    100419 < Bach.                        <Details algorithm="Decision Tree" class="0" node="12">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="1" weight=".189" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="1" weight=".046" rank="2"/>
+                                          <Attribute name="AGE" actualValue="10" weight=".018" rank="3"/>
+                                          </Details>
+
+    100448 HS-grad                        <Details algorithm="Decision Tree" class="0" node="11">
+                                          <Attribute name="EDUCATION" actualValue="HS-grad" weight=".142" rank="1"/>
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight="-.213" rank="2"/>
+                                          </Details>
+
+    100489 Assoc-A                        <Details algorithm="Decision Tree" class="0" node="12">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="1" weight=".189" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="3" weight=".046" rank="2"/>
+                                          <Attribute name="AGE" actualValue="14" weight=".018" rank="3"/>
+                                          </Details>
+
+    100583 < Bach.                        <Details algorithm="Decision Tree" class="0" node="11">
+                                          <Attribute name="EDUCATION" actualValue="&lt; Bach." weight=".142" rank="1"/>
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight="-.213" rank="2"/>
+                                          </Details>
+
+    100643 Bach.                          <Details algorithm="Decision Tree" class="0" node="12">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".189" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="3" weight=".046" rank="2"/>
+                                          <Attribute name="AGE" actualValue="14" weight=".018" rank="3"/>
+                                          </Details>
+
+    100657 HS-grad                        <Details algorithm="Decision Tree" class="0" node="12">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="1" weight=".189" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="0" weight=".046" rank="2"/>
+                                          <Attribute name="AGE" actualValue="7" weight=".018" rank="3"/>
+                                          </Details>
+
+
+   CUST_ID EDUCATION                      PREDICTION_DETAILS
+---------- ------------------------------ --------------------------------------------------------------------------------
+    100670 < Bach.                        <Details algorithm="Decision Tree" class="0" node="13">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".167" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="3" weight=".046" rank="2"/>
+                                          <Attribute name="CUST_MARITAL_STATUS" actualValue="never married" weight="-.016"
+                                           rank="3"/>
+                                          <Attribute name="AGE" actualValue="17" weight="-.043" rank="4"/>
+                                          </Details>
+
+    100824 Bach.                          <Details algorithm="Decision Tree" class="0" node="12">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="9+" weight=".189" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="3" weight=".046" rank="2"/>
+                                          <Attribute name="AGE" actualValue="14" weight=".018" rank="3"/>
+                                          </Details>
+
+    100851 HS-grad                        <Details algorithm="Decision Tree" class="0" node="12">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="9+" weight=".189" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="3" weight=".046" rank="2"/>
+                                          <Attribute name="AGE" actualValue="14" weight=".018" rank="3"/>
+                                          </Details>
+
+    100952 Bach.                          <Details algorithm="Decision Tree" class="0" node="12">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".189" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="3" weight=".046" rank="2"/>
+                                          <Attribute name="AGE" actualValue="14" weight=".018" rank="3"/>
+                                          </Details>
+
+    100993 Assoc-V                        <Details algorithm="Decision Tree" class="0" node="13">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".167" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="3" weight=".046" rank="2"/>
+                                          <Attribute name="CUST_MARITAL_STATUS" actualValue="never married" weight="-.016"
+                                           rank="3"/>
+                                          <Attribute name="AGE" actualValue="17" weight="-.043" rank="4"/>
+                                          </Details>
+
+    101043 Assoc-V                        <Details algorithm="Decision Tree" class="0" node="16">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="9+" weight=".229" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="3" weight=".046" rank="2"/>
+                                          <Attribute name="AGE" actualValue="20" weight="-.022" rank="3"/>
+                                          </Details>
+
+    101158 Bach.                          <Details algorithm="Decision Tree" class="0" node="12">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="1" weight=".189" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="1" weight=".046" rank="2"/>
+                                          <Attribute name="AGE" actualValue="14" weight=".018" rank="3"/>
+                                          </Details>
+
+    101171 < Bach.                        <Details algorithm="Decision Tree" class="0" node="12">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".189" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="2" weight=".046" rank="2"/>
+                                          <Attribute name="AGE" actualValue="11" weight=".018" rank="3"/>
+                                          </Details>
+
+    101218 Bach.                          <Details algorithm="Decision Tree" class="0" node="13">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".167" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="3" weight=".046" rank="2"/>
+                                          <Attribute name="CUST_MARITAL_STATUS" actualValue="never married" weight="-.016"
+                                           rank="3"/>
+                                          <Attribute name="AGE" actualValue="20" weight="-.043" rank="4"/>
+                                          </Details>
+
+    101222 Assoc-V                        <Details algorithm="Decision Tree" class="0" node="12">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="9+" weight=".189" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="3" weight=".046" rank="2"/>
+                                          <Attribute name="AGE" actualValue="14" weight=".018" rank="3"/>
+                                          </Details>
+
+    101225 < Bach.                        <Details algorithm="Decision Tree" class="0" node="12">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="1" weight=".189" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="2" weight=".046" rank="2"/>
+                                          <Attribute name="AGE" actualValue="11" weight=".018" rank="3"/>
+                                          </Details>
+
+    101338 < Bach.                        <Details algorithm="Decision Tree" class="0" node="12">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="6-8" weight=".189" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="2" weight=".046" rank="2"/>
+                                          <Attribute name="AGE" actualValue="11" weight=".018" rank="3"/>
+                                          </Details>
+
+    101405 Bach.                          <Details algorithm="Decision Tree" class="0" node="13">
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="1" weight=".167" rank="1"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="3" weight=".046" rank="2"/>
+                                          <Attribute name="CUST_MARITAL_STATUS" actualValue="never married" weight="-.016"
+                                           rank="3"/>
+                                          <Attribute name="AGE" actualValue="16" weight="-.043" rank="4"/>
+                                          </Details>
+
+    101422 Assoc-A                        <Details algorithm="Decision Tree" class="1" node="10">
+                                          <Attribute name="EDUCATION" actualValue="Assoc-A" weight=".271" rank="1"/>
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".213" rank="2"/>
+                                          </Details>
+
+    101438 HS-grad                        <Details algorithm="Decision Tree" class="0" node="11">
+                                          <Attribute name="EDUCATION" actualValue="HS-grad" weight=".142" rank="1"/>
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight="-.213" rank="2"/>
+                                          </Details>
+
+    101480 < Bach.                        <Details algorithm="Decision Tree" class="0" node="15">
+
+   CUST_ID EDUCATION                      PREDICTION_DETAILS
+---------- ------------------------------ --------------------------------------------------------------------------------
+                                          <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".167" rank="1"/>
+                                          <Attribute name="CUST_MARITAL_STATUS" actualValue="divorced" weight=".062" rank=
+                                          "2"/>
+                                          <Attribute name="YRS_RESIDENCE" actualValue="1" weight=".046" rank="3"/>
+                                          <Attribute name="AGE" actualValue="17" weight="-.022" rank="4"/>
+                                          </Details>
+
+
+32行が選択されました。
+
+SQL> spool oml4sql-classification-glm

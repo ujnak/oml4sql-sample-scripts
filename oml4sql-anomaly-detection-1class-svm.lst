@@ -1,0 +1,343 @@
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SAMPLE PROBLEM
+SQL> -----------------------------------------------------------------------
+SQL> -- Given demographics about a set of customers that are known to have
+SQL> -- an affinity card, 1) find the most atypical members of this group
+SQL> -- (outlier identification), 2) discover the common demographic
+SQL> -- characteristics of the most typical customers with affinity card,
+SQL> -- and 3) compute how typical a given new/hypothetical customer is.
+SQL> --
+SQL> -------
+SQL> -- DATA
+SQL> -------
+SQL> -- The data for this sample is composed from base tables in the SH schema
+SQL> -- (See Sample Schema Documentation) and presented through a view:
+SQL> -- mining_data_one_class_pv
+SQL> -- (See dmsh.sql for view definition).
+SQL> --
+SQL> --
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Cleanup old model with the same name (if any)
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('SVMO_SH_Clas_sample');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> ---------------------
+SQL> -- CREATE A MODEL
+SQL> --
+SQL> -- Build a new one-class SVM Model
+SQL> -- Note the NULL sprecification for target column name
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- Set algorithm to Support Vector Machines
+  5    v_setlst('ALGO_NAME') := 'ALGO_SUPPORT_VECTOR_MACHINES';
+  6    -- Enable automatic data preparation
+  7    v_setlst('PREP_AUTO') := 'ON';
+  8
+  9    -- Examples of other possible overrides:
+ 10    -- Select a different rate of outliers in the data (default 0.1)
+ 11    -- v_setlst('SVMS_OUTLIER_RATE') := '0.05';
+ 12    -- Select a kernel type (default kernel: selected by the algorithm)
+ 13    -- v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_LINEAR';
+ 14    -- v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_GAUSSIAN';
+ 15
+ 16    DBMS_DATA_MINING.CREATE_MODEL2(
+ 17      model_name          => 'SVMO_SH_Clas_sample',
+ 18      mining_function     => 'CLASSIFICATION',
+ 19      data_query          => 'SELECT * FROM mining_data_one_class_pv',
+ 20      set_list            => v_setlst,
+ 21      case_id_column_name => 'cust_id',
+ 22      target_column_name  => NULL);
+ 23  END;
+ 24  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'SVMO_SH_CLAS_SAMPLE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                    SETTING_VALUE
+_______________________________ _______________________________
+ALGO_NAME                       ALGO_SUPPORT_VECTOR_MACHINES
+ODMS_DETAILS                    ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT    ODMS_MISSING_VALUE_AUTO
+ODMS_SAMPLING                   ODMS_SAMPLING_DISABLE
+PREP_AUTO                       ON
+SVMS_CONV_TOLERANCE             .0001
+SVMS_KERNEL_FUNCTION            SVMS_LINEAR
+SVMS_OUTLIER_RATE               .01
+
+8行が選択されました。
+
+SQL>
+SQL> --------------------------
+SQL> -- DISPLAY MODEL SIGNATURE
+SQL> --
+SQL> -- For sample code displaying SVM signature see dmsvcdem.sql.
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY MODEL DETAILS
+SQL> --
+SQL> -- Model details are available only for SVM models with linear kernel.
+SQL> -- For SVM model details sample code see dmsvcdem.sql.
+SQL> --
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2  WHERE model_name='SVMO_SH_CLAS_SAMPLE'
+  3  ORDER BY view_name;
+
+VIEW_NAME                   VIEW_TYPE
+___________________________ ___________________________________________
+DM$VCSVMO_SH_CLAS_SAMPLE    Scoring Cost Matrix
+DM$VGSVMO_SH_CLAS_SAMPLE    Global Name-Value Pairs
+DM$VLSVMO_SH_CLAS_SAMPLE    SVM Linear Coefficients
+DM$VNSVMO_SH_CLAS_SAMPLE    Normalization and Missing Value Handling
+DM$VSSVMO_SH_CLAS_SAMPLE    Computed Settings
+DM$VTSVMO_SH_CLAS_SAMPLE    Classification Targets
+DM$VWSVMO_SH_CLAS_SAMPLE    Model Build Alerts
+
+7行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               APPLY THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Depending on the business case, the model can be scored against the
+SQL> -- build data (e.g, business cases 1 and 2) or against new, previously
+SQL> -- unseen data (e.g., business case 3). New apply data needs to undergo
+SQL> -- the same transformations as the build data (see business case 3).
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 1
+SQL> -- Find the top 5 outliers - customers that differ the most from
+SQL> -- the rest of the population. Depending on the application, such
+SQL> -- atypical customers can be removed from the data (data cleansing).
+SQL> -- Explain which attributes cause them to appear different.
+SQL> --
+SQL> set long 20000
+SQL> col pd format a90
+SQL> SELECT cust_id, pd FROM
+  2  (SELECT cust_id,
+  3          PREDICTION_DETAILS(SVMO_SH_Clas_sample, 0 using *) pd,
+  4          rank() over (order by prediction_probability(
+  5                       SVMO_SH_Clas_sample, 0 using *) DESC, cust_id) rnk
+  6   FROM mining_data_one_class_pv)
+  7  WHERE rnk <= 5
+  8  order by rnk;
+
+   CUST_ID PD
+__________ _____________________________________________________________________________________________
+    102366 <Details algorithm="Support Vector Machines" class="0">
+<Attribute name="COUNTRY_NAME" actualValue="United Kingdom" weight=".338" rank="1"/>
+<Attribute name="CUST_MARITAL_STATUS" actualValue="divorced" weight=".239" rank="2"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="9+" weight=".163" rank="3"/>
+<Attribute name="CUST_GENDER" actualValue="F" weight=".123" rank="4"/>
+<Attribute name="AGE" actualValue="17" weight=".06" rank="5"/>
+</Details>
+
+    101542 <Details algorithm="Support Vector Machines" class="0">
+<Attribute name="COUNTRY_NAME" actualValue="Italy" weight=".36" rank="1"/>
+<Attribute name="CUST_MARITAL_STATUS" actualValue="never married" weight=".276" rank="2"/>
+<Attribute name="CUST_GENDER" actualValue="F" weight=".17" rank="3"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".132" rank="4"/>
+<Attribute name="EDUCATION" actualValue="Masters" weight=".044" rank="5"/>
+</Details>
+
+    101790 <Details algorithm="Support Vector Machines" class="0">
+<Attribute name="COUNTRY_NAME" actualValue="Canada" weight=".376" rank="1"/>
+<Attribute name="CUST_GENDER" actualValue="F" weight=".181" rank="2"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="4-5" weight=".154" rank="3"/>
+<Attribute name="EDUCATION" actualValue="7th-8th" weight=".105" rank="4"/>
+<Attribute name="AGE" actualValue="27" weight=".059" rank="5"/>
+</Details>
+
+    101734 <Details algorithm="Support Vector Machines" class="0">
+<Attribute name="CUST_MARITAL_STATUS" actualValue="divorced" weight=".283" rank="1"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="9+" weight=".219" rank="2"/>
+<Attribute name="CUST_GENDER" actualValue="F" weight=".178" rank="3"/>
+<Attribute name="OCCUPATION" actualValue="Protec." weight=".069" rank="4"/>
+<Attribute name="AGE" actualValue="27" weight=".057" rank="5"/>
+</Details>
+
+    102201 <Details algorithm="Support Vector Machines" class="0">
+<Attribute name="CUST_MARITAL_STATUS" actualValue="divorced" weight=".268" rank="1"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="1" weight=".219" rank="2"/>
+<Attribute name="CUST_GENDER" actualValue="F" weight=".17" rank="3"/>
+<Attribute name="EDUCATION" actualValue="11th" weight=".105" rank="4"/>
+<Attribute name="OCCUPATION" actualValue="Crafts" weight=".033" rank="5"/>
+</Details>
+
+
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 2
+SQL> -- Find demographic characteristics of the typical affinity card members.
+SQL> -- These statistics will not be influenced by outliers and are likely to
+SQL> -- provide a more truthful picture of the population of interest than
+SQL> -- statistics computed on the entire group of affinity members.
+SQL> -- Statistics are computed on the original (non-transformed) data.
+SQL> column cust_gender format a12
+SQL> SELECT cust_gender, round(avg(age)) age,
+  2         round(avg(yrs_residence)) yrs_residence,
+  3         count(*) cnt
+  4  FROM mining_data_one_class_pv
+  5  WHERE prediction(SVMO_SH_Clas_sample using *) = 1
+  6  GROUP BY cust_gender
+  7  ORDER BY cust_gender;
+
+CUST_GENDER       AGE    YRS_RESIDENCE    CNT
+______________ ______ ________________ ______
+F                  31                4     50
+M                  34                5    326
+
+SQL>
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 3
+SQL> --
+SQL> -- Compute probability of a new/hypothetical customer being a typical
+SQL> -- affinity card holder.
+SQL> -- Necessary data preparation on the input attributes is performed
+SQL> -- automatically during model scoring since the model was build with
+SQL> -- auto data prep.
+SQL> --
+SQL> column prob_typical format 9.99
+SQL> select prediction_probability(SVMO_SH_Clas_sample, 1 using
+  2                               44 AS age,
+  3                               6 AS yrs_residence,
+  4                               'Bach.' AS education,
+  5                               'Married' AS cust_marital_status,
+  6                               'Exec.' AS occupation,
+  7                               'United States of America' AS country_name,
+  8                               'M' AS cust_gender,
+  9                               'L: 300,000 and above' AS cust_income_level,
+ 10                               '3' AS household_size
+ 11                               ) prob_typical
+ 12  from dual;
+
+PROB_TYPICAL
+_____________________
+0.8833408238614217
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --    BUILD and APPLY a transient model using analytic functions
+SQL> -----------------------------------------------------------------------
+SQL> -- In addition to creating a persistent model that is stored as a schema
+SQL> -- object, models can be built and scored on data on the fly using
+SQL> -- Oracle's analytic function syntax.
+SQL>
+SQL> ----------------------
+SQL> -- BUSINESS USE CASE 4
+SQL> --
+SQL> -- Identify rows that are most atypical in the input dataset.
+SQL> -- Consider each type of marital status to be separate, so the most
+SQL> -- anomalous rows per marital status group should be returned.
+SQL> -- Provide the top three attributes leading to the reason for the
+SQL> -- record being an anomaly.
+SQL> -- The partition by clause used in the analytic version of the
+SQL> -- prediction_probability function will lead to separate models
+SQL> -- being built and scored for each marital status.
+SQL> col cust_marital_status format a30
+SQL> select cust_id, cust_marital_status, rank_anom, anom_det FROM
+  2  (SELECT cust_id, cust_marital_status, anom_det,
+  3          rank() OVER (PARTITION BY CUST_MARITAL_STATUS
+  4                       ORDER BY ROUND(ANOM_PROB,8) DESC,cust_id) rank_anom FROM
+  5   (SELECT cust_id, cust_marital_status,
+  6          PREDICTION_PROBABILITY(OF ANOMALY, 0 USING *)
+  7            OVER (PARTITION BY CUST_MARITAL_STATUS) anom_prob,
+  8          PREDICTION_DETAILS(OF ANOMALY, 0, 3 USING *)
+  9            OVER (PARTITION BY CUST_MARITAL_STATUS) anom_det
+ 10     FROM mining_data_one_class_pv
+ 11   ))
+ 12  where rank_anom < 3 order by 2, 3;
+
+   CUST_ID CUST_MARITAL_STATUS       RANK_ANOM ANOM_DET
+__________ ______________________ ____________ __________________________________________________________________________________________________
+    102366 divorced                          1 <Details algorithm="Support Vector Machines" class="0">
+<Attribute name="COUNTRY_NAME" actualValue="United Kingdom" weight=".311" rank="1"/>
+<Attribute name="AGE" actualValue="17" weight=".127" rank="2"/>
+<Attribute name="YRS_RESIDENCE" actualValue="4" weight=".069" rank="3"/>
+</Details>
+
+    102201 divorced                          2 <Details algorithm="Support Vector Machines" class="0">
+<Attribute name="HOUSEHOLD_SIZE" actualValue="1" weight=".104" rank="1"/>
+<Attribute name="EDUCATION" actualValue="11th" weight=".046" rank="2"/>
+<Attribute name="CUST_INCOME_LEVEL" actualValue="J: 190,000 - 249,999" weight=".016" rank="3"/>
+</Details>
+
+    101790 married                           1 <Details algorithm="Support Vector Machines" class="0">
+<Attribute name="COUNTRY_NAME" actualValue="Canada" weight=".386" rank="1"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="4-5" weight=".254" rank="2"/>
+<Attribute name="CUST_GENDER" actualValue="F" weight=".25" rank="3"/>
+</Details>
+
+    102708 married                           2 <Details algorithm="Support Vector Machines" class="0">
+<Attribute name="COUNTRY_NAME" actualValue="Germany" weight=".365" rank="1"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="4-5" weight=".267" rank="2"/>
+<Attribute name="CUST_GENDER" actualValue="F" weight=".263" rank="3"/>
+</Details>
+
+    101542 never married                     1 <Details algorithm="Support Vector Machines" class="0">
+<Attribute name="COUNTRY_NAME" actualValue="Italy" weight=".322" rank="1"/>
+<Attribute name="CUST_ID" actualValue="101542" weight=".085" rank="2"/>
+<Attribute name="EDUCATION" actualValue="Masters" weight=".022" rank="3"/>
+</Details>
+
+    101505 never married                     2 <Details algorithm="Support Vector Machines" class="0">
+<Attribute name="HOUSEHOLD_SIZE" actualValue="9+" weight=".179" rank="1"/>
+<Attribute name="CUST_ID" actualValue="101505" weight=".079" rank="2"/>
+<Attribute name="AGE" actualValue="23" weight=".034" rank="3"/>
+</Details>
+
+    101836 separated                         1 <Details algorithm="Support Vector Machines" class="0">
+<Attribute name="CUST_GENDER" actualValue="F" weight=".063" rank="1"/>
+<Attribute name="CUST_INCOME_LEVEL" actualValue="K: 250,000 - 299,999" weight=".033" rank="2"/>
+<Attribute name="CUST_ID" actualValue="101836" weight=".029" rank="3"/>
+</Details>
+
+    102716 separated                         2 <Details algorithm="Support Vector Machines" class="0">
+<Attribute name="HOUSEHOLD_SIZE" actualValue="9+" weight=".092" rank="1"/>
+<Attribute name="AGE" actualValue="32" weight=".027" rank="2"/>
+<Attribute name="OCCUPATION" actualValue="Transp." weight=".015" rank="3"/>
+</Details>
+
+    101777 widowed                           1 <Details algorithm="Support Vector Machines" class="0">
+<Attribute name="YRS_RESIDENCE" actualValue="8" weight=".012" rank="1"/>
+<Attribute name="CUST_ID" actualValue="101777" weight=".012" rank="2"/>
+<Attribute name="AGE" actualValue="44" weight=".012" rank="3"/>
+</Details>
+
+    102451 widowed                           2 <Details algorithm="Support Vector Machines" class="0">
+<Attribute name="OCCUPATION" actualValue="Sales" weight=".013" rank="1"/>
+<Attribute name="EDUCATION" actualValue="HS-grad" weight=".013" rank="2"/>
+<Attribute name="CUST_INCOME_LEVEL" actualValue="J: 190,000 - 249,999" weight=".013" rank="3"/>
+</Details>
+
+    101713                                   1 <Details algorithm="Support Vector Machines" class="0">
+</Details>
+
+
+11行が選択されました。
+
+SQL> spool oml4sql-anomaly-detection-em

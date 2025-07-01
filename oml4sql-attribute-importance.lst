@@ -1,0 +1,86 @@
+SQL> @oml4sql-attribute-importance
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Attribute Importance - "EXPLAIN" function - dmaidemo.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> SET serveroutput ON
+SQL> SET trimspool ON
+SQL> SET pages 10000
+SQL> SET echo ON
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SAMPLE PROBLEM
+SQL> -----------------------------------------------------------------------
+SQL> -- Given a target attribute affinity_card, find the importance of
+SQL> -- attributes that independently impact the target attribute.
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -------------------
+SQL> -- Cleanup old output table for repeat runs
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE ai_explain_output';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------
+SQL> -- Run the EXPLAIN routine to get attribute importance results
+SQL> BEGIN
+  2    DBMS_PREDICTIVE_ANALYTICS.EXPLAIN(
+  3      data_table_name     => 'mining_data_build_v',
+  4      explain_column_name => 'affinity_card',
+  5      result_table_name   => 'ai_explain_output');
+  6  END;
+  7  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY RESULTS
+SQL> --
+SQL> -- List of attribute names ranked by their importance value.
+SQL> -- The larger the value, the more impact that attribute has
+SQL> -- on causing variation in the target column.
+SQL> --
+SQL> column attribute_name    format a40
+SQL> column explanatory_value format 9.999
+SQL> SELECT attribute_name, explanatory_value, rank
+  2  FROM ai_explain_output
+  3  ORDER BY rank, attribute_name;
+
+ATTRIBUTE_NAME                           EXPLANATORY_VALUE       RANK
+---------------------------------------- ----------------- ----------
+HOUSEHOLD_SIZE                                        .194          1
+CUST_MARITAL_STATUS                                   .183          2
+YRS_RESIDENCE                                         .112          3
+AGE                                                   .100          4
+EDUCATION                                             .089          5
+OCCUPATION                                            .079          6
+Y_BOX_GAMES                                           .077          7
+HOME_THEATER_PACKAGE                                  .070          8
+CUST_GENDER                                           .045          9
+BOOKKEEPING_APPLICATION                               .022         10
+BULK_PACK_DISKETTES                                   .000         11
+COUNTRY_NAME                                          .000         11
+CUST_ID                                               .000         11
+CUST_INCOME_LEVEL                                     .000         11
+FLAT_PANEL_MONITOR                                    .000         11
+OS_DOC_SET_KANJI                                      .000         11
+PRINTER_SUPPLIES                                      .000         11
+
+17行が選択されました。
+
+SQL> spool oml4sql-classification-decision-tree

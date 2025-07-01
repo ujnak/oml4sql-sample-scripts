@@ -1,0 +1,762 @@
+SQL> @oml4sql-r-extensible-kmeans
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   OML R Extensible - K-Means Algorithm - dmrkmdemo.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET serveroutput ON
+SQL> SET trimspool ON
+SQL> SET pages 10000
+SQL> SET linesize 140
+SQL> SET LONG 10000
+SQL> SET echo ON
+SQL>
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SET UP THE DATA
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Cleanup old training data view for repeat runs
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP VIEW km_build_v';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- Create a view for building kmeans model
+SQL> create view km_build_v as
+  2  select cust_id, age, yrs_residence, affinity_card, bulk_pack_diskettes,
+  3  flat_panel_monitor, home_theater_package, bookkeeping_application, y_box_games
+  4  from mining_data_build_v;
+
+View KM_BUILD_Vは作成されました。
+
+SQL>
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Cleanup old model with same name for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('RKM_SH_CLUS_SAMPLE');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> BEGIN
+  2  sys.rqScriptDrop('RKM_BUILD');
+  3  sys.rqScriptDrop('RKM_SCORE');
+  4  sys.rqScriptDrop('RKM_WEIGHT');
+  5  sys.rqScriptDrop('RKM_DETAILS');
+  6  EXCEPTION WHEN OTHERS THEN NULL; END;
+  7  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> ------------
+SQL> -- R scripts
+SQL> --
+SQL> -- The R scripts are created by users using sys.rqScriptCreate to define
+SQL> -- their own approaches in R for building CLUSTERING models and
+SQL> -- scoring new data in ODM framework.
+SQL> --
+SQL> -- Here is the mapping between the R scripts and ODM functions/PROCs that
+SQL> -- invoke and use the R scripts. Please refer to user guide for details.
+SQL> --------------------------------------------------------------------------
+SQL> -- ralg_build_function           -------   CREATE_MODEL
+SQL> -- ralg_score_function           -------   CLUSTER_ID, CLUSTER_PROBABILITY
+SQL> --                                         CLUSTER_SET, CLUSTER_DISTANCE
+SQL> -- ralg_weight_function          -------   CLUSTER_DETAILS
+SQL> -- ralg_details_function         -------   CREATE_MODEL2(to generate model view)
+SQL> -- ralg_details_format           -------   CREATE_MODEL2(to generate model view)
+SQL>
+SQL> BEGIN
+  2
+  3  -- Our BUILD script here uses R's kmeans function to build a kmeans model.
+  4  -- We centralize and normalize the training data before the model build.
+  5  -- Predefined attribute dm$nclus must be set on the generated R model to
+  6  -- indicate the number of clusters produced by the clustering model fit.
+  7    sys.rqScriptCreate('RKM_BUILD',
+  8      'function(dat) {dat.scaled <- scale(dat)
+  9       set.seed(6543); mod <- list()
+ 10       fit <- kmeans(dat.scaled, centers = 3L)
+ 11       mod[[1L]] <- fit
+ 12       mod[[2L]] <- attr(dat.scaled, "scaled:center")
+ 13       mod[[3L]] <- attr(dat.scaled, "scaled:scale")
+ 14       attr(mod, "dm$nclus") <- nrow(fit$centers)
+ 15       mod}');
+ 16
+ 17  -- Our SCORE script here calculates the probabilities and distances to
+ 18  -- each cluster of the new data. It returns a data.frame combining columns
+ 19  -- of cluster probabilities and columns of cluster distances.
+ 20  -- We calculate the probability based on the normal distribution with distance.
+ 21  -- The distance here is referred to Euclidean distance.
+ 22    sys.rqScriptCreate('RKM_SCORE',
+ 23      'function(x, dat){
+ 24       mod <- x[[1L]]; ce <- x[[2L]]; sc <- x[[3L]]
+ 25       newdata = scale(dat, center = ce, scale = sc)
+ 26       centers <- mod$centers
+ 27       ss <- sapply(as.data.frame(t(centers)),
+ 28       function(v) rowSums(scale(newdata, center=v, scale=FALSE)^2))
+ 29       if (!is.matrix(ss)) ss <- matrix(ss, ncol=length(ss))
+ 30       disp <- -1 / (2* mod$tot.withinss/length(mod$cluster))
+ 31       distr <- exp(disp*ss)
+ 32       prob <- distr / rowSums(distr)
+ 33       as.data.frame(cbind(prob, sqrt(ss)))}');
+ 34
+ 35  -- Our WEIGHT script here calculates the attribute importance of new data for
+ 36  -- the specified cluster. It returns a data.frame with each column representing
+ 37  -- the weights of the corresponding attribute.
+ 38  -- We calulate the new probability without accounting for an attribute, and
+ 39  -- the attribute importance is the difference between the original probability
+ 40  -- by SCORING and the new probability.
+ 41    sys.rqScriptCreate('RKM_WEIGHT',
+ 42       'function(x, dat, clus) {
+ 43        clus <- as.numeric(clus)
+ 44        mod <- x[[1L]]; ce <- x[[2L]]; sc <- x[[3L]]
+ 45        newdata <- scale(dat, center = ce, scale = sc)
+ 46        centers <- mod$centers
+ 47        ss <- sapply(as.data.frame(t(centers)),
+ 48        function(v) rowSums(scale(newdata, center=v, scale=FALSE)^2))
+ 49        if (!is.matrix(ss)) ss <- matrix(ss, ncol=length(ss))
+ 50        disp <- -1 / (2* mod$tot.withinss/length(mod$cluster))
+ 51        distr <- exp(disp*ss)
+ 52        prob0 <- distr[, clus] / rowSums(distr)
+ 53        for (iattr in 1:ncol(newdata)) {
+ 54        newd <- newdata[, -iattr]
+ 55        if(!is.matrix(newd)) newd <- matrix(newd, ncol=length(newd))
+ 56        ss <- sapply(as.data.frame(t(centers[, -iattr])),
+ 57        function(v) rowSums(scale(newd, center=v, scale=FALSE)^2))
+ 58        if (!is.matrix(ss)) ss <- matrix(ss, ncol=length(ss))
+ 59        distr <- exp(disp*ss)
+ 60        prob <- distr[, clus] / rowSums(distr)
+ 61        w <- prob0-prob
+ 62        if (iattr == 1) res <- as.data.frame(w)
+ 63        else res <- cbind(res, w)
+ 64        }
+ 65        colnames(res) <- colnames(mod$centers)
+ 66        res}');
+ 67
+ 68  -- The DETAILS script, along with the FORMAT script below will be
+ 69  -- invoked during CREATE_MODEL. A model view will be generated with
+ 70  -- the output of the DETAILS script.
+ 71  -- Our DETAILS script returns a data.frame containing the sum of squares
+ 72  -- within clusters and the cluster size of the model.
+ 73    sys.rqScriptCreate('RKM_DETAILS',
+ 74       'function(x) {
+ 75        mod <- x[[1L]]
+ 76        data.frame(clus = seq(length(mod$size)), withinss=mod$withinss,
+ 77        clussize=mod$size)}');
+ 78  END;
+ 79  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> ---------------------
+SQL> -- CREATE A NEW MODEL
+SQL> --
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- specify settings
+  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  6    v_setlst('RALG_BUILD_FUNCTION')   := 'RKM_BUILD';
+  7    v_setlst('RALG_SCORE_FUNCTION')   := 'RKM_SCORE';
+  8    v_setlst('RALG_WEIGHT_FUNCTION')  := 'RKM_WEIGHT';
+  9    v_setlst('RALG_DETAILS_FUNCTION') := 'RKM_DETAILS';
+ 10    v_setlst('RALG_DETAILS_FORMAT')   :=
+ 11      'select 1 clus, 1 withinss, 1 clussize from dual';
+ 12
+ 13    DBMS_DATA_MINING.CREATE_MODEL2(
+ 14      model_name          => 'RKM_SH_CLUS_SAMPLE',
+ 15      mining_function     => 'CLUSTERING',
+ 16      data_query          => 'select * from KM_BUILD_V',
+ 17      case_id_column_name => 'CUST_ID',
+ 18      set_list            => v_setlst);
+ 19  END;
+ 20  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> select setting_name, setting_value from Rkm_sh_sample_settings
+  2  order by setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_EXTENSIBLE_LANG           R
+ODMS_SAMPLE_SIZE               1000
+ODMS_SAMPLING                  ODMS_SAMPLING_ENABLE
+RALG_BUILD_FUNCTION            RKM_BUILD
+RALG_DETAILS_FORMAT            select 1 clus, 1 withinss, 1 c
+                               lussize from dual
+
+RALG_DETAILS_FUNCTION          RKM_DETAILS
+RALG_SCORE_FUNCTION            RKM_SCORE
+RALG_WEIGHT_FUNCTION           RKM_WEIGHT
+
+8行が選択されました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL METADATA
+SQL> --
+SQL> column model_name format a20
+SQL> column mining_function format a20
+SQL> column algorithm format a20
+SQL> select model_name, mining_function, algorithm from user_mining_models
+  2  where model_name = 'RKM_SH_CLUS_SAMPLE';
+
+MODEL_NAME           MINING_FUNCTION      ALGORITHM
+-------------------- -------------------- --------------------
+RKM_SH_CLUS_SAMPLE   CLUSTERING           R_EXTENSIBLE
+
+1行が選択されました。
+
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY MODEL DETAILS
+SQL> --
+SQL> column partition_name format a20
+SQL> select * from DM$VDRKM_SH_CLUS_SAMPLE order by clus;
+
+PARTITION_NAME             CLUS   WITHINSS   CLUSSIZE
+-------------------- ---------- ---------- ----------
+                              1 1257.30425        178
+                              2 1946.30861        534
+                              3 3765.46322        788
+
+3行が選択されました。
+
+SQL>
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               APPLY THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL> -- For a descriptive mining function like Clustering, "Scoring" involves
+SQL> -- providing the probability values, distances for each cluster.
+SQL>
+SQL> -- List the count per cluster into which the customers in this
+SQL> -- given dataset have been grouped.
+SQL> --
+SQL> SELECT CLUSTER_ID(RKM_SH_CLUS_SAMPLE USING *) AS clus, COUNT(*) AS cnt
+  2    FROM mining_data_apply_v
+  3  GROUP BY CLUSTER_ID(RKM_SH_CLUS_SAMPLE USING *)
+  4  ORDER BY clus;
+
+      CLUS        CNT
+---------- ----------
+         1        169
+         2        564
+         3        767
+
+3行が選択されました。
+
+SQL>
+SQL> -- List the cluster and the corresponding probabilities for 15 new customers
+SQL> --
+SQL> SELECT cust_id, clus, prob, prob_1, prob_2, prob_3, prob_1+prob_2+prob_3 prob_tot
+  2  FROM (SELECT cust_id, CLUSTER_ID(RKM_SH_CLUS_SAMPLE USING *) clus,
+  3               CLUSTER_PROBABILITY(RKM_SH_CLUS_SAMPLE USING *) prob,
+  4               CLUSTER_PROBABILITY(RKM_SH_CLUS_SAMPLE, 1 USING *) prob_1,
+  5               CLUSTER_PROBABILITY(RKM_SH_CLUS_SAMPLE, 2 USING *) prob_2,
+  6               CLUSTER_PROBABILITY(RKM_SH_CLUS_SAMPLE, 3 USING *) prob_3
+  7        FROM mining_data_apply_v
+  8        where cust_id <= 100015
+  9        ORDER BY cust_id);
+
+   CUST_ID       CLUS PROB     PROB_1     PROB_2     PROB_3   PROB_TOT
+---------- ---------- ---- ---------- ---------- ---------- ----------
+    100001          3 .6253 1.927E-001  1.82E-001 6.253E-001   1.0E+000
+    100002          3 .5245 1.933E-001 2.822E-001 5.245E-001   1.0E+000
+    100003          2 .4305  1.84E-001 4.305E-001 3.855E-001   1.0E+000
+    100004          3 .5946  1.83E-001 2.224E-001 5.946E-001   1.0E+000
+    100005          3 .7005 1.421E-001 1.573E-001 7.005E-001   1.0E+000
+    100006          2 .6873 1.607E-001 6.873E-001  1.52E-001   1.0E+000
+    100007          3 .5506 1.872E-001 2.621E-001 5.506E-001   1.0E+000
+    100008          3 .5551 1.869E-001  2.58E-001 5.551E-001   1.0E+000
+    100009          2 .5810 1.561E-001  5.81E-001 2.628E-001   1.0E+000
+    100010          2 .6808 1.553E-001 6.808E-001 1.639E-001   1.0E+000
+    100011          1 .6577 6.577E-001 2.021E-001 1.402E-001   1.0E+000
+    100012          3 .6099 1.548E-001 2.354E-001 6.099E-001   1.0E+000
+    100013          3 .6004 1.885E-001 2.111E-001 6.004E-001   1.0E+000
+    100014          3 .6290 1.842E-001 1.868E-001  6.29E-001   1.0E+000
+    100015          3 .5981 1.786E-001 2.233E-001 5.981E-001   1.0E+000
+
+15行が選択されました。
+
+SQL>
+SQL> -- List the probabilities for each cluster for 15 new customers
+SQL> -- using CLUSTER_SET
+SQL> --
+SQL> select T.cust_id, S.cluster_id, S.probability
+  2  from (select cust_id, CLUSTER_SET(RKM_SH_CLUS_SAMPLE USING *) pset
+  3        FROM mining_data_apply_v) T, TABLE(T.pset) S
+  4  where T.cust_id <= 100015
+  5  order by T.cust_id, S.cluster_id;
+
+   CUST_ID CLUSTER_ID PROBABILITY
+---------- ---------- -----------
+    100001          1  .192747626
+    100001          2  .181993824
+    100001          3  .625258551
+    100002          1  .193281071
+    100002          2  .282240938
+    100002          3  .524477992
+    100003          1  .184006705
+    100003          2  .430522708
+    100003          3  .385470587
+    100004          1  .183043244
+    100004          2  .222404684
+    100004          3  .594552072
+    100005          1  .142141066
+    100005          2  .157344062
+    100005          3  .700514873
+    100006          1  .160701847
+    100006          2  .687276548
+    100006          3  .152021604
+    100007          1  .187232256
+    100007          2  .262141957
+    100007          3  .550625787
+    100008          1  .186894070
+    100008          2  .257985219
+    100008          3  .555120711
+    100009          1  .156138811
+    100009          2  .581034581
+    100009          3  .262826608
+    100010          1  .155272841
+    100010          2  .680814611
+    100010          3  .163912548
+    100011          1  .657666935
+    100011          2  .202095841
+    100011          3  .140237224
+    100012          1  .154794382
+    100012          2  .235351236
+    100012          3  .609854382
+    100013          1  .188451909
+    100013          2  .211123547
+    100013          3  .600424544
+    100014          1  .184158782
+    100014          2  .186823978
+    100014          3  .629017240
+    100015          1  .178566656
+    100015          2  .223305075
+    100015          3  .598128270
+
+45行が選択されました。
+
+SQL>
+SQL> -- List the cluster and distance to its centroid for 15 new customers
+SQL> --
+SQL> select cust_id, CLUSTER_ID(RKM_SH_CLUS_SAMPLE USING *) clus,
+  2  CLUSTER_DISTANCE(RKM_SH_CLUS_SAMPLE USING *) dis
+  3  from mining_data_apply_v
+  4  where cust_id <= 100015 order by cust_id;
+
+   CUST_ID       CLUS        DIS
+---------- ---------- ----------
+    100001          3 2.419E+000
+    100002          3 1.774E+000
+    100003          2 2.555E+000
+    100004          3 1.615E+000
+    100005          3 2.108E+000
+    100006          2 2.208E+000
+    100007          3 1.691E+000
+    100008          3 1.669E+000
+    100009          2 2.979E+000
+    100010          2 1.163E+000
+    100011          1  2.26E+000
+    100012          3  2.23E+000
+    100013          3 1.893E+000
+    100014          3 1.856E+000
+    100015          3 1.676E+000
+
+15行が選択されました。
+
+SQL>
+SQL> -- List the 5 most important attributes for each row for 15 new customers
+SQL> --
+SQL> column clus_det format a60
+SQL> SELECT cust_id, CLUSTER_DETAILS(RKM_SH_CLUS_SAMPLE USING *) clus_det
+  2  FROM mining_data_apply_v where cust_id <= 100015 order by cust_id;
+
+   CUST_ID CLUS_DET
+---------- ------------------------------------------------------------
+    100001 <Details algorithm="R Extensible" class="3">
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight=".16" rank="1"/>
+           <Attribute name="AGE" actualValue="51" weight=".1" rank="2"/
+           >
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weigh
+           t=".066" rank="3"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".038"
+           rank="4"/>
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight=
+           ".011" rank="5"/>
+           </Details>
+
+    100002 <Details algorithm="R Extensible" class="3">
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight=".134" rank="1"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weigh
+           t=".078" rank="2"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".045"
+           rank="3"/>
+           <Attribute name="AGE" actualValue="30" weight=".013" rank="4
+           "/>
+           <Attribute name="YRS_RESIDENCE" actualValue="4" weight="-.00
+           2" rank="5"/>
+           </Details>
+
+    100003 <Details algorithm="R Extensible" class="2">
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight=".106" rank="1"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="0" weigh
+           t=".079" rank="2"/>
+           <Attribute name="AFFINITY_CARD" actualValue="0" weight=".014
+           " rank="3"/>
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="1" weight=
+           ".011" rank="4"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight
+           =".01" rank="5"/>
+           </Details>
+
+    100004 <Details algorithm="R Extensible" class="3">
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight=".146" rank="1"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weigh
+           t=".073" rank="2"/>
+           <Attribute name="AGE" actualValue="39" weight=".052" rank="3
+           "/>
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".042"
+           rank="4"/>
+           <Attribute name="YRS_RESIDENCE" actualValue="5" weight=".028
+           " rank="5"/>
+           </Details>
+
+    100005 <Details algorithm="R Extensible" class="3">
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight=".142" rank="1"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weigh
+           t=".064" rank="2"/>
+           <Attribute name="AFFINITY_CARD" actualValue="1" weight=".063
+           " rank="3"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".036"
+           rank="4"/>
+           <Attribute name="AGE" actualValue="35" weight=".029" rank="5
+           "/>
+           </Details>
+
+    100006 <Details algorithm="R Extensible" class="2">
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight=".153" rank="1"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="1" weight=".076"
+           rank="2"/>
+           <Attribute name="AGE" actualValue="9" weight=".067" rank="3"
+           />
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="0" weigh
+           t=".063" rank="4"/>
+           <Attribute name="YRS_RESIDENCE" actualValue="2" weight=".039
+           " rank="5"/>
+           </Details>
+
+    100007 <Details algorithm="R Extensible" class="3">
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight=".138" rank="1"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weigh
+           t=".077" rank="2"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".044"
+           rank="3"/>
+           <Attribute name="YRS_RESIDENCE" actualValue="5" weight=".029
+           " rank="4"/>
+           <Attribute name="AGE" actualValue="29" weight=".008" rank="5
+           "/>
+           </Details>
+
+    100008 <Details algorithm="R Extensible" class="3">
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight=".139" rank="1"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weigh
+           t=".076" rank="2"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".044"
+           rank="3"/>
+           <Attribute name="YRS_RESIDENCE" actualValue="5" weight=".029
+           " rank="4"/>
+           <Attribute name="AGE" actualValue="30" weight=".012" rank="5
+           "/>
+           </Details>
+
+    100009 <Details algorithm="R Extensible" class="2">
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight=".127" rank="1"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="1" weight=".093"
+           rank="2"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="0" weigh
+           t=".079" rank="3"/>
+           <Attribute name="AGE" actualValue="18" weight=".035" rank="4
+           "/>
+           <Attribute name="YRS_RESIDENCE" actualValue="3" weight=".022
+           " rank="5"/>
+           </Details>
+
+    100010 <Details algorithm="R Extensible" class="2">
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight=".148" rank="1"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="1" weight=".079"
+           rank="2"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="0" weigh
+           t=".065" rank="3"/>
+           <Attribute name="AGE" actualValue="17" weight=".032" rank="4
+           "/>
+           <Attribute name="YRS_RESIDENCE" actualValue="3" weight=".016
+           " rank="5"/>
+           </Details>
+
+    100011 <Details algorithm="R Extensible" class="1">
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="0" we
+           ight=".249" rank="1"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".022"
+           rank="2"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="0" weigh
+           t=".013" rank="3"/>
+           <Attribute name="YRS_RESIDENCE" actualValue="3" weight=".011
+           " rank="4"/>
+           <Attribute name="AGE" actualValue="20" weight=".009" rank="5
+           "/>
+           </Details>
+
+    100012 <Details algorithm="R Extensible" class="3">
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight=".132" rank="1"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weigh
+           t=".077" rank="2"/>
+           <Attribute name="AFFINITY_CARD" actualValue="1" weight=".068
+           " rank="3"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".044"
+           rank="4"/>
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight=
+           ".013" rank="5"/>
+           </Details>
+
+    100013 <Details algorithm="R Extensible" class="3">
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight=".151" rank="1"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weigh
+           t=".071" rank="2"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".04" r
+           ank="3"/>
+           <Attribute name="YRS_RESIDENCE" actualValue="5" weight=".027
+           " rank="4"/>
+           <Attribute name="AGE" actualValue="31" weight=".015" rank="5
+           "/>
+           </Details>
+
+    100014 <Details algorithm="R Extensible" class="3">
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight=".155" rank="1"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weigh
+           t=".068" rank="2"/>
+           <Attribute name="AGE" actualValue="38" weight=".044" rank="3
+           "/>
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".038"
+           rank="4"/>
+           <Attribute name="YRS_RESIDENCE" actualValue="5" weight=".026
+           " rank="5"/>
+           </Details>
+
+    100015 <Details algorithm="R Extensible" class="3">
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight=".144" rank="1"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weigh
+           t=".073" rank="2"/>
+           <Attribute name="YRS_RESIDENCE" actualValue="6" weight=".058
+           " rank="3"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".042"
+           rank="4"/>
+           <Attribute name="AGE" actualValue="33" weight=".025" rank="5
+           "/>
+           </Details>
+
+
+15行が選択されました。
+
+SQL>
+SQL> -- List the 10 rows which are most anomalous as measured by their
+SQL> -- distance from the cluster centroids.  A row which is far from
+SQL> -- all cluster centroids may be anomalous.
+SQL> --
+SQL> select cust_id, dist
+  2  from(
+  3  select cust_id, CLUSTER_DISTANCE(RKM_SH_CLUS_SAMPLE USING *) dist,
+  4         rank() over (order by CLUSTER_DISTANCE(RKM_SH_CLUS_SAMPLE USING *) desc) rnk
+  5  from mining_data_apply_v)
+  6  where rnk <=10
+  7  order by rnk;
+
+   CUST_ID       DIST
+---------- ----------
+    100210 4.901E+000
+    101151 4.325E+000
+    100382 4.107E+000
+    100930 4.093E+000
+    101256 4.042E+000
+    101330 4.022E+000
+    100199 3.818E+000
+    100290 3.754E+000
+    100962 3.724E+000
+    101039 3.645E+000
+
+10行が選択されました。
+
+SQL>
+SQL>
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                      BUILD A MODEL USING SAMPLING
+SQL> -----------------------------------------------------------------------
+SQL> -- This example illustrates building a kmeans model by sampling the
+SQL> -- training data. We use the same settings table in the above example
+SQL> -- with additional sampling settings.
+SQL>
+SQL> -- Cleanup old model with same name for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('RKM_SH_CLUS_SAMPLE_S');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -----------------------------------
+SQL> -- CREATE A NEW MODEL WITH SAMPLING
+SQL> --
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- specify settings
+  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  6    v_setlst('RALG_BUILD_FUNCTION')   := 'RKM_BUILD';
+  7    v_setlst('RALG_SCORE_FUNCTION')   := 'RKM_SCORE';
+  8    v_setlst('RALG_WEIGHT_FUNCTION')  := 'RKM_WEIGHT';
+  9    v_setlst('RALG_DETAILS_FUNCTION') := 'RKM_DETAILS';
+ 10    v_setlst('RALG_DETAILS_FORMAT')   :=
+ 11      'select 1 clus, 1 withinss, 1 clussize from dual';
+ 12
+ 13    -- Enable sampling and specify sample size
+ 14    v_setlst('ODMS_SAMPLING')    := 'ODMS_SAMPLING_ENABLE';
+ 15    v_setlst('ODMS_SAMPLE_SIZE') := '1000';
+ 16
+ 17    DBMS_DATA_MINING.CREATE_MODEL2(
+ 18      model_name          => 'RKM_SH_CLUS_SAMPLE_S',
+ 19      mining_function     => 'CLUSTERING',
+ 20      data_query          => 'select * from KM_BUILD_V',
+ 21      case_id_column_name => 'CUST_ID',
+ 22      set_list            => v_setlst);
+ 23  END;
+ 24  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> select setting_name, setting_value from Rkm_sh_sample_settings
+  2  order by setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_EXTENSIBLE_LANG           R
+ODMS_SAMPLE_SIZE               1000
+ODMS_SAMPLING                  ODMS_SAMPLING_ENABLE
+RALG_BUILD_FUNCTION            RKM_BUILD
+RALG_DETAILS_FORMAT            select 1 clus, 1 withinss, 1 c
+                               lussize from dual
+
+RALG_DETAILS_FUNCTION          RKM_DETAILS
+RALG_SCORE_FUNCTION            RKM_SCORE
+RALG_WEIGHT_FUNCTION           RKM_WEIGHT
+
+8行が選択されました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL METADATA
+SQL> --
+SQL> select model_name, mining_function, algorithm from user_mining_models
+  2  where model_name = 'RKM_SH_CLUS_SAMPLE_S';
+
+MODEL_NAME           MINING_FUNCTION      ALGORITHM
+-------------------- -------------------- --------------------
+RKM_SH_CLUS_SAMPLE_S CLUSTERING           R_EXTENSIBLE
+
+1行が選択されました。
+
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY MODEL DETAILS
+SQL> --
+SQL> column partition_name format a20
+SQL> select * from DM$VDRKM_SH_CLUS_SAMPLE_S order by clus;
+
+PARTITION_NAME             CLUS   WITHINSS   CLUSSIZE
+-------------------- ---------- ---------- ----------
+                              1 1527.30174        322
+                              2  1360.1586        342
+                              3 1168.80096        314
+
+3行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               APPLY THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- List the cluster and the corresponding probabilities for 15 new customers
+SQL> --
+SQL> SELECT cust_id, clus, prob, prob_1, prob_2, prob_3, prob_1+prob_2+prob_3 prob_tot
+  2  FROM (SELECT cust_id, CLUSTER_ID(RKM_SH_CLUS_SAMPLE_S USING *) clus,
+  3               CLUSTER_PROBABILITY(RKM_SH_CLUS_SAMPLE_S USING *) prob,
+  4               CLUSTER_PROBABILITY(RKM_SH_CLUS_SAMPLE_S, 1 USING *) prob_1,
+  5               CLUSTER_PROBABILITY(RKM_SH_CLUS_SAMPLE_S, 2 USING *) prob_2,
+  6               CLUSTER_PROBABILITY(RKM_SH_CLUS_SAMPLE_S, 3 USING *) prob_3
+  7        FROM mining_data_apply_v
+  8        where cust_id <= 100015
+  9        ORDER BY cust_id);
+
+   CUST_ID       CLUS PROB     PROB_1     PROB_2     PROB_3   PROB_TOT
+---------- ---------- ---- ---------- ---------- ---------- ----------
+    100001          1 .6577 6.577E-001  9.82E-002 2.441E-001   1.0E+000
+    100002          3 .5683 2.281E-001 2.037E-001 5.683E-001   1.0E+000
+    100003          3 .4393 1.995E-001 3.613E-001 4.393E-001   1.0E+000
+    100004          3 .6091 2.453E-001 1.457E-001 6.091E-001   1.0E+000
+    100005          1 .6656 6.656E-001 7.748E-002  2.57E-001   1.0E+000
+    100006          2 .7137 2.151E-001 7.137E-001 7.119E-002   1.0E+000
+    100007          3 .5822 2.348E-001  1.83E-001 5.822E-001   1.0E+000
+    100008          3 .5851 2.359E-001  1.79E-001 5.851E-001   1.0E+000
+    100009          2 .5339  3.46E-001 5.339E-001 1.201E-001   1.0E+000
+    100010          2 .7362 8.164E-002 7.362E-001 1.821E-001   1.0E+000
+    100011          1 .4795 4.795E-001 3.646E-001 1.559E-001   1.0E+000
+    100012          1 .4255 4.255E-001 1.567E-001 4.178E-001   1.0E+000
+    100013          1 .6442 6.442E-001 1.196E-001 2.362E-001   1.0E+000
+    100014          1 .6577 6.577E-001 1.009E-001 2.414E-001   1.0E+000
+    100015          3 .6078 2.461E-001 1.462E-001 6.078E-001   1.0E+000
+
+15行が選択されました。
+
+SQL> spool oml4sql-r-extensible-principal-components

@@ -1,0 +1,229 @@
+SQL> @oml4sql-anomaly-detection-em
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Expectation Maximization - EM Algorithm for Anomaly Detection
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --   The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --   https://oss.oracle.com/licenses/upl
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SAMPLE PROBLEM
+SQL> -----------------------------------------------------------------------
+SQL> -- Segment the demographic data into clusters and examine the anomalies.
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            EXAMPLE IN THIS SCRIPT
+SQL> -----------------------------------------------------------------------
+SQL> -- Create EM model with CREATE MODEL2
+SQL> -- View model details
+SQL> -- View and sort anomalous customers
+SQL> -- View prediction details
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> -- In this script, we are using an EM classification model to expand on
+SQL> -- the One-Class SVM model approach for anomaly detection. EM
+SQL> -- can capture the underlying data distribution and thus flag records
+SQL> -- that do not fit the learned data distribution well. An object is
+SQL> -- identified as an outlier in an EM Anomaly Detection model if its anomaly
+SQL> -- probability is greater than 0.5. A label of 1 denotes normal, while
+SQL> -- a label of 0 denotes anomaly. The customer and demographics data is
+SQL> -- used to predict anomalous customers using prob_anomalous.
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                  SET UP AND ANALYZE THE DATA
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> ------------------------------
+SQL> -- CREATE VIEW DEMOGRAPHICS_V
+SQL> --
+SQL> CREATE OR REPLACE VIEW DEMOGRAPHICS_V AS
+  2    SELECT CUST_ID, YRS_RESIDENCE, EDUCATION, AFFINITY_CARD,
+  3           HOUSEHOLD_SIZE, OCCUPATION, BOOKKEEPING_APPLICATION,
+  4           BULK_PACK_DISKETTES, FLAT_PANEL_MONITOR, HOME_THEATER_PACKAGE,
+  5           OS_DOC_SET_KANJI, PRINTER_SUPPLIES, Y_BOX_GAMES
+  6    FROM SH.SUPPLEMENTARY_DEMOGRAPHICS;
+
+View DEMOGRAPHICS_Vは作成されました。
+
+SQL>
+SQL> -------------------------
+SQL> -- CREATE VIEW JOINING CUSTOMERS AND DEMOGRAPHICS_V
+SQL> --
+SQL>
+SQL> CREATE OR REPLACE VIEW CUSTOMERS360_V AS
+  2     SELECT a.CUST_ID, a.CUST_GENDER, a.CUST_MARITAL_STATUS, a.CUST_YEAR_OF_BIRTH,
+  3            a.CUST_INCOME_LEVEL, a.CUST_CREDIT_LIMIT, b.EDUCATION, b.AFFINITY_CARD,
+  4            b.HOUSEHOLD_SIZE, b.OCCUPATION, b.YRS_RESIDENCE, b.Y_BOX_GAMES
+  5     FROM SH.CUSTOMERS a, DEMOGRAPHICS_V b
+  6     WHERE a.CUST_ID = b.CUST_ID;
+
+View CUSTOMERS360_Vは作成されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -------------------------
+SQL> -- SET OUTLIER RATE IN SETTINGS TABLE - DEFAULT IS 0.05
+SQL> --
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('CUSTOMERS360MODEL_AD');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    v_setlst('ALGO_NAME')         := 'ALGO_EXPECTATION_MAXIMIZATION';
+  5    v_setlst('PREP_AUTO')         := 'ON';
+  6    v_setlst('EMCS_OUTLIER_RATE') := '0.1';
+  7
+  8    DBMS_DATA_MINING.CREATE_MODEL2(
+  9          MODEL_NAME          => 'CUSTOMERS360MODEL_AD',
+ 10          MINING_FUNCTION     => 'CLASSIFICATION',
+ 11          DATA_QUERY          => 'SELECT * FROM CUSTOMERS360_V',
+ 12          CASE_ID_COLUMN_NAME => 'CUST_ID',
+ 13          SET_LIST            => v_setlst,
+ 14          TARGET_COLUMN_NAME  => NULL); -- NULL target indicates anomaly detection
+ 15  END;
+ 16  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                   EXAMINE THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL> -------------------------
+SQL> -- DISPLAY MODEL DETAILS
+SQL> --
+SQL>
+SQL> SELECT NAME, NUMERIC_VALUE
+  2  FROM  DM$VGCUSTOMERS360MODEL_AD
+  3  ORDER BY NAME;
+
+NAME                          NUMERIC_VALUE
+_____________________ _____________________
+CONVERGED
+LOGLIKELIHOOD            -3.404144775668422
+NUM_COMPONENTS                           20
+NUM_ROWS                               4500
+RANDOM_SEED                               0
+REMOVED_COMPONENTS                        0
+
+6行が選択されました。
+
+SQL>
+SQL> ---------------------------------------------
+SQL> -- DISPLAY THE TOP 5 MOST ANOMALOUS CUSTOMERS
+SQL> --
+SQL>
+SQL> SELECT *
+  2  FROM (SELECT CUST_ID, round(prob_anomalous,2) prob_anomalous,
+  3               YRS_RESIDENCE, CUST_MARITAL_STATUS,
+  4               rank() over (ORDER BY prob_anomalous DESC) rnk
+  5        FROM (SELECT CUST_ID, HOUSEHOLD_SIZE, YRS_RESIDENCE, CUST_GENDER, CUST_MARITAL_STATUS,
+  6                     prediction_probability(CUSTOMERS360MODEL_AD, '0' USING *) prob_anomalous
+  7              FROM CUSTOMERS360_V))
+  8  WHERE rnk <= 5
+  9  ORDER BY prob_anomalous DESC;
+
+   CUST_ID    PROB_ANOMALOUS    YRS_RESIDENCE CUST_MARITAL_STATUS       RNK
+__________ _________________ ________________ ______________________ ______
+    102926                 1                2 married                     1
+    101693                 1                0 married                     2
+    102258                 1                9 never married               5
+    101478                 1                1 married                     4
+    102555                 1               14 never married               3
+
+SQL> ---------------------------------------------------------------
+SQL> -- CREATE VIEW OF CUSTOMERS IN DESCENDING ORDER OF ANOMALY PROBABILITY
+SQL> --
+SQL> CREATE OR REPLACE VIEW EM_ANOMALOUS_RESULTS AS
+  2  SELECT *
+  3  FROM (SELECT CUST_ID, anomalous, round(prob_anomalous,2) prob_anomalous,
+  4               YRS_RESIDENCE, HOUSEHOLD_SIZE, CUST_GENDER,
+  5               CUST_MARITAL_STATUS,
+  6               RANK() OVER (ORDER BY prob_anomalous DESC) rnk
+  7        FROM (SELECT CUST_ID, HOUSEHOLD_SIZE, YRS_RESIDENCE,
+  8                     CUST_GENDER, CUST_MARITAL_STATUS,
+  9                     prediction(CUSTOMERS360MODEL_AD using *) anomalous,
+ 10                     prediction_probability(CUSTOMERS360MODEL_AD, '0' USING *) prob_anomalous
+ 11              FROM CUSTOMERS360_V))
+ 12  ORDER BY prob_anomalous DESC;
+
+View EM_ANOMALOUS_RESULTSは作成されました。
+
+SQL>
+SQL> SELECT *
+  2  FROM   EM_ANOMALOUS_RESULTS
+  3  FETCH FIRST 10 ROWS ONLY;
+
+   CUST_ID    ANOMALOUS    PROB_ANOMALOUS    YRS_RESIDENCE HOUSEHOLD_SIZE    CUST_GENDER    CUST_MARITAL_STATUS       RNK
+__________ ____________ _________________ ________________ _________________ ______________ ______________________ ______
+    102926            0                 1                2 4-5               F              married                     1
+    101693            0                 1                0 4-5               F              married                     2
+    102555            0                 1               14 2                 M              never married               3
+    101478            0                 1                1 1                 F              married                     4
+    102258            0                 1                9 2                 F              never married               5
+    104403            0                 1                1 1                 F              married                     6
+    102689            0                 1                6 9+                M              divorced                    7
+    103684            0                 1                4 2                 M                                          8
+    102363            0                 1                3 1                 F              married                     9
+    102201            0                 1                7 1                 F              divorced                   10
+
+10行が選択されました。
+
+SQL>
+SQL> --------------------------------------------------------------------
+SQL> -- VIEW PREDICTION DETAILS OF TOP 3 ATTRIBUTES TO EXPLAIN PREDICTION
+SQL> --
+SQL>
+SQL> SELECT CUST_ID, PREDICTION,
+  2         RTRIM(TRIM(SUBSTR(OUTPRED."Attribute1",17,100)),'rank="1"/>') FIRST_ATTRIBUTE,
+  3         RTRIM(TRIM(SUBSTR(OUTPRED."Attribute2",17,100)),'rank="2"/>') SECOND_ATTRIBUTE,
+  4         RTRIM(TRIM(SUBSTR(OUTPRED."Attribute3",17,100)),'rank="3"/>') THIRD_ATTRIBUTE
+  5  FROM (SELECT CUST_ID,
+  6               PREDICTION(CUSTOMERS360MODEL_AD USING *) PREDICTION,
+  7               PREDICTION_DETAILS(CUSTOMERS360MODEL_AD, '0' USING *) PREDICTION_DETAILS
+  8        FROM   CUSTOMERS360_V
+  9        WHERE  PREDICTION_PROBABILITY(CUSTOMERS360MODEL_AD, '0' USING *) > 0.50
+ 10        AND OCCUPATION = 'TechSup'
+ 11        ORDER BY CUST_ID) OUT,
+ 12        XMLTABLE('/Details'
+ 13                  PASSING OUT.PREDICTION_DETAILS
+ 14                  COLUMNS
+ 15                     "Attribute1" XMLType PATH 'Attribute[1]',
+ 16                     "Attribute2" XMLType PATH 'Attribute[2]',
+ 17                     "Attribute3" XMLType PATH 'Attribute[3]') OUTPRED
+ 18  FETCH FIRST 10 ROWS ONLY;
+
+   CUST_ID    PREDICTION FIRST_ATTRIBUTE                                            SECOND_ATTRIBUTE                                                THIRD_ATTRIBUTE
+__________ _____________ __________________________________________________________ _______________________________________________________________ _____________________________________________________
+    100061             0 "CUST_YEAR_OF_BIRTH" actualValue="1970" weight=".492"      "Y_BOX_GAMES" actualValue="0" weight="-.037"                    "YRS_RESIDENCE" actualValue="4" weight="-.037"
+    100646             0 "CUST_YEAR_OF_BIRTH" actualValue="1952" weight=".795"      "CUST_MARITAL_STATUS" actualValue="widowed" weight="-.059"      "Y_BOX_GAMES" actualValue="0" weight="-.06"
+    100941             0 "CUST_YEAR_OF_BIRTH" actualValue="1959" weight=".58"       "EDUCATION" actualValue="9th" weight="-.351"                    "Y_BOX_GAMES" actualValue="0" weight="-.356"
+    101097             0 "Y_BOX_GAMES" actualValue="0" weight="-.001"               "YRS_RESIDENCE" actualValue="6" weight="-.001"                  "OCCUPATION" actualValue="TechSup" weight="-.001"
+    101706             0
+    101970             0 "CUST_YEAR_OF_BIRTH" actualValue="1984" weight=".33"       "Y_BOX_GAMES" actualValue="0" weight="-.014"                    "YRS_RESIDENCE" actualValue="3" weight="-.014"
+    102862             0 "CUST_YEAR_OF_BIRTH" actualValue="1963" weight="-.023"     "Y_BOX_GAMES" actualValue="0" weight="-.026"                    "YRS_RESIDENCE" actualValue="5" weight="-.026"
+    102907             0 "CUST_YEAR_OF_BIRTH" actualValue="1950" weight=".651"      "CUST_MARITAL_STATUS" actualValue="divorced" weight="-.022"     "Y_BOX_GAMES" actualValue="0" weight="-.023"
+    103341             0 "CUST_YEAR_OF_BIRTH" actualValue="1970" weight=".531"      "Y_BOX_GAMES" actualValue="0" weight="-.049"                    "YRS_RESIDENCE" actualValue="4" weight="-.049"
+    103441             0 "CUST_YEAR_OF_BIRTH" actualValue="1952" weight=".415"      "Y_BOX_GAMES" actualValue="0" weight="-.009"                    "YRS_RESIDENCE" actualValue="2" weight="-.009"
+
+10行が選択されました。
+
+SQL>
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --   End of script
+SQL> -----------------------------------------------------------------------
+SQL> spool oml4sql-association-rules

@@ -1,0 +1,146 @@
+SQL> @oml4sql-r-extensible-attribute-importance-via-rf
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   OML R Extensible - Attribute Importance via RF Algorithm - dmraidemo.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET ECHO ON
+SQL> SET FEEDBACK 1
+SQL> SET NUMWIDTH 10
+SQL> SET LINESIZE 80
+SQL> SET TRIMSPOOL ON
+SQL> SET TAB OFF
+SQL> SET PAGESIZE 100
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                         ATTRIBUTE IMPORTANCE DEMO
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explaination:
+SQL> -- This demo shows how to implement the attribute importance algorithm in
+SQL> -- Oracle Data Mining using R randomForest algorithm
+SQL>
+SQL> BEGIN
+  2    sys.rqScriptDrop('AI_RDEMO_BUILD_FUNCTION', v_silent => TRUE);
+  3    sys.rqScriptDrop('AI_RDEMO_DETAILS_FUNCTION', v_silent => TRUE);
+  4  END;
+  5  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('AI_RDEMO');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> BEGIN
+  2  -- Build R Function -----------------------------------------------------------
+  3  -- Explanation:
+  4  -- User can define their own R script function to build the model they want.
+  5  -- For example, here a script named AI_RDEMO_BUILD_FUNCTION is defined. This
+  6  -- function builds and returns a random forest model using R randomForest
+  7  -- algorithm. User can also choose other R algorithm to get the attribute
+  8  -- importance.
+  9
+ 10    sys.rqScriptCreate('AI_RDEMO_BUILD_FUNCTION', 'function(dat) {
+ 11      require(randomForest);
+ 12      set.seed(1234);
+ 13      mod <- randomForest(AFFINITY_CARD ~ ., data=dat, na.action=na.omit);
+ 14      mod}');
+ 15
+ 16  -- Detail R Function ----------------------------------------------------------
+ 17  -- Explanation:
+ 18  -- User can define their own R script function to show the model details they
+ 19  -- want to display. For example, here a script named AI_RDEMO_DETAILS_FUNCTION
+ 20  -- is defined. This function creates and returns an R data.frame containing the
+ 21  -- attribute importance of the built model. User can also display other details.
+ 22
+ 23    sys.rqScriptCreate('AI_RDEMO_DETAILS_FUNCTION', 'function(object, x)
+ 24     {require(randomForest);
+ 25     mod <- object;
+ 26     data.frame(row_name=row.names(mod$importance), importance=mod$importance)}');
+ 27  END;
+ 28  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL BUILD
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Build the model using the R script user defined. Here R script
+SQL> -- AI_RDEMO_BUILD_FUNCTION will be used to create the model AI_RDEMO, using
+SQL> -- dataset mining_data_build_v.
+SQL>
+SQL> declare
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  begin
+  4    -- specify settings
+  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  6    v_setlst('RALG_BUILD_FUNCTION')   := 'AI_RDEMO_BUILD_FUNCTION';
+  7    v_setlst('RALG_DETAILS_FUNCTION') := 'AI_RDEMO_DETAILS_FUNCTION';
+  8
+  9    -- Once this setting is specified, a model view will be created. This model
+ 10    -- view will be generated to display the model details, which contains the
+ 11    -- attribute names and the corresponding importance.
+ 12
+ 13    v_setlst('RALG_DETAILS_FORMAT') := 'select cast(''a'' as varchar2(100)) name, 1 importance from dual';
+ 14
+ 15    dbms_data_mining.create_model2(
+ 16      model_name          => 'AI_RDEMO',
+ 17      mining_function     => 'REGRESSION',
+ 18      data_query          => 'select * from mining_data_build_v',
+ 19      case_id_column_name => 'CUST_ID',
+ 20      target_column_name  => 'AFFINITY_CARD',
+ 21      set_list            => v_setlst);
+ 22  end;
+ 23  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                           ATTRIBUTE IMPORTANCE
+SQL> -------------------------------------------------------------------------------
+SQL>
+SQL> -- Attribute Importance
+SQL> -- Explanation:
+SQL> -- Display the model details using the R script user defined. Here R script
+SQL> -- AI_RDEMO_DETAIL_FUNCTION will be used to provide the attribute importance.
+SQL>
+SQL> column name format a30
+SQL> select name, round(importance, 3) as importance,
+  2  rank() OVER (ORDER BY importance DESC) rank
+  3  from DM$VDAI_RDEMO order by importance desc, name;
+
+NAME                           IMPORTANCE       RANK
+------------------------------ ---------- ----------
+OCCUPATION                         40.711          1
+EDUCATION                          40.652          2
+HOUSEHOLD_SIZE                     32.975          3
+AGE                                31.048          4
+CUST_INCOME_LEVEL                  30.291          5
+CUST_MARITAL_STATUS                24.587          6
+YRS_RESIDENCE                      20.573          7
+COUNTRY_NAME                        6.312          8
+CUST_GENDER                         3.368          9
+HOME_THEATER_PACKAGE                3.294         10
+BOOKKEEPING_APPLICATION             2.472         11
+FLAT_PANEL_MONITOR                  2.354         12
+Y_BOX_GAMES                         2.249         13
+BULK_PACK_DISKETTES                 2.111         14
+OS_DOC_SET_KANJI                     .035         15
+PRINTER_SUPPLIES                        0         16
+
+16行が選択されました。
+
+SQL> spool oml4sql-r-extensible-glm

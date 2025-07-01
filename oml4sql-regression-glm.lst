@@ -1,0 +1,1525 @@
+SQL> @oml4sql-regression-glm
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Regression - Generalized Linear Model Algorithm - dmglrdem.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET serveroutput ON
+SQL> SET trimspool ON
+SQL> SET pages 10000
+SQL> SET echo ON
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SAMPLE PROBLEM
+SQL> -----------------------------------------------------------------------
+SQL> -- Given demographic, purchase, and affinity card membership data for a
+SQL> -- set of customers, predict customer's age. Since age is a continuous
+SQL> -- variable, this is a regression problem.
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SET UP AND ANALYZE DATA
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- The data for this sample is composed from base tables in the SH Schema
+SQL> -- (See Sample Schema Documentation) and presented through these views:
+SQL> -- mining_data_build_v (build data)
+SQL> -- mining_data_test_v  (test data)
+SQL> -- mining_data_apply_v (apply data)
+SQL> -- (See dmsh.sql for view definitions).
+SQL> --
+SQL> -----------
+SQL> -- ANALYSIS
+SQL> -----------
+SQL> -- Data preparation for GLM is performed internally
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Cleanup old model with same name (if any)
+SQL> BEGIN
+  2    DBMS_DATA_MINING.DROP_MODEL('GLMR_SH_Regr_sample');
+  3  EXCEPTION WHEN OTHERS THEN NULL; END;
+  4  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> CREATE OR replace VIEW mdb_rdemo_v AS
+  2    SELECT cust_id, age, bookkeeping_application, bulk_pack_diskettes,
+  3      cust_marital_status, home_theater_package, household_size, occupation,
+  4      yrs_residence, y_box_games FROM mining_data_build_v;
+
+View MDB_RDEMO_Vは作成されました。
+
+SQL> ---------------------
+SQL> -- CREATE A NEW MODEL
+SQL> --
+SQL> -- Force the column affinity_card to be a feature in the model using
+SQL> -- dbms_data_mining_transform
+SQL> --
+SQL> declare
+  2    v_xlst dbms_data_mining_transform.TRANSFORM_LIST;
+  3    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  4  BEGIN
+  5    -- Force the column affinity_card to be a feature in the model
+  6    dbms_data_mining_transform.set_transform(v_xlst,
+  7      'HOME_THEATER_PACKAGE', NULL, 'HOME_THEATER_PACKAGE',
+  8      'HOME_THEATER_PACKAGE', 'FORCE_IN');
+  9
+ 10    -- specify settings
+ 11    v_setlst('ALGO_NAME')            := 'ALGO_GENERALIZED_LINEAR_MODEL';
+ 12    -- output row diagnostic statistics
+ 13    v_setlst('GLMS_ROW_DIAGNOSTICS') := 'GLMS_ROW_DIAG_ENABLE';
+ 14    v_setlst('PREP_AUTO')            := 'ON';
+ 15    -- turn on feature selection
+ 16    v_setlst('GLMS_FTR_SELECTION')   := 'GLMS_FTR_SELECTION_ENABLE';
+ 17    -- turn on feature generation
+ 18    v_setlst('GLMS_FTR_GENERATION')  := 'GLMS_FTR_GENERATION_ENABLE';
+ 19    v_setlst('GLMS_FTR_GEN_METHOD')  := 'GLMS_FTR_GEN_QUADRATIC';
+ 20
+ 21    -- Examples of possible overrides are shown below. If the user does not
+ 22    -- override, then relevant settings are determined by the algorithm
+ 23    -- specify a row weight column
+ 24    -- v_setlst('ODMS_ROW_WEIGHT_COLUMN_NAME') := '<row_weight_column_name>';
+ 25    -- specify a missing value treatment method:
+ 26    -- Default:  replace with mean (numeric features) or
+ 27    --           mode (categorical features)
+ 28    --   or delete the row
+ 29    -- v_setlst('ODMS_MISSING_VALUE_TREATMENT') := 'ODMS_MISSING_VALUE_DELETE_ROW';
+ 30    -- turn ridge regression on or off
+ 31    -- By default the system turns it on if there is a multicollinearity
+ 32    -- v_setlst('GLMS_RIDGE_REGRESSION') := 'GLMS_RIDGE_REG_ENABLE';
+ 33
+ 34    DBMS_DATA_MINING.CREATE_MODEL2(
+ 35      model_name          => 'GLMR_SH_Regr_sample',
+ 36      mining_function     => 'REGRESSION',
+ 37      data_query          => 'SELECT * FROM mdb_rdemo_v',
+ 38      case_id_column_name => 'cust_id',
+ 39      target_column_name  => 'age',
+ 40      set_list            => v_setlst,
+ 41      xform_list          => v_xlst);
+ 42  END;
+ 43  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'GLMR_SH_REGR_SAMPLE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_GENERALIZED_LINEAR_MODEL
+GLMS_CONF_LEVEL                .95
+GLMS_FTR_GENERATION            GLMS_FTR_GENERATION_ENABLE
+GLMS_FTR_GEN_METHOD            GLMS_FTR_GEN_QUADRATIC
+GLMS_FTR_SELECTION             GLMS_FTR_SELECTION_ENABLE
+GLMS_FTR_SEL_CRIT              GLMS_FTR_SEL_ALPHA_INV
+GLMS_LINK_FUNCTION             GLMS_IDENTITY_LINK
+GLMS_MAX_FEATURES              1000
+GLMS_PRUNE_MODEL               GLMS_PRUNE_MODEL_ENABLE
+GLMS_ROW_DIAGNOSTICS           GLMS_ROW_DIAG_ENABLE
+GLMS_SELECT_BLOCK              GLMS_SELECT_BLOCK_DISABLE
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+PREP_AUTO                      ON
+
+15行が選択されました。
+
+SQL>
+SQL> --------------------------
+SQL> -- DISPLAY MODEL SIGNATURE
+SQL> --
+SQL> column attribute_name format a40
+SQL> column attribute_type format a20
+SQL> SELECT attribute_name, attribute_type
+  2    FROM user_mining_model_attributes
+  3   WHERE model_name = 'GLMR_SH_REGR_SAMPLE'
+  4  ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                           ATTRIBUTE_TYPE
+---------------------------------------- --------------------
+AGE                                      NUMERICAL
+BOOKKEEPING_APPLICATION                  NUMERICAL
+BULK_PACK_DISKETTES                      NUMERICAL
+CUST_MARITAL_STATUS                      CATEGORICAL
+HOME_THEATER_PACKAGE                     NUMERICAL
+HOUSEHOLD_SIZE                           CATEGORICAL
+OCCUPATION                               CATEGORICAL
+YRS_RESIDENCE                            NUMERICAL
+Y_BOX_GAMES                              NUMERICAL
+
+9行が選択されました。
+
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY MODEL DETAILS
+SQL> --
+SQL> -- IF the covariance matrix had been invalid, THEN the global details
+SQL> -- would have had a row like:
+SQL> --
+SQL> --   VALID_COVARIANCE_MATRIX  0
+SQL> --
+SQL> -- And, as a result we would only have gotten a limited set of diagnostics.
+SQL> -- This never happens with feature selecion enabled. IF the forced in feature
+SQL> -- had caused a multi-collinearity then the model build would have failed.
+SQL> -- Note that the forced_in feature, age, was not statistically significant.
+SQL> -- However, it did not cause a multi-collinearity, hence the build succeeded.
+SQL> --
+SQL> -- With feature selection disabled, then an invalid covariance matrix is
+SQL> -- possible. Then, multi-collinearity, if it exists will cause
+SQL> -- RIDGE REGRESSION to kick in, unless it has been specifically disabled by
+SQL> -- you. The build will succeed with ridge enabled. However, the covariance
+SQL> -- matrix will be invalid since it is not computed by the ridge algorithm.
+SQL> --
+SQL> -- An important consequence of an invalid covariance matrix is that
+SQL> -- the model cannot predict confidence bounds - i.e. the result of
+SQL> -- PREDICTION_BOUNDS function in a SQL query is NULL.
+SQL> --
+SQL> -- If accuracy is the primary goal and interpretability not important, then we
+SQL> -- note that RIDGE REGRESSION may be preferrable to feature selection for
+SQL> -- some datasets. You can test this by specifically enabling ridge regression.
+SQL> --
+SQL> -- In this demo, we compute two models. The first (above) has feature
+SQL> -- selection enabled and produces confidence bounds and a full set of
+SQL> -- diagnostics. The second enables ridge regression. It does not produce
+SQL> -- confidence bounds. It only produces a limited set of diagnostics.
+SQL>
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2    WHERE model_name='GLMR_SH_REGR_SAMPLE'
+  3    ORDER BY view_name;
+
+VIEW_NAME
+------------------------------
+VIEW_TYPE
+--------------------------------------------------
+DM$VAGLMR_SH_REGR_SAMPLE
+GLM Regression Row Diagnostics
+
+DM$VDGLMR_SH_REGR_SAMPLE
+GLM Regression Attribute Diagnostics
+
+DM$VGGLMR_SH_REGR_SAMPLE
+Global Name-Value Pairs
+
+DM$VNGLMR_SH_REGR_SAMPLE
+Normalization and Missing Value Handling
+
+DM$VSGLMR_SH_REGR_SAMPLE
+Computed Settings
+
+DM$VWGLMR_SH_REGR_SAMPLE
+Model Build Alerts
+
+
+6行が選択されました。
+
+SQL>
+SQL> -- Global GLM model statistics
+SQL> column numeric_value format 9999990.999
+SQL> column string_value format a20
+SQL> select name, numeric_value, string_value from DM$VGGLMR_SH_REGR_SAMPLE
+  2    ORDER BY name;
+
+NAME                           NUMERIC_VALUE STRING_VALUE
+------------------------------ ------------- --------------------
+ADJUSTED_R_SQUARE                      0.762
+AIC                                 5704.986
+COEFF_VAR                             23.860
+CONVERGED                                    YES
+CORRECTED_TOTAL_DF                  1499.000
+CORRECTED_TOT_SS                  278740.504
+DEPENDENT_MEAN                        27.892
+ERROR_DF                            1481.000
+ERROR_MEAN_SQUARE                     44.289
+ERROR_SUM_SQUARES                  65592.135
+F_VALUE                              267.370
+GMSEP                                 44.858
+HOCKING_SP                             0.030
+J_P                                   44.850
+MODEL_DF                              18.000
+MODEL_F_P_VALUE                        0.000
+MODEL_MEAN_SQUARE                  11841.576
+MODEL_SUM_SQUARES                 213148.369
+NUM_PARAMS                            19.000
+NUM_ROWS                            1500.000
+ROOT_MEAN_SQ                           6.655
+R_SQ                                   0.765
+SBIC                                5805.937
+VALID_COVARIANCE_MATRIX                      YES
+
+24行が選択されました。
+
+SQL>
+SQL> -- Coefficient statistics
+SQL> SET line 120
+SQL> column feature_expression format a53
+SQL> column coefficient format 9999990.999
+SQL> column std_error format 9999990.999
+SQL> column test_statistic format 9999990.999
+SQL> column p_value format 9999990.999
+SQL> column std_coefficient format 9999990.999
+SQL> column lower_coeff_limit format 9999990.999
+SQL> column upper_coeff_limit format 9999990.999
+SQL>   SELECT feature_expression, coefficient, std_error, test_statistic,
+  2    p_value, std_coefficient, lower_coeff_limit, upper_coeff_limit
+  3    FROM DM$VDGLMR_SH_REGR_SAMPLE
+  4    ORDER BY 1;
+
+FEATURE_EXPRESSION                                     COEFFICIENT    STD_ERROR TEST_STATISTIC      P_VALUE
+----------------------------------------------------- ------------ ------------ -------------- ------------
+STD_COEFFICIENT LOWER_COEFF_LIMIT UPPER_COEFF_LIMIT
+--------------- ----------------- -----------------
+CUST_MARITAL_STATUS_never married                           -6.242        1.275         -4.896        0.000
+         -0.214            -8.742            -3.741
+
+CUST_MARITAL_STATUS_widowed                                 13.017        1.114         11.683        0.000
+          0.154            10.831            15.202
+
+HOME_THEATER_PACKAGE                                        12.453        2.333          5.337        0.000
+          0.452             7.876            17.031
+
+HOME_THEATER_PACKAGE*BOOKKEEPING_APPLICATION                -5.277        1.398         -3.774        0.000
+         -0.194            -8.020            -2.534
+
+HOME_THEATER_PACKAGE*BULK_PACK_DISKETTES                    -1.019        0.463         -2.200        0.028
+         -0.035            -1.927            -0.110
+
+HOME_THEATER_PACKAGE*CUST_MARITAL_STATUS_never marrie       -3.935        1.140         -3.453        0.001
+d                                                              -0.076            -6.171            -1.699
+
+HOME_THEATER_PACKAGE*OCCUPATION_?                           13.788        1.233         11.179        0.000
+          0.169            11.368            16.207
+
+HOME_THEATER_PACKAGE*YRS_RESIDENCE                           1.578        0.548          2.880        0.004
+          0.331             0.503             2.654
+
+HOUSEHOLD_SIZE_1                                            -1.391        0.652         -2.132        0.033
+         -0.036            -2.670            -0.111
+
+HOUSEHOLD_SIZE_2*OCCUPATION_?                               -9.660        1.760         -5.487        0.000
+         -0.081           -13.112            -6.207
+
+HOUSEHOLD_SIZE_4-5*OCCUPATION_House-s                       29.481        6.748          4.369        0.000
+          0.056            16.245            42.718
+
+YRS_RESIDENCE                                               -2.616        0.647         -4.041        0.000
+         -0.369            -3.886            -1.346
+
+YRS_RESIDENCE*BOOKKEEPING_APPLICATION                        0.503        0.243          2.072        0.038
+          0.082             0.027             0.980
+
+YRS_RESIDENCE*CUST_MARITAL_STATUS_never married              1.895        0.372          5.095        0.000
+          0.223             1.166             2.625
+
+YRS_RESIDENCE*HOUSEHOLD_SIZE_9+                             -0.478        0.134         -3.573        0.000
+         -0.047            -0.740            -0.215
+
+YRS_RESIDENCE*YRS_RESIDENCE                                  0.202        0.038          5.336        0.000
+          0.290             0.128             0.276
+
+YRS_RESIDENCE*Y_BOX_GAMES                                    1.916        0.684          2.799        0.005
+          0.163             0.573             3.258
+
+Y_BOX_GAMES                                                -12.068        2.240         -5.388        0.000
+         -0.400           -16.462            -7.675
+
+                                                            26.353        1.909         13.801        0.000
+          0.000            22.607            30.099
+
+
+19行が選択されました。
+
+SQL>
+SQL> -- Show the features and their p_values
+SQL> SET lin 80
+SQL> SET pages 20
+SQL>   SELECT feature_expression, coefficient, p_value
+  2    FROM DM$VDGLMR_SH_REGR_SAMPLE
+  3    ORDER BY feature_expression;
+
+FEATURE_EXPRESSION                                     COEFFICIENT      P_VALUE
+----------------------------------------------------- ------------ ------------
+CUST_MARITAL_STATUS_never married                           -6.242        0.000
+CUST_MARITAL_STATUS_widowed                                 13.017        0.000
+HOME_THEATER_PACKAGE                                        12.453        0.000
+HOME_THEATER_PACKAGE*BOOKKEEPING_APPLICATION                -5.277        0.000
+HOME_THEATER_PACKAGE*BULK_PACK_DISKETTES                    -1.019        0.028
+HOME_THEATER_PACKAGE*CUST_MARITAL_STATUS_never marrie       -3.935        0.001
+d
+
+HOME_THEATER_PACKAGE*OCCUPATION_?                           13.788        0.000
+HOME_THEATER_PACKAGE*YRS_RESIDENCE                           1.578        0.004
+HOUSEHOLD_SIZE_1                                            -1.391        0.033
+HOUSEHOLD_SIZE_2*OCCUPATION_?                               -9.660        0.000
+HOUSEHOLD_SIZE_4-5*OCCUPATION_House-s                       29.481        0.000
+YRS_RESIDENCE                                               -2.616        0.000
+YRS_RESIDENCE*BOOKKEEPING_APPLICATION                        0.503        0.038
+YRS_RESIDENCE*CUST_MARITAL_STATUS_never married              1.895        0.000
+YRS_RESIDENCE*HOUSEHOLD_SIZE_9+                             -0.478        0.000
+
+FEATURE_EXPRESSION                                     COEFFICIENT      P_VALUE
+----------------------------------------------------- ------------ ------------
+YRS_RESIDENCE*YRS_RESIDENCE                                  0.202        0.000
+YRS_RESIDENCE*Y_BOX_GAMES                                    1.916        0.005
+Y_BOX_GAMES                                                -12.068        0.000
+                                                            26.353        0.000
+
+19行が選択されました。
+
+SQL>
+SQL> -- Row diagnostics
+SQL> SELECT CASE_id, TARGET_value, PREDICTED_TARGET_value, hat,
+  2    residual, std_err_residual, studentized_residual, pred_res, cooks_d
+  3    FROM dm$vaGLMR_SH_Regr_sample
+  4   WHERE case_id <= 101510
+  5   ORDER BY case_id;
+
+   CASE_ID           TARGET_VALUE PREDICTED_TARGET_VALUE        HAT   RESIDUAL
+---------- ---------------------- ---------------------- ---------- ----------
+STD_ERR_RESIDUAL STUDENTIZED_RESIDUAL   PRED_RES    COOKS_D
+---------------- -------------------- ---------- ----------
+    101501          30.0000000000             3.101E+001          0 -1.01E+000
+      -1.51E-001           -1.51E-001 1.011E+000          0
+
+    101502          16.0000000000             1.495E+001          0 1.047E+000
+      1.573E-001           1.573E-001 1.096E+000          0
+
+    101503           9.0000000000             1.225E+001          0 -3.25E+000
+      -4.88E-001           -4.88E-001 1.054E+001          0
+
+    101504          34.0000000000              3.59E+001          0  -1.9E+000
+      -2.85E-001           -2.85E-001 3.609E+000          0
+
+    101505          23.0000000000             2.168E+001          0 1.322E+000
+      1.987E-001           1.987E-001 1.749E+000          0
+
+
+   CASE_ID           TARGET_VALUE PREDICTED_TARGET_VALUE        HAT   RESIDUAL
+---------- ---------------------- ---------------------- ---------- ----------
+STD_ERR_RESIDUAL STUDENTIZED_RESIDUAL   PRED_RES    COOKS_D
+---------------- -------------------- ---------- ----------
+    101506          27.0000000000              3.36E+001          0  -6.6E+000
+      -9.92E-001           -9.92E-001 4.357E+001          0
+
+    101507          17.0000000000             1.551E+001          0 1.492E+000
+      2.241E-001           2.241E-001 2.225E+000          0
+
+    101508           8.0000000000             1.225E+001          0 -4.25E+000
+      -6.38E-001           -6.38E-001 1.803E+001          0
+
+    101509          41.0000000000             3.488E+001          0 6.119E+000
+      9.194E-001           9.194E-001 3.744E+001          0
+
+    101510          16.0000000000             1.495E+001          0 1.047E+000
+      1.573E-001           1.573E-001 1.096E+000          0
+
+
+10行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               TEST THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> ------------------------------------
+SQL> -- COMPUTE METRICS TO TEST THE MODEL
+SQL> --
+SQL>
+SQL> -- 1. Root Mean Square Error - Sqrt(Mean((x - x')^2))
+SQL> -- 2. Mean Absolute Error - Mean(|(x - x')|)
+SQL> --
+SQL> column rmse format 9999.9
+SQL> column mae format 9999.9
+SQL> SELECT SQRT(AVG((A.pred - B.age) * (A.pred - B.age))) rmse,
+  2         AVG(ABS(a.pred - B.age)) mae
+  3    FROM (SELECT cust_id, prediction(GLMR_SH_Regr_sample using *) pred
+  4            FROM mining_data_test_v) A,
+  5         mining_data_test_v B
+  6    WHERE A.cust_id = B.cust_id;
+
+   RMSE     MAE
+------- -------
+    6.6     4.4
+
+1行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               SCORE NEW DATA
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Since the model has a valid covariance matrix, it is possible
+SQL> -- to obtain confidence bounds.
+SQL> -- In addition, provide details to help explain the prediction
+SQL> set long 20000
+SQL> set line 200
+SQL> set pagesize 100
+SQL> SELECT CUST_ID,
+  2         PREDICTION(GLMR_SH_Regr_sample USING *) pr,
+  3         PREDICTION_BOUNDS(GLMR_SH_Regr_sample USING *).lower pl,
+  4         PREDICTION_BOUNDS(GLMR_SH_Regr_sample USING *).upper pu,
+  5         PREDICTION_DETAILS(GLMR_SH_Regr_sample USING *) pd
+  6    FROM mining_data_apply_v
+  7   WHERE CUST_ID < 100010
+  8   ORDER BY CUST_ID;
+
+   CUST_ID         PR         PL         PU PD
+---------- ---------- ---------- ---------- ------------------------------------------------------------------------------------------
+    100001  46.758161 44.4151359  49.101186 <Details algorithm="Generalized Linear Model">
+                                            <Attribute name="CUST_MARITAL_STATUS" actualValue="widowed" weight="-.048" rank="1"/>
+                                            <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight="-.132" rank="2"/>
+                                            <Attribute name="BULK_PACK_DISKETTES" actualValue="0" weight="-.132" rank="3"/>
+                                            <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight="-.151" rank="4"/>
+                                            <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight="-.174" rank="5"/>
+                                            </Details>
+
+    100002 31.0053339 29.6000774 32.4105905 <Details algorithm="Generalized Linear Model">
+                                            <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight="-.071" rank="1"/>
+                                            <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight="-.092" rank="2"/>
+                                            <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight="-.109" rank="3"/>
+                                            <Attribute name="CUST_MARITAL_STATUS" actualValue="never married" weight="-.111" rank="4"/
+                                            >
+                                            <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight="-.142" rank="5"/>
+                                            </Details>
+
+    100003 26.0672601 22.6527809 29.4817393 <Details algorithm="Generalized Linear Model">
+                                            <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".299" rank="1"/>
+                                            <Attribute name="YRS_RESIDENCE" actualValue="6" weight=".13" rank="2"/>
+                                            <Attribute name="CUST_MARITAL_STATUS" actualValue="never married" weight=".112" rank="3"/>
+
+                                            <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".053" rank="4"/>
+                                            <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".006" rank="5"/>
+                                            </Details>
+
+    100004 34.8811319 34.2045266 35.5577372 <Details algorithm="Generalized Linear Model">
+                                            <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight="-.102" rank="1"/>
+                                            <Attribute name="CUST_MARITAL_STATUS" actualValue="divorced" weight="-.102" rank="2"/>
+                                            <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight="-.118" rank="3"/>
+                                            <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight="-.126" rank="4"/>
+                                            <Attribute name="YRS_RESIDENCE" actualValue="5" weight="-.172" rank="5"/>
+                                            </Details>
+
+    100005 35.8997364 35.1180269 36.6814458 <Details algorithm="Generalized Linear Model">
+                                            <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight="-.106" rank="1"/>
+                                            <Attribute name="CUST_MARITAL_STATUS" actualValue="married" weight="-.106" rank="2"/>
+                                            <Attribute name="BULK_PACK_DISKETTES" actualValue="0" weight="-.106" rank="3"/>
+                                            <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight="-.129" rank="4"/>
+                                            <Attribute name="YRS_RESIDENCE" actualValue="5" weight="-.171" rank="5"/>
+                                            </Details>
+
+    100006 11.2907718 10.1914329 12.3901108 <Details algorithm="Generalized Linear Model">
+                                            <Attribute name="HOME_THEATER_PACKAGE" actualValue="0" weight=".175" rank="1"/>
+                                            <Attribute name="YRS_RESIDENCE" actualValue="2" weight=".156" rank="2"/>
+                                            <Attribute name="Y_BOX_GAMES" actualValue="1" weight=".144" rank="3"/>
+                                            <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".138" rank="4"/>
+                                            <Attribute name="CUST_MARITAL_STATUS" actualValue="never married" weight=".132" rank="5"/>
+
+                                            </Details>
+
+    100007 34.8811319 34.2045266 35.5577372 <Details algorithm="Generalized Linear Model">
+                                            <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight="-.102" rank="1"/>
+                                            <Attribute name="CUST_MARITAL_STATUS" actualValue="divorced" weight="-.102" rank="2"/>
+                                            <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight="-.118" rank="3"/>
+                                            <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight="-.126" rank="4"/>
+                                            <Attribute name="YRS_RESIDENCE" actualValue="5" weight="-.172" rank="5"/>
+                                            </Details>
+
+    100008 34.1814802 32.8297529 35.5332075 <Details algorithm="Generalized Linear Model">
+                                            <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight="-.094" rank="1"/>
+                                            <Attribute name="CUST_MARITAL_STATUS" actualValue="never married" weight="-.103" rank="2"/
+                                            >
+                                            <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight="-.111" rank="3"/>
+                                            <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight="-.119" rank="4"/>
+                                            <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight="-.161" rank="5"/>
+                                            </Details>
+
+    100009 15.5083459  14.392325 16.6243668 <Details algorithm="Generalized Linear Model">
+                                            <Attribute name="HOME_THEATER_PACKAGE" actualValue="0" weight=".186" rank="1"/>
+                                            <Attribute name="YRS_RESIDENCE" actualValue="3" weight=".143" rank="2"/>
+                                            <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".141" rank="3"/>
+                                            <Attribute name="Y_BOX_GAMES" actualValue="1" weight=".141" rank="4"/>
+                                            <Attribute name="CUST_MARITAL_STATUS" actualValue="married" weight=".134" rank="5"/>
+                                            </Details>
+
+
+9行が選択されました。
+
+SQL>
+SQL> -- Next we compare to a model built with ridge regression enabled
+SQL>
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD A NEW MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> ---------------------
+SQL> -- CREATE A NEW MODEL
+SQL> --
+SQL> -- Cleanup old model with same name (if any)
+SQL> BEGIN
+  2    DBMS_DATA_MINING.DROP_MODEL('GLMR_SH_Regr_sample');
+  3  EXCEPTION WHEN OTHERS THEN
+  4    NULL;
+  5  END;
+  6  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- specify settings
+  5    v_setlst('ALGO_NAME')             := 'ALGO_GENERALIZED_LINEAR_MODEL';
+  6    -- output row diagnostic statistics
+  7    v_setlst('GLMS_ROW_DIAGNOSTICS')  := 'GLMS_ROW_DIAG_ENABLE';
+  8    v_setlst('PREP_AUTO')             := 'ON';
+  9    -- turn on ridge regression
+ 10    v_setlst('GLMS_RIDGE_REGRESSION') := 'GLMS_RIDGE_REG_ENABLE';
+ 11    v_setlst('GLMS_SOLVER')           := 'GLMS_SOLVER_QR';
+ 12
+ 13    DBMS_DATA_MINING.CREATE_MODEL2(
+ 14      model_name          => 'GLMR_SH_Regr_sample',
+ 15      mining_function     => 'REGRESSION',
+ 16      data_query          => 'SELECT * FROM mining_data_build_v',
+ 17      case_id_column_name => 'cust_id',
+ 18      target_column_name  => 'age',
+ 19      set_list            => v_setlst);
+ 20  END;
+ 21  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'GLMR_SH_REGR_SAMPLE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_GENERALIZED_LINEAR_MODEL
+GLMS_CONF_LEVEL                .95
+GLMS_FTR_GENERATION            GLMS_FTR_GENERATION_DISABLE
+GLMS_FTR_SELECTION             GLMS_FTR_SELECTION_DISABLE
+GLMS_LINK_FUNCTION             GLMS_IDENTITY_LINK
+GLMS_RIDGE_REGRESSION          GLMS_RIDGE_REG_ENABLE
+GLMS_RIDGE_VALUE               .01
+GLMS_ROW_DIAGNOSTICS           GLMS_ROW_DIAG_ENABLE
+GLMS_SOLVER                    GLMS_SOLVER_QR
+GLMS_VIF_FOR_RIDGE             GLMS_VIF_RIDGE_DISABLE
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+PREP_AUTO                      ON
+
+14行が選択されました。
+
+SQL>
+SQL> --------------------------
+SQL> -- DISPLAY MODEL SIGNATURE
+SQL> --
+SQL> column attribute_name format a40
+SQL> column attribute_type format a20
+SQL> SELECT attribute_name, attribute_type
+  2    FROM user_mining_model_attributes
+  3   WHERE model_name = 'GLMR_SH_REGR_SAMPLE'
+  4  ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                           ATTRIBUTE_TYPE
+---------------------------------------- --------------------
+AFFINITY_CARD                            NUMERICAL
+AGE                                      NUMERICAL
+BOOKKEEPING_APPLICATION                  NUMERICAL
+BULK_PACK_DISKETTES                      NUMERICAL
+COUNTRY_NAME                             CATEGORICAL
+CUST_GENDER                              CATEGORICAL
+CUST_INCOME_LEVEL                        CATEGORICAL
+CUST_MARITAL_STATUS                      CATEGORICAL
+EDUCATION                                CATEGORICAL
+FLAT_PANEL_MONITOR                       NUMERICAL
+HOME_THEATER_PACKAGE                     NUMERICAL
+HOUSEHOLD_SIZE                           CATEGORICAL
+OCCUPATION                               CATEGORICAL
+OS_DOC_SET_KANJI                         NUMERICAL
+PRINTER_SUPPLIES                         NUMERICAL
+YRS_RESIDENCE                            NUMERICAL
+Y_BOX_GAMES                              NUMERICAL
+
+17行が選択されました。
+
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY MODEL DETAILS
+SQL> --
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2    WHERE model_name='GLMR_SH_REGR_SAMPLE'
+  3    ORDER BY view_name;
+
+VIEW_NAME                      VIEW_TYPE
+------------------------------ --------------------------------------------------
+DM$VAGLMR_SH_REGR_SAMPLE       GLM Regression Row Diagnostics
+DM$VDGLMR_SH_REGR_SAMPLE       GLM Regression Attribute Diagnostics
+DM$VGGLMR_SH_REGR_SAMPLE       Global Name-Value Pairs
+DM$VNGLMR_SH_REGR_SAMPLE       Normalization and Missing Value Handling
+DM$VSGLMR_SH_REGR_SAMPLE       Computed Settings
+DM$VWGLMR_SH_REGR_SAMPLE       Model Build Alerts
+
+6行が選択されました。
+
+SQL>
+SQL> -- Global GLM model statistics
+SQL> column name format a30
+SQL> column numeric_value format 9999990.999
+SQL> column string_value format a20
+SQL> select name, numeric_value, string_value from DM$VGGLMR_SH_REGR_SAMPLE
+  2    ORDER BY name;
+
+NAME                           NUMERIC_VALUE STRING_VALUE
+------------------------------ ------------- --------------------
+ADJUSTED_R_SQUARE                      0.729
+AIC                                 5954.762
+COEFF_VAR                             25.443
+CONVERGED                                    YES
+CORRECTED_TOTAL_DF                  1499.000
+CORRECTED_TOT_SS                  278740.504
+DEPENDENT_MEAN                        27.892
+ERROR_DF                            1422.000
+ERROR_MEAN_SQUARE                     50.362
+ERROR_SUM_SQUARES                  71615.128
+F_VALUE                               52.924
+GMSEP                                 53.127
+HOCKING_SP                             0.035
+J_P                                   52.981
+MODEL_DF                              77.000
+MODEL_F_P_VALUE                        0.000
+MODEL_MEAN_SQUARE                   2665.378
+MODEL_SUM_SQUARES                 205234.114
+NUM_PARAMS                            78.000
+NUM_ROWS                            1500.000
+RANK_DEFICIENCY                        0.000
+ROOT_MEAN_SQ                           7.097
+R_SQ                                   0.743
+SBIC                                6369.193
+VALID_COVARIANCE_MATRIX                      YES
+
+25行が選択されました。
+
+SQL>
+SQL> -- Coefficient statistics
+SQL> SET line 120
+SQL> column attribute_name format a20
+SQL> column attribute_subname format a20
+SQL> column attribute_value format a20
+SQL> column partition_name format a20
+SQL> column vif format 9999990.999
+SQL> column exp_coefficient format 9999990.999
+SQL> column exp_lower_coeff_limit format 9999990.999
+SQL> column exp_upper_coeff_limit format 9999990.999
+SQL>   SELECT *
+  2    FROM DM$VDGLMR_SH_REGR_SAMPLE
+  3   WHERE attribute_name in ('AFFINITY_CARD','BULK_PACK_DISKETTES','COUNTRY_NAME')
+  4  ORDER BY attribute_name, attribute_value;
+
+PARTITION_NAME       ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME    ATTRIBUTE_VALUE
+-------------------- -------------------- -------------------- --------------------
+FEATURE_EXPRESSION                                     COEFFICIENT    STD_ERROR TEST_STATISTIC      P_VALUE          VIF
+----------------------------------------------------- ------------ ------------ -------------- ------------ ------------
+STD_COEFFICIENT LOWER_COEFF_LIMIT UPPER_COEFF_LIMIT
+--------------- ----------------- -----------------
+                     AFFINITY_CARD
+                                                            -0.638        0.530         -1.203        0.229        1.585
+         -0.020            -1.678             0.402
+
+                     BULK_PACK_DISKETTES
+                                                            -0.907        2.554         -0.355        0.723       45.400
+         -0.032            -5.918             4.104
+
+                     COUNTRY_NAME                              Argentina
+                                                            -1.222        1.193         -1.025        0.306        1.260
+         -0.015            -3.562             1.118
+
+                     COUNTRY_NAME                              Australia
+                                                            -0.372        5.137         -0.073        0.942        1.047
+         -0.001           -10.449             9.704
+
+                     COUNTRY_NAME                              Brazil
+                                                             5.290        1.931          2.740        0.006        1.027
+          0.037             1.502             9.078
+
+                     COUNTRY_NAME                              Canada
+                                                             3.850        2.421          1.590        0.112        1.041
+          0.022            -0.900             8.599
+
+                     COUNTRY_NAME                              China
+                                                             0.692        3.605          0.192        0.848        1.029
+          0.003            -6.380             7.763
+
+                     COUNTRY_NAME                              Denmark
+                                                            -3.095        3.195         -0.969        0.333        1.010
+         -0.013            -9.362             3.171
+
+                     COUNTRY_NAME                              France
+                                                            -1.133        7.213         -0.157        0.875        1.033
+         -0.002           -15.283            13.017
+
+                     COUNTRY_NAME                              Germany
+                                                            -1.702        2.541         -0.670        0.503        1.020
+         -0.009            -6.686             3.281
+
+                     COUNTRY_NAME                              Italy
+                                                            -1.263        1.201         -1.052        0.293        1.033
+         -0.014            -3.619             1.092
+
+                     COUNTRY_NAME                              Japan
+                                                            -6.211        5.053         -1.229        0.219        1.012
+         -0.017           -16.123             3.700
+
+                     COUNTRY_NAME                              New Zealand
+                                                             5.096        4.153          1.227        0.220        1.025
+          0.017            -3.051            13.243
+
+                     COUNTRY_NAME                              Poland
+                                                             2.225        2.808          0.792        0.428        1.091
+          0.011            -3.284             7.734
+
+                     COUNTRY_NAME                              Saudi Arabia
+                                                             0.466        3.253          0.143        0.886        1.047
+          0.002            -5.915             6.847
+
+                     COUNTRY_NAME                              Singapore
+                                                            -4.910        3.607         -1.361        0.174        1.030
+         -0.019           -11.985             2.164
+
+                     COUNTRY_NAME                              South Africa
+                                                             0.174        7.164          0.024        0.981        1.019
+          0.000           -13.880            14.228
+
+                     COUNTRY_NAME                              Spain
+                                                            -3.115        7.122         -0.437        0.662        1.007
+         -0.006           -17.086            10.856
+
+                     COUNTRY_NAME                              Turkey
+                                                            -5.967        7.124         -0.838        0.402        1.007
+         -0.011           -19.943             8.008
+
+                     COUNTRY_NAME                              United Kingdom
+                                                             2.255        2.948          0.765        0.444        1.032
+          0.010            -3.528             8.039
+
+
+20行が選択されました。
+
+SQL>
+SQL> -- Limited row diagnostics - residuals only, others are NULL
+SQL> SELECT CASE_id, TARGET_value, PREDICTED_TARGET_value, residual
+  2    FROM dm$vaGLMR_SH_Regr_sample
+  3   WHERE case_id <= 101510
+  4   ORDER BY case_id;
+
+   CASE_ID           TARGET_VALUE PREDICTED_TARGET_VALUE   RESIDUAL
+---------- ---------------------- ---------------------- ----------
+    101501          30.0000000000             3.302E+001 -3.02E+000
+    101502          16.0000000000              1.53E+001 6.995E-001
+    101503           9.0000000000             1.148E+001 -2.48E+000
+    101504          34.0000000000             3.597E+001 -1.97E+000
+    101505          23.0000000000              2.18E+001 1.205E+000
+    101506          27.0000000000             3.488E+001 -7.88E+000
+    101507          17.0000000000              1.53E+001 1.701E+000
+    101508           8.0000000000             1.324E+001 -5.24E+000
+    101509          41.0000000000             4.165E+001 -6.54E-001
+    101510          16.0000000000             1.296E+001 3.038E+000
+
+10行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               TEST THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> ------------------------------------
+SQL> -- COMPUTE METRICS TO TEST THE MODEL
+SQL> --
+SQL>
+SQL> -- 1. Root Mean Square Error - Sqrt(Mean((x - x')^2))
+SQL> -- 2. Mean Absolute Error - Mean(|(x - x')|)
+SQL> --
+SQL> column rmse format 9999.9
+SQL> column mae format 9999.9
+SQL> SELECT SQRT(AVG((A.pred - B.age) * (A.pred - B.age))) rmse,
+  2         AVG(ABS(a.pred - B.age)) mae
+  3    FROM (SELECT cust_id, prediction(GLMR_SH_Regr_sample using *) pred
+  4            FROM mining_data_test_v) A,
+  5         mining_data_test_v B
+  6   WHERE A.cust_id = B.cust_id;
+
+   RMSE     MAE
+------- -------
+    6.9     4.8
+
+1行が選択されました。
+
+SQL>
+SQL> -- 3. Residuals
+SQL> --    If the residuals show substantial variance between
+SQL> --    the predicted value and the actual, you can consider
+SQL> --    changing the algorithm parameters.
+SQL> --
+SQL> SELECT TO_CHAR(ROUND(pred, 4)) prediction, residual
+  2    FROM (SELECT A.pred, (A.pred - B.age) residual
+  3            FROM (SELECT cust_id, prediction(GLMR_SH_Regr_sample using *) pred
+  4                    FROM mining_data_test_v) A,
+  5                 mining_data_test_v B
+  6           WHERE A.cust_id = B.cust_id
+  7          ORDER BY A.pred ASC)
+  8   WHERE pred <= 18.388
+  9   ORDER BY pred;
+
+PREDICTION                                 RESIDUAL
+---------------------------------------- ----------
+4.9384                                   -8.06163963
+5.5926                                   -12.4073946
+5.6213                                   -7.37867373
+6.0133                                   .0133259972
+6.213                                    -2.78702546
+6.2908                                   .290784299
+6.401                                    -1.59897551
+6.5162                                   -1.48378638
+6.7211                                     -2.27891
+6.9125                                   -5.08747817
+7.006                                    .00602781235
+7.0757                                   -0.924281851
+7.2008                                   -6.79921565
+7.2463                                   -2.75371818
+7.261                                    -5.73900988
+7.459                                    -4.54096683
+7.509                                    1.50899035
+7.5263                                   -3.47366353
+7.5344                                   .534388458
+7.5978                                   -1.40215239
+7.8004                                   1.80044629
+7.8373                                   -7.16266378
+7.8718                                   -4.12821408
+7.9372                                   -8.06278605
+7.9423                                   -1.05772018
+7.9865                                   -0.0134758358
+8.0471                                    1.0470876
+8.0729                                   1.07293468
+8.1313                                   2.13126224
+8.1329                                   .132904632
+8.1396                                   .139602188
+8.2006                                   -4.79938022
+8.2803                                   -0.719712546
+8.2803                                   .280287454
+8.3111                                   1.31106634
+8.3326                                   -0.667446821
+8.3412                                   -3.65879809
+8.4111                                   -1.58885393
+8.4263                                   .426282285
+8.4292                                   -0.570842345
+8.4549                                   2.45491367
+8.5042                                   -4.49576647
+8.5461                                   -1.45392172
+8.5743                                   .574296895
+8.5755                                   .575463755
+8.6058                                   -1.39417695
+8.6127                                   -0.387254204
+8.6317                                   2.63165606
+8.721                                    2.72098632
+8.7381                                   2.73811836
+8.7587                                   -2.24126815
+8.81                                     -0.190028974
+8.8153                                   1.81534447
+8.8955                                   -0.10454755
+8.9085                                   -0.0915208297
+8.9736                                   .973555817
+9.0212                                   -0.978834655
+9.0375                                   3.03746466
+9.0711                                   .0711481899
+9.0792                                   -3.92081587
+9.0848                                   -2.91517173
+9.1037                                   -3.89626568
+9.1206                                   -1.87935224
+9.218                                    -0.782040473
+9.232                                    3.23201881
+9.2686                                   -1.73137014
+9.2986                                   -0.701368033
+9.3203                                   2.32025605
+9.3312                                   2.33122795
+9.3363                                   -1.66365659
+9.3385                                   -5.66153547
+9.346                                    -3.65395561
+9.3594                                   .359376744
+9.3594                                   -3.64062326
+9.3628                                   -4.63721683
+9.4073                                   -7.59272527
+9.4735                                   .473504818
+9.4821                                   -0.517914657
+9.4895                                   .489503413
+9.4895                                   -3.51049659
+9.4895                                   -0.510496587
+9.5028                                   2.50276089
+9.5062                                   -1.49376544
+9.554                                    3.55402785
+9.6129                                   -4.38705604
+9.6301                                   -2.36989331
+9.6538                                   -2.34617891
+9.6623                                   -6.33767549
+9.6623                                   .662324511
+9.6704                                   2.67038385
+9.6814                                   .681385782
+9.6905                                   2.69050522
+9.729                                    -0.271007977
+9.7453                                   -7.25469383
+9.7616                                   -0.238376034
+9.7664                                    2.7664416
+9.8062                                   -3.19381759
+
+PREDICTION                                 RESIDUAL
+---------------------------------------- ----------
+9.8111                                   -2.18893089
+9.8241                                   -7.17586401
+9.8594                                   1.85941442
+9.884                                    -0.115951309
+9.8882                                   1.88818143
+9.9415                                   -2.05845599
+9.9474                                   -3.05258726
+9.9627                                   -1.03726398
+9.9712                                   -6.02879847
+9.9745                                   -4.02547669
+9.9751                                   -1.02485093
+9.9751                                   .975149071
+9.9859                                   -7.01407056
+10.0201                                  4.02007941
+10.1053                                  2.10527574
+10.157                                   -1.84298394
+10.1719                                  -0.828056747
+10.1895                                  3.18947246
+10.2041                                  1.20407908
+10.2077                                  .207680192
+10.2157                                  -1.78428387
+10.2287                                  3.22871629
+10.2361                                  1.23613436
+10.2683                                  -2.73173754
+10.2683                                  -2.73173754
+10.3449                                  -0.655131988
+10.401                                   -1.59904703
+10.4256                                  -4.5744199
+10.4508                                  -1.54922065
+10.4756                                  3.47562297
+10.4828                                  -0.517211886
+10.4924                                  .492420231
+10.4926                                  3.49255552
+10.6428                                  .642822492
+10.6435                                  -6.35649072
+10.6649                                  -7.33509486
+10.7062                                  -3.29384315
+10.7104                                  -6.28956709
+10.7436                                  .743622908
+10.7613                                  -3.23867382
+10.7959                                  2.79592733
+10.8208                                  -0.179218808
+10.8287                                  -1.17127982
+10.8436                                  4.84356674
+10.9927                                  1.99274095
+10.9929                                  -2.00708629
+10.998                                   -4.00198277
+11.0133                                  .0133103404
+11.0143                                  .0142625826
+11.019                                   -0.980976927
+11.0203                                  -0.979714929
+11.025                                   .0250418047
+11.0296                                  .0296446168
+11.0521                                  -5.94790681
+11.0588                                  -1.94119281
+11.0588                                  2.05880719
+11.0816                                  3.08163054
+11.0914                                   4.0913953
+11.0929                                  -0.907110126
+11.0959                                  -3.90410048
+11.1058                                  -0.894238091
+11.1177                                  -3.88230248
+11.1497                                  -1.8502963
+11.1603                                  -1.83971434
+11.1645                                  .164533912
+11.1877                                   1.1876766
+11.1995                                  2.19949246
+11.2101                                  3.21007904
+11.2108                                  -2.7892213
+11.2175                                  3.21749657
+11.2246                                  .224567161
+11.2637                                  .263683569
+11.2637                                  2.26368357
+11.2832                                  1.28321184
+11.3018                                  -1.69822079
+11.3071                                  2.30707363
+11.3914                                  -0.608614528
+11.4115                                  -5.5885262
+11.4182                                  -1.5817928
+11.4299                                  -0.570103686
+11.4312                                  -0.568766812
+11.4393                                  -2.56074398
+11.4551                                  -6.54490502
+11.4816                                  -0.518433576
+11.4954                                  .495372132
+11.4987                                  -1.50126573
+11.5014                                  2.50139141
+11.5446                                  -1.45536543
+11.5618                                  .561837204
+11.571                                   -4.42897292
+11.573                                   -2.42695842
+11.5764                                  3.57635315
+11.6028                                  -2.39724914
+11.6076                                  -6.39242383
+11.6262                                  .626155733
+11.6348                                  2.63475663
+11.6361                                  -1.3639426
+
+PREDICTION                                 RESIDUAL
+---------------------------------------- ----------
+11.6395                                  -1.36053934
+11.645                                   -4.35503941
+11.6524                                  .652360118
+11.6694                                  -1.33058163
+11.6754                                  1.67535355
+11.742                                   -0.257978938
+11.7669                                  -1.23308398
+11.7753                                  -0.224670286
+11.867                                   2.86700134
+11.887                                   -5.11295543
+11.9                                     1.89998695
+11.9526                                  -0.047351133
+11.9879                                  2.98792894
+12.0058                                  -3.9941574
+12.0164                                   6.0164316
+12.0431                                  -0.956854019
+12.0478                                  -4.95219821
+12.0537                                  4.05370458
+12.0821                                  2.08211881
+12.0845                                  -1.91551243
+12.1048                                  -1.89524318
+12.1048                                  -3.89524318
+12.108                                   1.10802867
+12.1354                                  3.13539667
+12.1386                                  .138585605
+12.1483                                  -1.85173717
+12.1556                                  1.15559257
+12.1833                                  4.18328922
+12.2068                                  2.20681159
+12.2249                                  -0.775079546
+12.248                                   4.24802236
+12.248                                   2.24802236
+12.2521                                  5.25212243
+12.2549                                  -0.74505651
+12.2713                                  .271303788
+12.3067                                  4.30665393
+12.3307                                  3.33073459
+12.3483                                  6.34830015
+12.3583                                  -0.641675959
+12.3609                                  -1.6391387
+12.3831                                  -2.61686831
+12.3985                                  -3.60147989
+12.4128                                   3.4127724
+12.4271                                  -3.57285874
+12.4549                                  -4.54512986
+12.4658                                  -5.5342355
+12.476                                   -2.52404586
+12.49                                    -1.51001263
+12.4959                                  -5.5040648
+12.5293                                  1.52933486
+12.5354                                  -4.46457881
+12.5411                                  -4.45892225
+12.5542                                  1.55417848
+12.5613                                  -0.438656379
+12.5829                                  -2.41712515
+12.5956                                  1.59560813
+12.5956                                  2.59560813
+12.6222                                  -2.37778836
+12.6535                                  3.65349134
+12.6623                                  3.66227564
+12.6978                                  .697759352
+12.7034                                  4.70343604
+12.7214                                    3.721378
+12.7445                                  -1.2554636
+12.7596                                  -0.240401328
+12.7718                                  -10.2282336
+12.7786                                  -2.22139415
+12.7999                                  4.79992533
+12.8059                                  -0.194065942
+12.8149                                  4.81490708
+12.8179                                  .817901998
+12.8383                                  -3.16170137
+12.8601                                  1.86009305
+12.8793                                  -2.12067681
+12.888                                   -3.11196194
+12.892                                   -1.10801908
+12.893                                   -0.106986597
+12.921                                   -1.07900509
+12.9213                                  -1.07869958
+12.9217                                  -4.07825621
+12.9485                                  .948473776
+12.9802                                  5.98022422
+12.9971                                  2.99712971
+13.0149                                  3.01493981
+13.0164                                  1.01637119
+13.0262                                  1.02615058
+13.0413                                  -1.95870846
+13.0528                                  .0528334283
+13.1161                                  -0.883944367
+13.1867                                  -4.8132809
+13.1987                                  -2.80127057
+13.215                                   -3.78498445
+13.2229                                  2.22289056
+13.2339                                  4.23394991
+13.2534                                   1.2534496
+13.2687                                  -3.73132645
+13.289                                   5.28898049
+
+PREDICTION                                 RESIDUAL
+---------------------------------------- ----------
+13.2921                                  -4.70785129
+13.3066                                  -3.69344529
+13.3315                                  -0.668508352
+13.432                                   1.43200774
+13.4511                                  -1.54885598
+13.4575                                  3.45746675
+13.461                                   -4.53895432
+13.4649                                  -0.53512898
+13.4771                                  -3.52289138
+13.5118                                  -4.48824336
+13.5384                                  -0.461647671
+13.548                                   -4.45199401
+13.5608                                  -3.43920083
+13.5689                                  -1.43112903
+13.5811                                  -0.418885073
+13.5839                                  -1.41613163
+13.5849                                  -0.415070425
+13.5849                                  -2.41507042
+13.585                                   -3.41500009
+13.6003                                   -3.399682
+13.6355                                  -4.3644582
+13.6917                                  2.69166469
+13.7011                                  -2.29891471
+13.7031                                  -2.29688753
+13.707                                   -3.29297156
+13.7284                                  3.72836117
+13.7539                                  4.75390906
+13.7583                                  4.75833221
+13.7775                                  -0.222479872
+13.7817                                  3.78172376
+13.7868                                  -2.21323795
+13.8451                                  4.84508781
+13.8667                                  -0.13325895
+13.873                                   -2.12699769
+13.9139                                  -0.0860866569
+13.9388                                  -4.06118284
+14.0101                                  -2.98988587
+14.0105                                  .0105285271
+14.0299                                  .0299297762
+14.0635                                  -2.93652328
+14.0877                                  2.08771066
+14.1316                                  -1.86835778
+14.1729                                  3.17290736
+14.2097                                  1.20969132
+14.2104                                  .210420947
+14.2371                                  -0.762856033
+14.2511                                  -0.748865819
+14.2911                                  -1.70894504
+14.3045                                  -0.695503234
+14.3263                                  -3.6737118
+14.3496                                  .349576216
+14.4208                                  1.42077461
+14.4319                                  2.43192498
+14.4383                                  6.43829564
+14.44                                    -0.560031212
+14.4402                                  -3.55979225
+14.4612                                  5.46124385
+14.4732                                  .473183215
+14.4771                                  .477075618
+14.4771                                  -1.52292438
+14.4785                                  -2.52152037
+14.4785                                  -2.52152037
+14.505                                   7.50496315
+14.523                                   5.52297473
+14.5279                                  2.52791136
+14.5279                                  3.52791136
+14.5316                                  1.53157228
+14.5385                                  -2.46149689
+14.5522                                  -0.447766607
+14.5701                                  3.57006927
+14.5816                                  -0.418372396
+14.6067                                  .606737482
+14.6086                                  -2.3913937
+14.6107                                  -0.389347112
+14.6258                                  .625820517
+14.6341                                  7.63412761
+14.6385                                  -0.361518147
+14.6386                                  -2.36142556
+14.6863                                  1.68630077
+14.7397                                   .73970529
+14.7484                                  4.74838113
+14.777                                   -2.22295591
+14.8281                                  -0.171880752
+14.849                                   6.84901351
+14.8623                                  1.86233573
+14.8874                                  -0.112557602
+14.8904                                  -1.10959688
+14.9014                                  -3.09860799
+14.9471                                  -2.05288887
+14.9552                                  .955158705
+14.9557                                  .955695264
+14.9595                                   5.9594739
+14.9605                                  -2.03950346
+14.9637                                  1.96368196
+14.9736                                  -3.02639748
+15.0047                                  -0.995267993
+15.0325                                  1.03251092
+
+PREDICTION                                 RESIDUAL
+---------------------------------------- ----------
+15.0489                                  6.04885813
+15.0734                                  2.07339415
+15.081                                   1.08098607
+15.1546                                  3.15457363
+15.1717                                  -4.82827402
+15.2035                                  -2.79653799
+15.2991                                  .299082075
+15.3552                                  .355237247
+15.3552                                  -1.64476275
+15.3552                                  -2.64476275
+15.3573                                  -2.64272168
+15.361                                   -0.638950562
+15.3633                                  .363273184
+15.3805                                  .380544403
+15.3861                                  -1.61386791
+15.427                                   .426984438
+15.468                                   -0.531951591
+15.5167                                  7.51665298
+15.5167                                  4.51665298
+15.5167                                  4.51665298
+15.5264                                  -2.47356123
+15.5267                                  -2.47326364
+15.5637                                  -2.43633684
+15.6322                                  2.63221833
+15.7077                                   .70770539
+15.7124                                  .712395995
+15.7561                                  3.75614159
+15.7667                                  -1.23334323
+15.8342                                  -1.16575208
+15.8565                                  -2.14348565
+15.8959                                  -2.10413816
+15.9283                                  -1.07167507
+15.9566                                   3.9566305
+16.0638                                   3.0638389
+16.0986                                      1.0986
+16.0995                                   1.0995355
+16.107                                   .107025396
+16.1431                                  7.14311346
+16.1448                                   2.1448447
+16.1589                                  8.15892677
+16.1673                                  3.16733325
+16.1787                                  -1.82131589
+16.1847                                  -0.815308968
+16.2014                                  -5.7986113
+16.2244                                  3.22439767
+16.2729                                  -1.72711298
+16.2814                                  -1.71864196
+16.3298                                  5.32983045
+16.3637                                  -0.636343307
+16.3995                                  -1.60054037
+16.4182                                  .418206169
+16.4875                                  -1.51252895
+16.5                                     1.50004131
+16.5676                                  10.5675935
+16.6109                                   7.6108697
+16.6109                                   9.6108697
+16.6187                                  4.61868778
+16.6503                                   8.6502558
+16.6967                                  -0.303255872
+16.7518                                  -0.248228204
+16.764                                   1.76399379
+16.7847                                  -0.215323002
+16.8129                                  -0.187108527
+16.8787                                  3.87868925
+16.8899                                  .889863772
+16.9117                                  -0.0883172972
+17.0076                                  -0.992355194
+17.0859                                  -3.91413152
+17.0917                                  -3.90830806
+17.1213                                  1.12130547
+17.1314                                  -3.86860645
+17.135                                   -5.86503867
+17.1406                                  .140615892
+17.1503                                  -2.84967648
+17.2017                                  3.20166148
+17.2275                                  5.22747156
+17.2439                                  -3.75614047
+17.2638                                  2.26384519
+17.2697                                  1.26967862
+17.3364                                  .336393524
+17.4053                                  -3.59470661
+17.4812                                  -3.51875881
+17.5257                                  -0.474341067
+17.5464                                  6.54643408
+17.5811                                  2.58112988
+17.5865                                    1.586481
+17.6478                                  7.64779739
+17.6806                                  -1.31940007
+17.7268                                  -3.27319099
+17.7555                                  -1.24448981
+17.7616                                  .761609662
+17.7688                                   1.7688473
+17.79                                    2.78999089
+17.8347                                   6.8346971
+17.8624                                  1.86236136
+17.8731                                  -1.12686757
+17.9087                                  -3.09132185
+
+PREDICTION                                 RESIDUAL
+---------------------------------------- ----------
+17.9087                                  -3.09132185
+17.9262                                  3.92624656
+17.9359                                  -1.06405124
+18.0168                                  1.01678211
+18.2216                                  .221615374
+18.2787                                  -2.72128893
+18.2858                                  .285750414
+
+492行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               SCORE NEW DATA
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Now that the model has an invalid covariance matrix, it is
+SQL> -- no longer possible to obtain confidence bounds.
+SQL> -- So the lower (PL) and upper (PU) confidence bounds are NULL
+SQL> set long 20000
+SQL> set line 200
+SQL> set pagesize 100
+SQL> SELECT CUST_ID,
+  2         PREDICTION(GLMR_SH_Regr_sample USING *) pr,
+  3         PREDICTION_BOUNDS(GLMR_SH_Regr_sample USING *).lower pl,
+  4         PREDICTION_BOUNDS(GLMR_SH_Regr_sample USING *).upper pu,
+  5         PREDICTION_DETAILS(GLMR_SH_Regr_sample USING *) pd
+  6    FROM mining_data_apply_v
+  7   WHERE CUST_ID < 100010
+  8   ORDER BY CUST_ID;
+
+   CUST_ID         PR         PL         PU PD
+---------- ---------- ---------- ---------- ------------------------------------------------------------------------------------------
+    100001 46.2745492 43.2639809 49.2851175 <Details algorithm="Generalized Linear Model">
+                                            <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".291" rank="1"/>
+                                            <Attribute name="CUST_MARITAL_STATUS" actualValue="widowed" weight=".256" rank="2"/>
+                                            <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".123" rank="3"/>
+                                            <Attribute name="CUST_INCOME_LEVEL" actualValue="G: 130,000 - 149,999" weight=".042" rank=
+                                            "4"/>
+                                            <Attribute name="BULK_PACK_DISKETTES" actualValue="0" weight=".026" rank="5"/>
+                                            </Details>
+
+    100002 32.7091921 30.6516105 34.7667736 <Details algorithm="Generalized Linear Model">
+                                            <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".401" rank="1"/>
+                                            <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".169" rank="2"/>
+                                            <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".03" rank="3
+                                            "/>
+                                            <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".029" rank="4"/>
+                                            <Attribute name="FLAT_PANEL_MONITOR" actualValue="1" weight=".028" rank="5"/>
+                                            </Details>
+
+    100003 25.6179489 23.3534697 27.8824281 <Details algorithm="Generalized Linear Model">
+                                            <Attribute name="YRS_RESIDENCE" actualValue="6" weight=".224" rank="1"/>
+                                            <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".148" rank="2"/>
+                                            <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".026" rank="
+                                            3"/>
+                                            <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".025" rank="4"/>
+                                            <Attribute name="FLAT_PANEL_MONITOR" actualValue="1" weight=".025" rank="5"/>
+                                            </Details>
+
+    100004 35.7152879 33.5702025 37.8603733 <Details algorithm="Generalized Linear Model">
+                                            <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".383" rank="1"/>
+                                            <Attribute name="YRS_RESIDENCE" actualValue="5" weight=".202" rank="2"/>
+                                            <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".162" rank="3"/>
+                                            <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".029" rank="
+                                            4"/>
+                                            <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".027" rank="5"/>
+                                            </Details>
+
+    100005 35.9749853 33.1453594 38.8046113 <Details algorithm="Generalized Linear Model">
+                                            <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".378" rank="1"/>
+                                            <Attribute name="YRS_RESIDENCE" actualValue="5" weight=".199" rank="2"/>
+                                            <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".159" rank="3"/>
+                                            <Attribute name="CUST_MARITAL_STATUS" actualValue="married" weight=".056" rank="4"/>
+                                            <Attribute name="CUST_INCOME_LEVEL" actualValue="B: 30,000 - 49,999" weight=".036" rank="5
+                                            "/>
+                                            </Details>
+
+    100006 12.4127724  9.9260653 14.8994795 <Details algorithm="Generalized Linear Model">
+                                            <Attribute name="CUST_INCOME_LEVEL" actualValue="G: 130,000 - 149,999" weight=".046" rank=
+                                            "1"/>
+                                            <Attribute name="BULK_PACK_DISKETTES" actualValue="0" weight=".028" rank="2"/>
+                                            <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".024" rank="
+                                            3"/>
+                                            <Attribute name="OCCUPATION" actualValue="Prof." weight=".017" rank="4"/>
+                                            <Attribute name="AFFINITY_CARD" actualValue="0" weight=".014" rank="5"/>
+                                            </Details>
+
+    100007 34.6632327 32.6006386 36.7258269 <Details algorithm="Generalized Linear Model">
+                                            <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".392" rank="1"/>
+                                            <Attribute name="YRS_RESIDENCE" actualValue="5" weight=".206" rank="2"/>
+                                            <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".165" rank="3"/>
+                                            <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".03" rank="4
+                                            "/>
+                                            <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".028" rank="5"/>
+                                            </Details>
+
+    100008 34.4914525 32.6620797 36.3208252 <Details algorithm="Generalized Linear Model">
+                                            <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".389" rank="1"/>
+                                            <Attribute name="YRS_RESIDENCE" actualValue="5" weight=".205" rank="2"/>
+                                            <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".164" rank="3"/>
+                                            <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".029" rank="
+                                            4"/>
+                                            <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".028" rank="5"/>
+                                            </Details>
+
+    100009 16.4874711 14.2298003 18.7451418 <Details algorithm="Generalized Linear Model">
+                                            <Attribute name="CUST_MARITAL_STATUS" actualValue="married" weight=".049" rank="1"/>
+                                            <Attribute name="CUST_INCOME_LEVEL" actualValue="G: 130,000 - 149,999" weight=".048" rank=
+                                            "2"/>
+                                            <Attribute name="BULK_PACK_DISKETTES" actualValue="0" weight=".029" rank="3"/>
+                                            <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".025" rank="
+                                            4"/>
+                                            <Attribute name="OCCUPATION" actualValue="Prof." weight=".018" rank="5"/>
+                                            </Details>
+
+
+9行が選択されました。
+
+SQL> spool oml4sql-regression-neural-networks

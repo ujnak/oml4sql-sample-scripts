@@ -1,0 +1,717 @@
+SQL> @oml4sql-r-extensible-glm
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   OML R Extensible - Generalized Linear Model Algorithm - dmrglmdemo.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET ECHO ON
+SQL> SET FEEDBACK 1
+SQL> SET NUMWIDTH 10
+SQL> SET LINESIZE 80
+SQL> SET TRIMSPOOL ON
+SQL> SET TAB OFF
+SQL> SET PAGESIZE 100
+SQL> SET LONG 10000
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                         GLM REGRESSION DEMO
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- This demo shows how to implement the GLM regression algorithm in Oracle Data
+SQL> -- Mining using R glm algorithm.
+SQL>
+SQL> Begin
+  2    sys.rqScriptDrop('GLM_RDEMO_BUILD_REGRESSION', v_silent => TRUE);
+  3    sys.rqScriptDrop('GLM_RDEMO_SCORE_REGRESSION', v_silent => TRUE);
+  4    sys.rqScriptDrop('GLM_RDEMO_DETAILS_REGRESSION', v_silent => TRUE);
+  5  End;
+  6  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('GLM_RDEMO_REGRESSION');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> Begin
+  2  -- Build R Function -----------------------------------------------------------
+  3  -- Explanation:
+  4  -- User can define their own R script function to build the model they want.
+  5  -- For example, here a script named GLM_RDEMO_BUILD_REGRESSION is defined. This
+  6  -- function builds and returns a GLM regression model using R glm algorithm.
+  7  -- User can also choose other R algorithm to implement the GLM regression
+  8  -- algorithm.
+  9
+ 10    sys.rqScriptCreate('GLM_RDEMO_BUILD_REGRESSION', 'function(dat, wgt) {
+ 11     set.seed(1234);
+ 12     mod <- glm(AGE ~ ., data = dat, weights = wgt); mod}');
+ 13
+ 14  -- Score R Function -----------------------------------------------------------
+ 15  -- Explanation:
+ 16  -- User can define their own R script function to do the scoring using the built
+ 17  -- model. For example, here a script named GLM_RDEMO_SCORE_REGRESSION is defined.
+ 18  -- This function creates and returns an R data.frame containing the target
+ 19  -- predictions with se.fit on. User can also define other prediction functions
+ 20  -- with different settings.
+ 21
+ 22    sys.rqScriptCreate('GLM_RDEMO_SCORE_REGRESSION', 'function(mod, dat) {
+ 23     res <- predict(mod, newdata = dat, se.fit = TRUE);
+ 24     data.frame(fit=res$fit, se=res$se.fit, df=summary(mod)$df[1L]) }');
+ 25
+ 26  -- Detail R Function ----------------------------------------------------------
+ 27  -- Explanation:
+ 28  -- User can define their own R script function to show the model details they
+ 29  -- want to display. For example, here a script named GLM_RDEMO_DETAILS_REGRESSION
+ 30  -- is defined. This function creates and returns an R data.frame containing the
+ 31  -- attribute coefficients of the built model. User can also display other details.
+ 32
+ 33    sys.rqScriptCreate('GLM_RDEMO_DETAILS_REGRESSION', 'function(object) {
+ 34     mod <- object;
+ 35     data.frame(name=names(mod$coefficients),
+ 36     coef=mod$coefficients)}');
+ 37  End;
+ 38  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL BUILD
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Build the model using the R script user defined. Here R script
+SQL> -- GLM_RDEMO_BUILD_REGRESSION will be used to create the GLM regression model
+SQL> -- GLM_RDEMO_REGRESSION using dataset mining_data_build_v.
+SQL>
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- Model Settings -----------------------------------------------------------
+  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  6    v_setlst('RALG_BUILD_FUNCTION')   := 'GLM_RDEMO_BUILD_REGRESSION';
+  7    v_setlst('RALG_SCORE_FUNCTION')   := 'GLM_RDEMO_SCORE_REGRESSION';
+  8    v_setlst('RALG_DETAILS_FUNCTION') := 'GLM_RDEMO_DETAILS_REGRESSION';
+  9
+ 10    -- Once this setting is specified, a model view will be created. This model
+ 11    -- view will be generated to display the model details, which contains the
+ 12    -- attribute names and the corresponding coefficients.
+ 13
+ 14    v_setlst('RALG_DETAILS_FORMAT') :=
+ 15      'select cast(''a'' as varchar2(200)) attr, 1 coef from dual';
+ 16
+ 17    -- Column YRS_RESIDENCE has row weights.
+ 18
+ 19    v_setlst('ODMS_ROW_WEIGHT_COLUMN_NAME') := 'YRS_RESIDENCE';
+ 20
+ 21    DBMS_DATA_MINING.CREATE_MODEL2(
+ 22      model_name          => 'GLM_RDEMO_REGRESSION',
+ 23      mining_function     => 'REGRESSION',
+ 24      data_query          => 'select * from mining_data_build_v',
+ 25      case_id_column_name => 'CUST_ID',
+ 26      target_column_name  => 'AGE',
+ 27      set_list            => v_setlst);
+ 28  END;
+ 29  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL DETAIL
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Display the details of the built model using the R script user defined.
+SQL> -- Here R script GLM_RDEMO_DETAIL_REGRESSION will be used to display the model
+SQL> -- details.
+SQL>
+SQL> column attr format a40
+SQL> select attr, round(coef, 3) as coef from DM$VDGLM_RDEMO_REGRESSION
+  2  order by attr;
+
+ATTR                                           COEF
+---------------------------------------- ----------
+(Intercept)                                  25.858
+AFFINITY_CARD                                -0.042
+BOOKKEEPING_APPLICATION                      -3.454
+BULK_PACK_DISKETTES                          -4.395
+COUNTRY_NAMEArgentina                        -0.498
+COUNTRY_NAMEAustralia                        -0.815
+COUNTRY_NAMEBrazil                            8.848
+COUNTRY_NAMECanada                           -0.062
+COUNTRY_NAMEChina                            -2.259
+COUNTRY_NAMEDenmark                          -2.959
+COUNTRY_NAMEFrance                           -1.805
+COUNTRY_NAMEGermany                          -2.815
+COUNTRY_NAMEItaly                            -2.457
+COUNTRY_NAMEJapan                            -7.783
+COUNTRY_NAMENew Zealand                       6.136
+COUNTRY_NAMEPoland                            2.614
+COUNTRY_NAMESaudi Arabia                     -1.828
+COUNTRY_NAMESingapore                        -6.186
+COUNTRY_NAMESouth Africa                       .947
+COUNTRY_NAMESpain                            -6.925
+COUNTRY_NAMETurkey                           -7.681
+COUNTRY_NAMEUnited Kingdom                    1.429
+CUST_GENDERF                                  -0.47
+CUST_INCOME_LEVELA: Below 30,000               .661
+CUST_INCOME_LEVELB: 30,000 - 49,999           1.375
+CUST_INCOME_LEVELC: 50,000 - 69,999          -1.636
+CUST_INCOME_LEVELD: 70,000 - 89,999          -0.508
+CUST_INCOME_LEVELE: 90,000 - 109,999          1.494
+CUST_INCOME_LEVELG: 130,000 - 149,999         1.693
+CUST_INCOME_LEVELH: 150,000 - 169,999          2.53
+CUST_INCOME_LEVELI: 170,000 - 189,999         2.425
+CUST_INCOME_LEVELJ: 190,000 - 249,999         1.612
+CUST_INCOME_LEVELK: 250,000 - 299,999         1.083
+CUST_INCOME_LEVELL: 300,000 and above
+CUST_MARITAL_STATUSdivorced                    .189
+CUST_MARITAL_STATUSnever married                .07
+CUST_MARITAL_STATUSseparated                  1.368
+CUST_MARITAL_STATUSwidowed                   13.795
+EDUCATION10th                                 -2.72
+EDUCATION11th                                -2.787
+EDUCATION12th                                -4.311
+EDUCATION1st-4th                              1.984
+EDUCATION5th-6th                             -3.713
+EDUCATION7th-8th                             -1.801
+EDUCATION9th                                   .382
+EDUCATION< Bach.                             -1.462
+EDUCATIONAssoc-A                             -1.956
+EDUCATIONAssoc-V                             -0.058
+EDUCATIONBach.                               -0.567
+EDUCATIONMasters                             -2.772
+EDUCATIONPhD                                  3.815
+EDUCATIONPresch.
+EDUCATIONProfsc                              -2.894
+FLAT_PANEL_MONITOR                             2.28
+HOME_THEATER_PACKAGE                         15.282
+HOUSEHOLD_SIZE1                              -4.613
+HOUSEHOLD_SIZE2                              -1.139
+HOUSEHOLD_SIZE4-5                             -1.04
+HOUSEHOLD_SIZE6-8                            -0.307
+HOUSEHOLD_SIZE9+                             -3.397
+OCCUPATION?                                   6.849
+OCCUPATIONArmed-F                             1.532
+OCCUPATIONCleric.                             1.336
+OCCUPATIONCrafts                             -0.091
+OCCUPATIONExec.                                1.92
+OCCUPATIONHandler                            -0.844
+OCCUPATIONHouse-s                              .771
+OCCUPATIONMachine                            -1.683
+OCCUPATIONOther                              -0.324
+OCCUPATIONProf.                               1.659
+OCCUPATIONProtec.                              .468
+OCCUPATIONSales                               2.271
+OCCUPATIONTechSup                              .457
+OCCUPATIONTransp.                             2.191
+OS_DOC_SET_KANJI                             -8.211
+PRINTER_SUPPLIES
+Y_BOX_GAMES                                  -6.601
+
+77行が選択されました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL SCORE
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Score the model using the R script user defined. Here R script
+SQL> -- GLM_RDEMO_SCORE_REGRESSION will be used to do the scoring.
+SQL>
+SQL> -- PREDICTION/PREDICTION_PROBABILITY ------------------------------------------
+SQL> -- Explanation:
+SQL> -- Show actual target value and predicted target values.
+SQL>
+SQL> SELECT CUST_ID, round(PREDICTION(GLM_RDEMO_REGRESSION USING *), 3) as AGE_pred,
+  2  AGE as AGE_act
+  3  FROM mining_data_apply_v where CUST_ID <= 100010
+  4  order by CUST_ID;
+
+   CUST_ID   AGE_PRED    AGE_ACT
+---------- ---------- ----------
+    100001     52.025         51
+    100002     35.126         30
+    100003     21.112         23
+    100004     36.044         39
+    100005     36.973         35
+    100006     13.897          9
+    100007     33.829         29
+    100008     34.562         30
+    100009     18.548         18
+    100010     13.598         17
+
+10行が選択されました。
+
+SQL>
+SQL> -- PREDICTION_BOUND -----------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Show actual target value, predicted target values, upper bounds, lower
+SQL> -- bounds.
+SQL>
+SQL> SELECT CUST_ID, AGE,
+  2         round(PREDICTION(GLM_RDEMO_REGRESSION USING *), 3) as AGE_pred,
+  3         round(PREDICTION_BOUNDS(GLM_RDEMO_REGRESSION USING *).UPPER, 3) as upp,
+  4         round(PREDICTION_BOUNDS(GLM_RDEMO_REGRESSION USING *).LOWER, 3) as low
+  5  FROM mining_data_apply_v where CUST_ID <= 100010
+  6  order by CUST_ID;
+
+   CUST_ID        AGE   AGE_PRED        UPP        LOW
+---------- ---------- ---------- ---------- ----------
+    100001         51     52.025     55.429     48.621
+    100002         30     35.126      37.64     32.611
+    100003         23     21.112     23.856     18.368
+    100004         39     36.044     38.725     33.363
+    100005         35     36.973     40.278     33.668
+    100006          9     13.897     17.008     10.785
+    100007         29     33.829     36.461     31.198
+    100008         30     34.562     36.829     32.294
+    100009         18     18.548     21.331     15.765
+    100010         17     13.598     15.857     11.339
+
+10行が選択されました。
+
+SQL>
+SQL> -- Specify Confidence Level 0.9 -----------------------------------------------
+SQL> -- Explanation:
+SQL> -- Show predicted target values, bounds, middle value.
+SQL>
+SQL> select CUST_ID, round(AGE_pred, 3) as AGE_pred,
+  2  round((upp - low)/2, 3) as bound, round((low+upp)/2, 3) as pred_mid
+  3  from (select CUST_ID, PREDICTION(GLM_RDEMO_REGRESSION USING *) AGE_pred,
+  4               PREDICTION_BOUNDS(GLM_RDEMO_REGRESSION, 0.9 USING *).LOWER low,
+  5               PREDICTION_BOUNDS(GLM_RDEMO_REGRESSION, 0.9 USING *).UPPER upp
+  6  FROM mining_data_apply_v where CUST_ID <= 100010)
+  7  order by CUST_ID;
+
+   CUST_ID   AGE_PRED      BOUND   PRED_MID
+---------- ---------- ---------- ----------
+    100001     52.025      2.846     52.025
+    100002     35.126      2.102     35.126
+    100003     21.112      2.294     21.112
+    100004     36.044      2.241     36.044
+    100005     36.973      2.763     36.973
+    100006     13.897      2.601     13.897
+    100007     33.829        2.2     33.829
+    100008     34.562      1.896     34.562
+    100009     18.548      2.326     18.548
+    100010     13.598      1.888     13.598
+
+10行が選択されました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                        GLM CLASSIFICATION DEMO
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explaination:
+SQL> -- This demo shows how to implement the GLM classification algorithm in Oracle
+SQL> -- Data Mining using R glm algorithm.
+SQL>
+SQL> Begin
+  2    sys.rqScriptDrop('GLM_RDEMO_BUILD_CLASSIFICATION', v_silent => TRUE);
+  3    sys.rqScriptDrop('GLM_RDEMO_SCORE_CLASSIFICATION', v_silent => TRUE);
+  4    sys.rqScriptDrop('GLM_RDEMO_DETAILS_CLASSIFICATION', v_silent => TRUE);
+  5    sys.rqScriptDrop('GLM_RDEMO_WEIGHT_CLASSIFICATION', v_silent => TRUE);
+  6  End;
+  7  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('GLM_RDEMO_CLASSIFICATION');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> Begin
+  2  -- Build R Function -----------------------------------------------------------
+  3  -- Explanation:
+  4  -- User can define their own R script function to build the model they want.
+  5  -- For example, here a script named GLM_RDEMO_BUILD_CLASSIFICATION is defined.
+  6  -- This function builds and returns a GLM classification model using R glm
+  7  -- algorithm. User can also choose other R algorithm to implement the GLM
+  8  -- classification algorithm.
+  9
+ 10    sys.rqScriptCreate('GLM_RDEMO_BUILD_CLASSIFICATION',
+ 11                       'function(dat, form, keep.model) {
+ 12     set.seed(1234);
+ 13     mod <- glm(formula = formula(form), data=dat,
+ 14                family=binomial(logit), model = as.logical(keep.model));
+ 15     mod}');
+ 16
+ 17  -- Score R Function -----------------------------------------------------------
+ 18  -- Explanation:
+ 19  -- User can define their own R script function to do the scoring using the built
+ 20  -- model. For example, here a script named GLM_RDEMO_SCORE_CLASSIFICATION is
+ 21  -- defined. This function creates and returns an R data.frame containing the
+ 22  -- target predictions using type response. User can also define other prediction
+ 23  -- functions with different types.
+ 24
+ 25    sys.rqScriptCreate('GLM_RDEMO_SCORE_CLASSIFICATION', 'function(mod, dat) {
+ 26     res <- predict(mod, newdata = dat, type="response");
+ 27     res2=data.frame(1-res, res); names(res2) <- c("0", "1"); res2}');
+ 28
+ 29  -- Detail R Function ----------------------------------------------------------
+ 30  -- Explanation:
+ 31  -- User can define their own R script function to show the model details they
+ 32  -- want to display. For example, here a script named
+ 33  -- GLM_RDEMO_DETAILS_CLASSIFICATION is defined. This function creates and
+ 34  -- returns an R data.frame containing the attribute coefficients of the built
+ 35  -- model. User can also display other details.
+ 36
+ 37    sys.rqScriptCreate('GLM_RDEMO_DETAILS_CLASSIFICATION', 'function(object) {
+ 38     mod <- object;
+ 39     data.frame(name=names(mod$coefficients),
+ 40     coef=mod$coefficients)}');
+ 41
+ 42  -- Model Weight R Function ----------------------------------------------------
+ 43  -- Explanation:
+ 44  -- User can define their own R script function to provide the attribute weights
+ 45  -- of the scoring data. For example, here a script named
+ 46  -- GLM_RDEMO_WEIGHT_CLASSIFICATION is defined. This function creates and returns
+ 47  -- an R data.frame containing the weights of each attribute of the scoring data.
+ 48  -- Here we simply use the product of the attribute value with the attribute
+ 49  -- coefficients as the weight of the missing attribute. User can define their
+ 50  -- own method to calculate the attribute weight.
+ 51
+ 52    sys.rqScriptCreate('GLM_RDEMO_WEIGHT_CLASSIFICATION', 'function(mod, dat, clas) {
+ 53
+ 54     v <- predict(mod, newdata=dat, type = "response");
+ 55     v0 <- data.frame(v, 1-v); names(v0) <- c("0", "1");
+ 56     res <- data.frame(lapply(seq_along(dat),
+ 57     function(x, dat) {
+ 58     if(is.numeric(dat[[x]])) dat[,x] <- as.numeric(0)
+ 59     else dat[,x] <- as.factor(NA);
+ 60     vv <- predict(mod, newdata = dat, type = "response");
+ 61     vv = data.frame(vv, 1-vv); names(vv) <- c("0", "1");
+ 62     v0[[clas]] / vv[[clas]]}, dat = dat));
+ 63     names(res) <- names(dat);
+ 64     res}');
+ 65  End;
+ 66  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL BUILD
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Build the model using the R script user defined. Here R script
+SQL> -- GLM_RDEMO_BUILD_CLASSIFICATION will be used to create the GLM classification
+SQL> -- model GLM_RDEMO_CLASSIFICATION using dataset mining_data_build_v.
+SQL>
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- Model Settings -----------------------------------------------------------
+  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  6    v_setlst('RALG_BUILD_FUNCTION')   := 'GLM_RDEMO_BUILD_CLASSIFICATION';
+  7    v_setlst('RALG_SCORE_FUNCTION')   := 'GLM_RDEMO_SCORE_CLASSIFICATION';
+  8    v_setlst('RALG_DETAILS_FUNCTION') := 'GLM_RDEMO_DETAILS_CLASSIFICATION';
+  9    v_setlst('RALG_WEIGHT_FUNCTION')  := 'GLM_RDEMO_WEIGHT_CLASSIFICATION';
+ 10
+ 11    -- Once this setting is specified, a model view will be created. This model
+ 12    -- view will be generated to display the model details, which contains the
+ 13    -- attribute names and the corresponding coefficients.
+ 14
+ 15    v_setlst('RALG_DETAILS_FORMAT') :=
+ 16      'select cast(''a'' as varchar2(200)) attr, 1 coef from dual';
+ 17
+ 18    -- In this setting, a formula is specified,  which will be passed as a parameter
+ 19    -- to the model build function to build the model.
+ 20
+ 21    v_setlst('RALG_BUILD_PARAMETER') :=
+ 22      'select ''AFFINITY_CARD ~ AGE + EDUCATION + HOUSEHOLD_SIZE + OCCUPATION'' ' ||
+ 23      '"form", 0 "keep.model" from dual';
+ 24
+ 25    DBMS_DATA_MINING.CREATE_MODEL2(
+ 26      model_name          => 'GLM_RDEMO_CLASSIFICATION',
+ 27      mining_function     => 'CLASSIFICATION',
+ 28      data_query          => 'select * from mining_data_build_v',
+ 29      case_id_column_name => 'CUST_ID',
+ 30      target_column_name  => 'AFFINITY_CARD',
+ 31      set_list            => v_setlst);
+ 32  END;
+ 33  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL DETAIL
+SQL> -------------------------------------------------------------------------------
+SQL> -- Display the details of the built model using the R script user defined.
+SQL> -- Here R script GLM_RDEMO_DETAIL_CLASSIFICATION will be used to display the
+SQL> -- model details.
+SQL>
+SQL> column attr format a40
+SQL> select attr, round(coef, 3) as coef from DM$VDGLM_RDEMO_CLASSIFICATION
+  2  order by attr;
+
+ATTR                                           COEF
+---------------------------------------- ----------
+(Intercept)                                  -2.202
+AGE                                            .031
+EDUCATION10th                                -0.365
+EDUCATION11th                                -1.788
+EDUCATION12th                                -0.001
+EDUCATION1st-4th                            -16.871
+EDUCATION5th-6th                            -15.626
+EDUCATION7th-8th                              -1.64
+EDUCATION9th                                 -0.598
+EDUCATION< Bach.                               .382
+EDUCATIONAssoc-A                              1.313
+EDUCATIONAssoc-V                                .66
+EDUCATIONBach.                                1.422
+EDUCATIONMasters                              2.272
+EDUCATIONPhD                                  1.656
+EDUCATIONPresch.                             -16.93
+EDUCATIONProfsc                               2.589
+HOUSEHOLD_SIZE1                              -2.764
+HOUSEHOLD_SIZE2                              -2.195
+HOUSEHOLD_SIZE4-5                              .483
+HOUSEHOLD_SIZE6-8                           -25.628
+HOUSEHOLD_SIZE9+                             -2.465
+OCCUPATION?                                  -0.828
+OCCUPATIONArmed-F                            12.961
+OCCUPATIONCleric.                              .396
+OCCUPATIONCrafts                                .38
+OCCUPATIONExec.                               1.183
+OCCUPATIONHandler                            -0.235
+OCCUPATIONHouse-s                           -16.323
+OCCUPATIONMachine                              .234
+OCCUPATIONOther                              -1.303
+OCCUPATIONProf.                                .524
+OCCUPATIONProtec.                              .754
+OCCUPATIONSales                                .402
+OCCUPATIONTechSup                              .538
+OCCUPATIONTransp.                              .499
+
+36行が選択されました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL SCORE
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Score the model using the R script user defined.
+SQL>
+SQL> -- PREDICTION/PREDICTION_PROBABILITY ------------------------------------------
+SQL> -- Explanation:
+SQL> -- Here R script GLM_RDEMO_SCORE_CLASSIFICATION is used to get the prediction
+SQL> -- value and the prediction probability. Actual target value and predicted
+SQL> -- target values are provided.
+SQL>
+SQL> SELECT CUST_ID, AFFINITY_CARD as AFFINITY_CARD_act,
+  2  PREDICTION(GLM_RDEMO_CLASSIFICATION USING *) AFFINITY_CARD_pred,
+  3  round(PREDICTION_PROBABILITY(GLM_RDEMO_CLASSIFICATION USING *), 3)
+  4  as AFFINITY_CARD_prob
+  5  FROM mining_data_apply_v where CUST_ID <= 100010
+  6  order by CUST_ID;
+
+   CUST_ID AFFINITY_CARD_ACT AFFINITY_CARD_PRED AFFINITY_CARD_PROB
+---------- ----------------- ------------------ ------------------
+    100001                 0                  0               .778
+    100002                 0                  0               .821
+    100003                 0                  0               .948
+    100004                 0                  0               .917
+    100005                 1                  1                .64
+    100006                 0                  0                .97
+    100007                 0                  0               .992
+    100008                 0                  0               .937
+    100009                 1                  1               .575
+    100010                 0                  0               .785
+
+10行が選択されました。
+
+SQL>
+SQL> -- PREDICTION_SET -------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Here R script GLM_RDEMO_SCORE_CLASSIFICATION is used to get the
+SQL> -- prediction set. Actual target value and predicted target values are provided.
+SQL>
+SQL> select T.CUST_ID, T.AFFINITY_CARD, S.prediction,
+  2  round(S.probability, 3) as probability
+  3  from (select CUST_ID, AFFINITY_CARD,
+  4  PREDICTION_SET(GLM_RDEMO_CLASSIFICATION USING *) pset
+  5  from mining_data_apply_v where CUST_ID <= 100010) T, TABLE(T.pset) S
+  6  where S.probability > 0
+  7  order by T.CUST_ID, S.prediction;
+
+   CUST_ID AFFINITY_CARD PREDICTION PROBABILITY
+---------- ------------- ---------- -----------
+    100001             0          0  .778000000
+    100001             0          1  .222000000
+    100002             0          0  .821000000
+    100002             0          1  .179000000
+    100003             0          0  .948000000
+    100003             0          1  .052000000
+    100004             0          0  .917000000
+    100004             0          1  .083000000
+    100005             1          0  .360000000
+    100005             1          1  .640000000
+    100006             0          0  .970000000
+    100006             0          1  .030000000
+    100007             0          0  .992000000
+    100007             0          1  .008000000
+    100008             0          0  .937000000
+    100008             0          1  .063000000
+    100009             1          0  .425000000
+    100009             1          1  .575000000
+    100010             0          0  .785000000
+    100010             0          1  .215000000
+
+20行が選択されました。
+
+SQL>
+SQL> -- PREDICTION_DETAILS ---------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- The R script GLM_RDEMO_WEIGHT_CLASSIFICATION is used to get the prediction
+SQL> -- details. The CUST_ID and the prediction details with the weight of each
+SQL> -- attribute are provided.
+SQL>
+SQL> column pred_det format a65
+SQL> SELECT CUST_ID, PREDICTION_DETAILS(GLM_RDEMO_CLASSIFICATION, '0' USING *) pred_det
+  2  FROM mining_data_apply_v where CUST_ID <= 100010 order by CUST_ID;
+
+   CUST_ID PRED_DET
+---------- -----------------------------------------------------------------
+    100001 <Details algorithm="R Extensible" class="0">
+           <Attribute name="AGE" actualValue="51" weight="4.003" rank="1"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="2"/>
+           <Attribute name="OCCUPATION" actualValue="Exec." weight="1" rank=
+           "3"/>
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight="1" rank=
+           "4"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight="1"
+            rank="5"/>
+           </Details>
+
+    100002 <Details algorithm="R Extensible" class="0">
+           <Attribute name="AGE" actualValue="30" weight="2.26" rank="1"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="2"/>
+           <Attribute name="OCCUPATION" actualValue="Prof." weight="1" rank=
+           "3"/>
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight="1" rank=
+           "4"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight="1"
+            rank="5"/>
+           </Details>
+
+    100003 <Details algorithm="R Extensible" class="0">
+           <Attribute name="AGE" actualValue="23" weight="1.986" rank="1"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="2"/>
+           <Attribute name="OCCUPATION" actualValue="Sales" weight="1" rank=
+           "3"/>
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight="1" rank=
+           "4"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="0" weight="1"
+            rank="5"/>
+           </Details>
+
+    100004 <Details algorithm="R Extensible" class="0">
+           <Attribute name="AGE" actualValue="39" weight="3.156" rank="1"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="2"/>
+           <Attribute name="OCCUPATION" actualValue="Sales" weight="1" rank=
+           "3"/>
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight="1" rank=
+           "4"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight="1"
+            rank="5"/>
+           </Details>
+
+    100005 <Details algorithm="R Extensible" class="0">
+           <Attribute name="AGE" actualValue="35" weight="1.705" rank="1"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="2"/>
+           <Attribute name="OCCUPATION" actualValue="Crafts" weight="1" rank
+           ="3"/>
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight="1" rank=
+           "4"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight="1"
+            rank="5"/>
+           </Details>
+
+    100006 <Details algorithm="R Extensible" class="0">
+           <Attribute name="AGE" actualValue="9" weight="1.312" rank="1"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="2"/>
+           <Attribute name="OCCUPATION" actualValue="Prof." weight="1" rank=
+           "3"/>
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="9+" weight="1" rank
+           ="4"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="0" weight="1"
+            rank="5"/>
+           </Details>
+
+    100007 <Details algorithm="R Extensible" class="0">
+           <Attribute name="AGE" actualValue="29" weight="2.446" rank="1"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="2"/>
+           <Attribute name="OCCUPATION" actualValue="Other" weight="1" rank=
+           "3"/>
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight="1" rank=
+           "4"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight="1"
+            rank="5"/>
+           </Details>
+
+    100008 <Details algorithm="R Extensible" class="0">
+           <Attribute name="AGE" actualValue="30" weight="2.439" rank="1"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="2"/>
+           <Attribute name="OCCUPATION" actualValue="Crafts" weight="1" rank
+           ="3"/>
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight="1" rank=
+           "4"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight="1"
+            rank="5"/>
+           </Details>
+
+    100009 <Details algorithm="R Extensible" class="0">
+
+   CUST_ID PRED_DET
+---------- -----------------------------------------------------------------
+           <Attribute name="AGE" actualValue="18" weight="1.318" rank="1"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="2"/>
+           <Attribute name="OCCUPATION" actualValue="Prof." weight="1" rank=
+           "3"/>
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight="1" rank=
+           "4"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="0" weight="1"
+            rank="5"/>
+           </Details>
+
+    100010 <Details algorithm="R Extensible" class="0">
+           <Attribute name="AGE" actualValue="17" weight="1.545" rank="1"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="2"/>
+           <Attribute name="OCCUPATION" actualValue="Crafts" weight="1" rank
+           ="3"/>
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight="1" rank=
+           "4"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="0" weight="1"
+            rank="5"/>
+           </Details>
+
+
+10行が選択されました。
+
+SQL> spool oml4sql-r-extensible-kmeans

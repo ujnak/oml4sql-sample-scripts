@@ -1,0 +1,512 @@
+SQL> @oml4sql-partitioned-models-svm
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Partitioned Models - Support Vector Machine Algorithm - dmpartdemo.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET ECHO ON
+SQL> SET FEEDBACK 1
+SQL> SET NUMWIDTH 10
+SQL> SET LINESIZE 80
+SQL> SET TRIMSPOOL ON
+SQL> SET TAB OFF
+SQL> SET PAGESIZE 100
+SQL> SET serveroutput ON
+SQL> SET pages 10000
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SAMPLE PROBLEM
+SQL> -----------------------------------------------------------------------
+SQL> -- Given demographic data about a set of customers, predict the
+SQL> -- customer response to an affinity card program using a SVM
+SQL> -- classifier whose model is partitioned.
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL> -- Cleanup old model with the same name for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('part_clas_sample');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> -- Build a new partitioned SVM model
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    v_setlst('ALGO_NAME')              := 'ALGO_SUPPORT_VECTOR_MACHINES';
+  5    v_setlst('PREP_AUTO')              := 'ON';
+  6    v_setlst('SVMS_KERNEL_FUNCTION')   := 'SVMS_LINEAR';
+  7    v_setlst('ODMS_PARTITION_COLUMNS') := 'CUST_GENDER';
+  8
+  9    DBMS_DATA_MINING.CREATE_MODEL2(
+ 10      model_name          => 'part_clas_sample',
+ 11      mining_function     => 'CLASSIFICATION',
+ 12      data_query          => 'select * from mining_data_build_parallel_v',
+ 13      set_list            => v_setlst,
+ 14      case_id_column_name => 'cust_id',
+ 15      target_column_name  => 'affinity_card');
+ 16  END;
+ 17  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- Display the model settings
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'PART_CLAS_SAMPLE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_SUPPORT_VECTOR_MACHINES
+CLAS_WEIGHTS_BALANCED          OFF
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MAX_PARTITIONS            1000
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_PARTITION_COLUMNS         CUST_GENDER
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+PREP_AUTO                      ON
+SVMS_CONV_TOLERANCE            .0001
+SVMS_KERNEL_FUNCTION           SVMS_LINEAR
+
+10行が選択されました。
+
+SQL>
+SQL> -- Display the model signature
+SQL> column attribute_name format a40
+SQL> column attribute_type format a20
+SQL> SELECT attribute_name, attribute_type
+  2    FROM user_mining_model_attributes
+  3   WHERE model_name = 'PART_CLAS_SAMPLE'
+  4  ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                           ATTRIBUTE_TYPE
+---------------------------------------- --------------------
+AFFINITY_CARD                            CATEGORICAL
+AGE                                      NUMERICAL
+BOOKKEEPING_APPLICATION                  NUMERICAL
+BULK_PACK_DISKETTES                      NUMERICAL
+COUNTRY_NAME                             CATEGORICAL
+CUST_GENDER                              PARTITION
+CUST_INCOME_LEVEL                        CATEGORICAL
+CUST_MARITAL_STATUS                      CATEGORICAL
+EDUCATION                                CATEGORICAL
+FLAT_PANEL_MONITOR                       NUMERICAL
+HOME_THEATER_PACKAGE                     NUMERICAL
+HOUSEHOLD_SIZE                           CATEGORICAL
+OCCUPATION                               CATEGORICAL
+OS_DOC_SET_KANJI                         NUMERICAL
+PRINTER_SUPPLIES                         NUMERICAL
+YRS_RESIDENCE                            NUMERICAL
+Y_BOX_GAMES                              NUMERICAL
+
+17行が選択されました。
+
+SQL>
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2    WHERE model_name='PART_CLAS_SAMPLE'
+  3    ORDER BY view_name;
+
+VIEW_NAME
+------------------------------
+VIEW_TYPE
+--------------------------------------------------
+DM$VCPART_CLAS_SAMPLE
+Scoring Cost Matrix
+
+DM$VGPART_CLAS_SAMPLE
+Global Name-Value Pairs
+
+DM$VLPART_CLAS_SAMPLE
+SVM Linear Coefficients
+
+DM$VNPART_CLAS_SAMPLE
+Normalization and Missing Value Handling
+
+DM$VSPART_CLAS_SAMPLE
+Computed Settings
+
+DM$VTPART_CLAS_SAMPLE
+Classification Targets
+
+DM$VWPART_CLAS_SAMPLE
+Model Build Alerts
+
+
+7行が選択されました。
+
+SQL>
+SQL> -- Display the top ten model details per partition
+SQL> set long 20000
+SQL> column class format 9999
+SQL> column aname format a25
+SQL> column aval  format a25
+SQL> column coeff format 9.999
+SQL> -- for male customers
+SQL> SELECT target_value class, attribute_name aname, attribute_value aval, coefficient coeff
+  2  FROM (SELECT target_value, attribute_name, attribute_value, coefficient
+  3    FROM DM$VLPART_CLAS_SAMPLE WHERE partition_name =
+  4    (SELECT ORA_DM_PARTITION_NAME(PART_CLAS_SAMPLE using 'M' CUST_GENDER) FROM dual)
+  5    ORDER BY coefficient DESC)
+  6  WHERE ROWNUM <= 10;
+
+CLASS ANAME                     AVAL                      COEFF
+----- ------------------------- ------------------------- -----
+    1 HOUSEHOLD_SIZE            3                         1.581
+    1 COUNTRY_NAME              Canada                    1.109
+    1 COUNTRY_NAME              New Zealand                .909
+    1 EDUCATION                 Masters                    .834
+    1 COUNTRY_NAME              Germany                    .833
+    1 COUNTRY_NAME              Denmark                    .818
+    1 OCCUPATION                Exec.                      .818
+    1 EDUCATION                 10th                       .672
+    1 CUST_MARITAL_STATUS       separated                  .644
+    1 EDUCATION                 12th                       .537
+
+10行が選択されました。
+
+SQL> -- for female customers
+SQL> SELECT target_value class, attribute_name aname, attribute_value aval, coefficient coeff
+  2  FROM (SELECT target_value, attribute_name, attribute_value, coefficient
+  3    FROM DM$VLPART_CLAS_SAMPLE WHERE partition_name =
+  4    (SELECT ORA_DM_PARTITION_NAME(PART_CLAS_SAMPLE using 'F' CUST_GENDER) FROM dual)
+  5    ORDER BY coefficient DESC)
+  6  WHERE ROWNUM <= 10;
+
+CLASS ANAME                     AVAL                      COEFF
+----- ------------------------- ------------------------- -----
+    1 CUST_MARITAL_STATUS       married                   3.424
+    1 OCCUPATION                Protec.                   2.785
+    1 COUNTRY_NAME              United Kingdom            2.719
+    1 EDUCATION                 12th                      2.049
+    1 OCCUPATION                Handler                   1.780
+    1 EDUCATION                 9th                       1.526
+    1 COUNTRY_NAME              Canada                    1.515
+    1 OCCUPATION                Crafts                    1.432
+    1 EDUCATION                 Masters                   1.301
+    1 OCCUPATION                Exec.                     1.176
+
+10行が選択されました。
+
+SQL>
+SQL> -- Cleanup old model with the same name for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('part2_clas_sample');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- Build another partitioned model with two partition columns
+SQL> -- with three partition values for CUST_INCOME_LEVEL
+SQL> DECLARE
+  2    xform_list dbms_data_mining_transform.TRANSFORM_LIST;
+  3    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  4  BEGIN
+  5    dbms_data_mining_transform.set_transform(xform_list,
+  6      'CUST_INCOME_LEVEL', null,
+  7      'CASE CUST_INCOME_LEVEL WHEN ''A: Below 30,000'' THEN ''LOW''
+  8      WHEN ''L: 300,000 and above'' THEN ''HIGH''
+  9      ELSE ''MEDIUM'' END', null);
+ 10
+ 11    v_setlst('ALGO_NAME')               := 'ALGO_SUPPORT_VECTOR_MACHINES';
+ 12    v_setlst('PREP_AUTO')               := 'ON';
+ 13    v_setlst('SVMS_KERNEL_FUNCTION')    := 'SVMS_LINEAR';
+ 14    v_setlst('ODMS_PARTITION_COLUMNS')  := 'CUST_GENDER,CUST_INCOME_LEVEL';
+ 15
+ 16    DBMS_DATA_MINING.CREATE_MODEL2(
+ 17      model_name          => 'part2_clas_sample',
+ 18      mining_function     => 'CLASSIFICATION',
+ 19      data_query          => 'select * from mining_data_build_parallel_v',
+ 20      set_list            => v_setlst,
+ 21      case_id_column_name => 'cust_id',
+ 22      target_column_name  => 'affinity_card',
+ 23      xform_list          => xform_list);
+ 24  END;
+ 25  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- Display model details for partition: 'F','MEDIUM'
+SQL> SELECT target_value class, attribute_name aname, attribute_value aval, coefficient coeff
+  2  FROM (SELECT target_value, attribute_name, attribute_value, coefficient
+  3    FROM DM$VLPART2_CLAS_SAMPLE WHERE partition_name =
+  4    (SELECT ORA_DM_PARTITION_NAME(PART2_CLAS_SAMPLE USING
+  5    'F' CUST_GENDER, 'MEDIUM' CUST_INCOME_LEVEL) FROM dual)
+  6    ORDER BY coefficient DESC)
+  7  WHERE ROWNUM <= 10;
+
+CLASS ANAME                     AVAL                      COEFF
+----- ------------------------- ------------------------- -----
+    1 CUST_MARITAL_STATUS       married                   1.727
+    1 EDUCATION                 12th                      1.042
+    1 EDUCATION                 9th                       1.025
+    1 OCCUPATION                Exec.                      .959
+    1 OCCUPATION                Protec.                    .956
+    1 OCCUPATION                Crafts                     .935
+    1 OCCUPATION                Machine                    .924
+    1 OCCUPATION                Cleric.                    .907
+    1 OCCUPATION                Handler                    .904
+    1 OCCUPATION                Prof.                      .886
+
+10行が選択されました。
+
+SQL>
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               TEST THE MODEL
+SQL> --                SCORE NEW DATA USING SQL DATA MINING FUNCTIONS
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 1
+SQL> --
+SQL> -- Find the three male and five female customers that are most likely
+SQL> -- to use an affinity card.
+SQL> -- Also explain why they are likely to use an affinity card.
+SQL> -- /*+ GROUPING */ hint forces scoring to be done completely
+SQL> -- for each partition before advancing to the next partition.
+SQL> -- GROUPING is especially beneficial when partitions altogether
+SQL> -- do not fit into fast memory.
+SQL> column gender format a1
+SQL> column income format a30
+SQL> column rnk format 9
+SQL> SELECT cust_id, cust_gender as gender, rnk, pd FROM
+  2  ( SELECT cust_id, cust_gender,
+  3      PREDICTION_DETAILS(/*+ GROUPING */ PART_CLAS_SAMPLE, 1 USING *) pd,
+  4      rank() over (partition by cust_gender order by
+  5      PREDICTION_PROBABILITY(PART_CLAS_SAMPLE, 1 USING *) desc, cust_id) rnk
+  6    FROM mining_data_apply_parallel_v)
+  7  WHERE rnk <= 3
+  8  order by rnk, cust_gender;
+
+   CUST_ID G RNK
+---------- - ---
+PD
+--------------------------------------------------------------------------------
+    101108 F   1
+<Details algorithm="Support Vector Machines" class="1">
+<Attribute name="CUST_MARITAL_STATUS" actualValue="married" weight=".742" rank="
+1"/>
+<Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".1" rank="2"/>
+<Attribute name="EDUCATION" actualValue="Assoc-A" weight=".065" rank="3"/>
+<Attribute name="OCCUPATION" actualValue="Exec." weight=".033" rank="4"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".021" rank="5"
+/>
+</Details>
+
+    100962 M   1
+<Details algorithm="Support Vector Machines" class="1">
+<Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".017" rank="1"/>
+<Attribute name="COUNTRY_NAME" actualValue="Germany" weight=".006" rank="2"/>
+<Attribute name="YRS_RESIDENCE" actualValue="11" weight=".002" rank="3"/>
+<Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight=".002" rank="4"/>
+<Attribute name="EDUCATION" actualValue="Profsc" weight=".002" rank="5"/>
+</Details>
+
+    100816 F   2
+<Details algorithm="Support Vector Machines" class="1">
+<Attribute name="CUST_MARITAL_STATUS" actualValue="married" weight=".783" rank="
+1"/>
+<Attribute name="EDUCATION" actualValue="Masters" weight=".134" rank="2"/>
+<Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".123" rank="3"/>
+<Attribute name="OCCUPATION" actualValue="Exec." weight=".042" rank="4"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".027" rank="5"
+/>
+</Details>
+
+    100210 M   2
+<Details algorithm="Support Vector Machines" class="1">
+<Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".055" rank="1"/>
+<Attribute name="YRS_RESIDENCE" actualValue="14" weight=".021" rank="2"/>
+<Attribute name="EDUCATION" actualValue="Bach." weight=".005" rank="3"/>
+<Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".004" rank="4"/>
+<Attribute name="OCCUPATION" actualValue="Exec." weight=".001" rank="5"/>
+</Details>
+
+    100100 F   3
+<Details algorithm="Support Vector Machines" class="1">
+<Attribute name="CUST_MARITAL_STATUS" actualValue="married" weight=".862" rank="
+1"/>
+<Attribute name="EDUCATION" actualValue="Masters" weight=".217" rank="2"/>
+<Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".201" rank="3"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".047" rank="4"
+/>
+<Attribute name="OCCUPATION" actualValue="Prof." weight=".033" rank="5"/>
+</Details>
+
+    100052 M   3
+<Details algorithm="Support Vector Machines" class="1">
+<Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".163" rank="1"/>
+<Attribute name="EDUCATION" actualValue="Masters" weight=".086" rank="2"/>
+<Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight=".018" rank="3"/>
+<Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".012" rank="4"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".004" rank="5"
+/>
+</Details>
+
+
+6行が選択されました。
+
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 2
+SQL> -- Find the average age of customers who are likely to use an
+SQL> -- affinity card. Break out the results by gender.
+SQL> --
+SQL> SELECT cust_gender as gender,
+  2         COUNT(*) AS cnt,
+  3         ROUND(AVG(age)) AS avg_age
+  4  FROM mining_data_apply_parallel_v
+  5  WHERE PREDICTION(PART_CLAS_SAMPLE USING *) = 1
+  6  GROUP BY cust_gender ORDER BY cust_gender;
+
+G        CNT    AVG_AGE
+- ---------- ----------
+F         62         28
+M        252         34
+
+2行が選択されました。
+
+SQL>
+SQL> -- compare with the average age of all customers
+SQL> SELECT cust_gender,
+  2         COUNT(*) AS cnt,
+  3         ROUND(AVG(age)) AS avg_age
+  4    FROM mining_data_apply_parallel_v
+  5  GROUP BY cust_gender ORDER BY cust_gender;
+
+CUST_GENDER         CNT    AVG_AGE
+------------ ---------- ----------
+F                   512         25
+M                   988         28
+
+2行が選択されました。
+
+SQL>
+SQL> -- find the average age of predicted card users per gender and income
+SQL> -- for the groups containing statistically sufficient data
+SQL> -- using model PART2_CLAS_SAMPLE with two partition columns
+SQL> SELECT cust_gender as gender, cust_income_level as income, avg_age FROM
+  2    (SELECT cust_gender, cust_income_level,
+  3      COUNT(*) AS cnt,
+  4      ROUND(AVG(age)) AS avg_age
+  5    FROM mining_data_apply_parallel_v
+  6    WHERE PREDICTION(PART2_CLAS_SAMPLE USING *) = 1
+  7    GROUP BY cust_gender, cust_income_level)
+  8  WHERE cnt > 10 -- throw out the groups with fewer than 10 people
+  9  ORDER BY cust_gender, cust_income_level;
+
+G INCOME                            AVG_AGE
+- ------------------------------ ----------
+F J: 190,000 - 249,999                   26
+M B: 30,000 - 49,999                     34
+M C: 50,000 - 69,999                     31
+M E: 90,000 - 109,999                    35
+M F: 110,000 - 129,999                   35
+M G: 130,000 - 149,999                   37
+M H: 150,000 - 169,999                   34
+M I: 170,000 - 189,999                   34
+M J: 190,000 - 249,999                   35
+M K: 250,000 - 299,999                   34
+M L: 300,000 and above                   31
+
+11行が選択されました。
+
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 3
+SQL> -- Calculate prediction accuracy per gender (expressed in percents).
+SQL> -- Expand the model and re-calculate the accuracy
+SQL> --
+SQL> column percent format 99
+SQL> SELECT t.cust_gender as gender, round(cnt/total*100) as percent FROM
+  2  (SELECT cust_gender, COUNT(*) AS cnt FROM mining_data_apply_parallel_v
+  3    WHERE PREDICTION(PART_CLAS_SAMPLE USING *) = AFFINITY_CARD
+  4    GROUP BY cust_gender) p,
+  5  (SELECT cust_gender, COUNT(*) AS total FROM mining_data_apply_parallel_v
+  6    GROUP BY cust_gender) t
+  7  WHERE p.cust_gender = t.cust_gender ORDER BY t.cust_gender;
+
+G PERCENT
+- -------
+F      88
+M      78
+
+2行が選択されました。
+
+SQL>
+SQL> -- Suppose we have additional training data with an unknown gender
+SQL> -- For that purpose, we duplicate mining_data_build_v
+SQL> -- with gender set to 'unknown' and ID set to a negative value
+SQL> CREATE OR replace VIEW ext_mining_data_build_v AS
+  2  (SELECT -CUST_ID as CUST_ID, 'U' as CUST_GENDER, AGE,
+  3    CUST_MARITAL_STATUS, COUNTRY_NAME,
+  4    CUST_INCOME_LEVEL, EDUCATION, OCCUPATION, HOUSEHOLD_SIZE,
+  5    YRS_RESIDENCE, AFFINITY_CARD, BULK_PACK_DISKETTES, FLAT_PANEL_MONITOR,
+  6    HOME_THEATER_PACKAGE, BOOKKEEPING_APPLICATION, PRINTER_SUPPLIES,
+  7    Y_BOX_GAMES, OS_DOC_SET_KANJI
+  8    FROM mining_data_build_parallel_v);
+
+View EXT_MINING_DATA_BUILD_Vは作成されました。
+
+SQL>
+SQL> -- Now we can add these data as a new partition to model PART_CLAS_SAMPLE
+SQL> BEGIN
+  2  dbms_data_mining.add_partition('PART_CLAS_SAMPLE',
+  3  'SELECT * FROM ext_mining_data_build_v', 'error');
+  4  END;
+  5  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- And we similarly duplicate mining_data_apply_v
+SQL> CREATE OR replace VIEW ext_mining_data_apply_v AS
+  2  SELECT -CUST_ID as CUST_ID, 'U' as CUST_GENDER, AGE, CUST_MARITAL_STATUS,
+  3    COUNTRY_NAME, CUST_INCOME_LEVEL, EDUCATION, OCCUPATION, HOUSEHOLD_SIZE,
+  4    YRS_RESIDENCE, AFFINITY_CARD, BULK_PACK_DISKETTES, FLAT_PANEL_MONITOR,
+  5    HOME_THEATER_PACKAGE, BOOKKEEPING_APPLICATION, PRINTER_SUPPLIES,
+  6    Y_BOX_GAMES, OS_DOC_SET_KANJI
+  7    FROM mining_data_apply_parallel_v
+  8  UNION
+  9  SELECT * FROM mining_data_apply_parallel_v;
+
+View EXT_MINING_DATA_APPLY_Vは作成されました。
+
+SQL>
+SQL> -- Re-calculate prediction accuracy per gender
+SQL> -- including data with unknown gender
+SQL> SELECT t.cust_gender as gender, round(cnt/total*100) as percent FROM
+  2  (SELECT cust_gender, COUNT(*) AS cnt FROM ext_mining_data_apply_v
+  3    WHERE PREDICTION(PART_CLAS_SAMPLE USING *) = AFFINITY_CARD
+  4    GROUP BY cust_gender) p,
+  5  (SELECT cust_gender, COUNT(*) AS total FROM ext_mining_data_apply_v
+  6    GROUP BY cust_gender) t
+  7  WHERE p.cust_gender = t.cust_gender ORDER BY t.cust_gender;
+
+G PERCENT
+- -------
+F      88
+M      78
+U      82
+
+3行が選択されました。
+
+SQL>
+SQL> spool oml4sql-r-extensible-algorithm-registration

@@ -1,0 +1,598 @@
+SQL> @oml4sql-r-extensible-principal-components
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   OML R Extensible - Principal Components Algorithm - dmrpcademo.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET serveroutput ON
+SQL> SET trimspool ON
+SQL> SET pages 10000
+SQL> SET linesize 140
+SQL> SET LONG 10000
+SQL> SET echo ON
+SQL>
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SET UP THE DATA
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Cleanup old training data view for repeat runs
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP VIEW pca_build_v';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- Create a view for building PCA model
+SQL> create view pca_build_v as
+  2  select cust_id, age, yrs_residence, affinity_card, bulk_pack_diskettes,
+  3  flat_panel_monitor, home_theater_package, bookkeeping_application, y_box_games
+  4  from mining_data_build_v;
+
+View PCA_BUILD_Vは作成されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD A PCA MODEL
+SQL> -----------------------------------------------------------------------
+SQL> -- Cleanup old model with same name for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('RPCA_SH_FE_SAMPLE');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> BEGIN
+  2  sys.rqScriptDrop('RPCA_BUILD');
+  3  sys.rqScriptDrop('RPCA_SCORE');
+  4  sys.rqScriptDrop('RPCA_WEIGHT');
+  5  sys.rqScriptDrop('RPCA_DETAILS');
+  6  EXCEPTION WHEN OTHERS THEN NULL; END;
+  7  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> ------------
+SQL> -- R scripts
+SQL> --
+SQL> -- The R scripts are created by users using sys.rqScriptCreate to define
+SQL> -- their own approaches in R for building FEATURE EXTRACTION models and
+SQL> -- scoring new data in ODM framework.
+SQL> --
+SQL> -- Here is the mapping between the R scripts and ODM functions/PROCs that
+SQL> -- invoke and use the R scripts. Please refer to user guide for details.
+SQL> --------------------------------------------------------------------------
+SQL> -- ralg_build_function           -------   CREATE_MODEL
+SQL> -- ralg_score_function           -------   FEATURE_VALUE, FEATURE_SET
+SQL> -- ralg_weight_function          -------   FEATURE_DETAILS
+SQL> -- ralg_details_function         -------   CREATE_MODEL2(to generate model view)
+SQL> -- ralg_details_format           -------   CREATE_MODEL2(to generate model view)
+SQL>
+SQL> BEGIN
+  2  -- Our BUILD script here uses R's prcomp function to build a PCA model
+  3  -- Predefined attribute dm$nfeat must be set on the generated R model to
+  4  -- indicate the number of features extracted by the model fit.
+  5    sys.rqScriptCreate('RPCA_BUILD',
+  6      'function(dat) {
+  7       mod <- prcomp(dat, retx = FALSE)
+  8       attr(mod, "dm$nfeat") <- ncol(mod$rotation)
+  9       mod}');
+ 10
+ 11  -- Our SCORE script here uses the predict method for prcomp to generate
+ 12  -- the mapped feature values of the new data. It returns a data.frame
+ 13  -- with each column representing a projected new feature.
+ 14    sys.rqScriptCreate('RPCA_SCORE',
+ 15      'function(mod, dat) {
+ 16       res <- predict(mod, dat)
+ 17       as.data.frame(res)}');
+ 18
+ 19  -- Our WEIGHT script here calculates the contribution of each attribute
+ 20  -- to the specified feature. It returns a data.frame with each column
+ 21  -- representing the weight of the corresponding attribute.
+ 22    sys.rqScriptCreate('RPCA_WEIGHT',
+ 23      'function(mod, dat, feature) {
+ 24       feature <- as.numeric(feature)
+ 25       dat <- scale(dat, center = mod$center, scale = FALSE)
+ 26       v <- mod$rotation[, feature]
+ 27       as.data.frame(t(apply(dat, 1L, function(u) v*u)))}');
+ 28
+ 29  -- The DETAILS script, along with the FORMAT script below will be
+ 30  -- invoked during CREATE_MODEL. A model view will be generated with
+ 31  -- the output of the DETAILS script.
+ 32  -- Our DETAILS script returns a data.frame containing the standard
+ 33  -- deviation of the new features.
+ 34    sys.rqScriptCreate('RPCA_DETAILS',
+ 35      'function(mod){
+ 36       data.frame(feature = seq(length(mod$sdev)), sd = mod$sdev)}');
+ 37  END;
+ 38  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL>
+SQL> ---------------------
+SQL> -- CREATE A NEW MODEL
+SQL> --
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  5    v_setlst('RALG_BUILD_FUNCTION')   := 'RPCA_BUILD';
+  6    v_setlst('RALG_SCORE_FUNCTION')   := 'RPCA_SCORE';
+  7    v_setlst('RALG_WEIGHT_FUNCTION')  := 'RPCA_WEIGHT';
+  8    v_setlst('RALG_DETAILS_FUNCTION') := 'RPCA_DETAILS';
+  9    v_setlst('RALG_DETAILS_FORMAT')   :=
+ 10      'select 1 feature, 1 sd from dual';
+ 11
+ 12    DBMS_DATA_MINING.CREATE_MODEL2(
+ 13      model_name          => 'RPCA_SH_FE_SAMPLE',
+ 14      mining_function     => 'FEATURE_EXTRACTION',
+ 15      data_query          => 'select * from PCA_BUILD_V',
+ 16      case_id_column_name => 'CUST_ID',
+ 17      set_list            => v_setlst);
+ 18  END;
+ 19  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a40
+SQL> select setting_name, setting_value from Rpca_sh_sample_settings
+  2  order by setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ----------------------------------------
+ALGO_EXTENSIBLE_LANG           R
+ODMS_PARTITION_COLUMNS         CUST_GENDER
+RALG_BUILD_FUNCTION            RPCA_BUILD
+RALG_DETAILS_FORMAT            select 1 feature, 1 sd from dual
+RALG_DETAILS_FUNCTION          RPCA_DETAILS
+RALG_SCORE_FUNCTION            RPCA_SCORE
+RALG_WEIGHT_FUNCTION           RPCA_WEIGHT
+
+7行が選択されました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL METADATA
+SQL> --
+SQL> column model_name format a20
+SQL> column mining_function format a20
+SQL> column algorithm format a20
+SQL> select model_name, mining_function, algorithm from user_mining_models
+  2  where model_name = 'RPCA_SH_FE_SAMPLE';
+
+MODEL_NAME           MINING_FUNCTION      ALGORITHM
+-------------------- -------------------- --------------------
+RPCA_SH_FE_SAMPLE    FEATURE_EXTRACTION   R_EXTENSIBLE
+
+1行が選択されました。
+
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY MODEL DETAILS
+SQL> --
+SQL> column partition_name format a20
+SQL> select * from DM$VDRPCA_SH_FE_SAMPLE order by feature;
+
+PARTITION_NAME          FEATURE         SD
+-------------------- ---------- ----------
+                              1 13.7084077
+                              2 1.41984987
+                              3 .670669661
+                              4 .420696826
+                              5 .348615493
+                              6 .313524136
+                              7 .238525714
+                              8 .147466454
+
+8行が選択されました。
+
+SQL>
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               APPLY THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL> -- For a descriptive mining function like Feature Extraction, "Scoring"
+SQL> -- involves providing the projected values of each feature.
+SQL>
+SQL> -- List the PCA projection values of the top four features for 15 customers
+SQL> --
+SQL> SELECT cust_id, round(FEATURE_VALUE(RPCA_SH_FE_SAMPLE, 1 USING *), 3)
+  2  AS PROJV1, round(FEATURE_VALUE(RPCA_SH_FE_SAMPLE, 2 USING *), 3)
+  3  AS PROJV2, round(FEATURE_VALUE(RPCA_SH_FE_SAMPLE, 3 USING *), 3) AS PROJV3,
+  4  round(FEATURE_VALUE(RPCA_SH_FE_SAMPLE, 4 USING *), 3) AS PROJV4
+  5  FROM mining_data_apply_v
+  6  WHERE cust_id <= 100015
+  7  ORDER BY cust_ID;
+
+   CUST_ID     PROJV1     PROJV2     PROJV3     PROJV4
+---------- ---------- ---------- ---------- ----------
+    100001     22.903     -3.318     -0.776     -0.133
+    100002      2.102     -0.284       .557     -0.056
+    100003     -4.698      2.331        .57     -0.409
+    100004      11.15      -0.18       .613     -0.242
+    100005      7.187       .313     -0.808       .713
+    100006    -19.022     -0.277     -0.958     -0.104
+    100007      1.203       .803       .567     -0.151
+    100008      2.198       .705       .572      -0.16
+    100009     -9.966     -0.093     -0.892       .619
+    100010    -10.976     -0.095       .507      -0.29
+    100011     -7.961     -0.349     -0.915       -0.3
+    100012     -3.854         .4     -0.173       .917
+    100013        3.2       .626     -0.837      -0.16
+    100014     10.163     -0.062     -0.806     -0.223
+    100015      5.277      1.399         .6     -0.292
+
+15行が選択されました。
+
+SQL>
+SQL> -- List the PCA projection values of the top three features for 10 customers
+SQL> -- using FEATURE_SET
+SQL> --
+SQL> SELECT cust_id, S.feature_id fid, round(S.value, 3) value
+  2  FROM  (SELECT cust_id, FEATURE_SET(RPCA_SH_FE_SAMPLE USING *) fset
+  3                  FROM mining_data_apply_v v where cust_id <= 100010) T,
+  4                 TABLE(T.fset) S
+  5  WHERE S.feature_id <= 3
+  6  ORDER BY cust_id, fid;
+
+   CUST_ID  FID VALUE
+---------- ---- -----
+    100001    1 22.903
+    100001    2 -3.31800
+    100001    3 -.77600
+    100002    1 2.10200
+    100002    2 -.28400
+    100002    3 .55700
+    100003    1 -4.69800
+    100003    2 2.33100
+    100003    3 .57000
+    100004    1 11.15
+    100004    2 -.18000
+    100004    3 .61300
+    100005    1 7.18700
+    100005    2 .31300
+    100005    3 -.80800
+    100006    1 -19.022
+    100006    2 -.27700
+    100006    3 -.95800
+    100007    1 1.20300
+    100007    2 .80300
+    100007    3 .56700
+    100008    1 2.19800
+    100008    2 .70500
+    100008    3 .57200
+    100009    1 -9.96600
+    100009    2 -.09300
+    100009    3 -.89200
+    100010    1 -10.976
+    100010    2 -.09500
+    100010    3 .50700
+
+30行が選択されました。
+
+SQL>
+SQL> -- List the 2 most important attributes for the top feature for each row
+SQL> -- for 10 new customers
+SQL> --
+SQL> column feat_det format a60
+SQL> SELECT cust_id,
+  2         FEATURE_DETAILS(RPCA_SH_FE_SAMPLE, 1, 2 USING *) feat_det
+  3  FROM mining_data_apply_v
+  4  WHERE CUST_ID < = 100010
+  5  ORDER BY cust_id;
+
+   CUST_ID FEAT_DET
+---------- ------------------------------------------------------------
+    100001 <Details algorithm="R Extensible" class="1">
+           <Attribute name="AGE" actualValue="51" weight="22.985" rank=
+           "1"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weigh
+           t=".012" rank="2"/>
+           </Details>
+
+    100002 <Details algorithm="R Extensible" class="1">
+           <Attribute name="AGE" actualValue="30" weight="2.097" rank="
+           1"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weigh
+           t=".012" rank="2"/>
+           </Details>
+
+    100003 <Details algorithm="R Extensible" class="1">
+           <Attribute name="YRS_RESIDENCE" actualValue="6" weight=".183
+           " rank="1"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".007"
+           rank="2"/>
+           </Details>
+
+    100004 <Details algorithm="R Extensible" class="1">
+           <Attribute name="AGE" actualValue="39" weight="11.049" rank=
+           "1"/>
+           <Attribute name="YRS_RESIDENCE" actualValue="5" weight=".087
+           " rank="2"/>
+           </Details>
+
+    100005 <Details algorithm="R Extensible" class="1">
+           <Attribute name="AGE" actualValue="35" weight="7.07" rank="1
+           "/>
+           <Attribute name="YRS_RESIDENCE" actualValue="5" weight=".087
+           " rank="2"/>
+           </Details>
+
+    100006 <Details algorithm="R Extensible" class="1">
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight=
+           ".002" rank="1"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="0" weight
+           =".002" rank="2"/>
+           </Details>
+
+    100007 <Details algorithm="R Extensible" class="1">
+           <Attribute name="AGE" actualValue="29" weight="1.102" rank="
+           1"/>
+           <Attribute name="YRS_RESIDENCE" actualValue="5" weight=".087
+           " rank="2"/>
+           </Details>
+
+    100008 <Details algorithm="R Extensible" class="1">
+           <Attribute name="AGE" actualValue="30" weight="2.097" rank="
+           1"/>
+           <Attribute name="YRS_RESIDENCE" actualValue="5" weight=".087
+           " rank="2"/>
+           </Details>
+
+    100009 <Details algorithm="R Extensible" class="1">
+           <Attribute name="AFFINITY_CARD" actualValue="1" weight=".006
+           " rank="1"/>
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight=
+           ".002" rank="2"/>
+           </Details>
+
+    100010 <Details algorithm="R Extensible" class="1">
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight
+           ="-.001" rank="1"/>
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="1" weight=
+           "-.002" rank="2"/>
+           </Details>
+
+
+10行が選択されました。
+
+SQL>
+SQL>
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                       BUILD A PCA MODEL BY PARTITION
+SQL> -----------------------------------------------------------------------
+SQL> -- This example illustrates building a partitioned PCA model by
+SQL> -- a specified partition column in parallel. We use the same settings
+SQL> -- table in the above example with an additional partition column
+SQL> -- setting.
+SQL>
+SQL> -- Cleanup old training data view for repeat runs
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP VIEW pca_build_partition_v';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- Create a view for building PCA models by partition in parallel
+SQL> create view pca_build_partition_v as
+  2  select /*+parallel */ cust_id, cust_gender, age, yrs_residence,
+  3  affinity_card, bulk_pack_diskettes, flat_panel_monitor,
+  4  home_theater_package, bookkeeping_application, y_box_games
+  5  from mining_data_build_v;
+
+View PCA_BUILD_PARTITION_Vは作成されました。
+
+SQL>
+SQL> -- Check the customer gender distribution of the training data
+SQL> select cust_gender gender, count(*) CNT
+  2  from pca_build_partition_v group by cust_gender order by cust_gender;
+
+G        CNT
+- ----------
+F        486
+M       1014
+
+2行が選択されました。
+
+SQL>
+SQL> -- Cleanup old model with same name for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('RPCA_SH_FE_SAMPLE_P');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> ----------------------------------
+SQL> -- CREATE A NEW MODEL BY PARTITION
+SQL> --
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  5    v_setlst('RALG_BUILD_FUNCTION')   := 'RPCA_BUILD';
+  6    v_setlst('RALG_SCORE_FUNCTION')   := 'RPCA_SCORE';
+  7    v_setlst('RALG_WEIGHT_FUNCTION')  := 'RPCA_WEIGHT';
+  8    v_setlst('RALG_DETAILS_FUNCTION') := 'RPCA_DETAILS';
+  9    v_setlst('RALG_DETAILS_FORMAT')   :=
+ 10      'select 1 feature, 1 sd from dual';
+ 11
+ 12    -- Specify the column CUST_GENDER as the partition column
+ 13    v_setlst('ODMS_PARTITION_COLUMNS') := 'CUST_GENDER';
+ 14
+ 15    DBMS_DATA_MINING.CREATE_MODEL2(
+ 16      model_name          => 'RPCA_SH_FE_SAMPLE_P',
+ 17      mining_function     => 'FEATURE_EXTRACTION',
+ 18      data_query          => 'select * from PCA_BUILD_PARTITION_V',
+ 19      case_id_column_name => 'CUST_ID',
+ 20      set_list            => v_setlst);
+ 21  END;
+ 22  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> select setting_name, setting_value from Rpca_sh_sample_settings
+  2  order by setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ----------------------------------------
+ALGO_EXTENSIBLE_LANG           R
+ODMS_PARTITION_COLUMNS         CUST_GENDER
+RALG_BUILD_FUNCTION            RPCA_BUILD
+RALG_DETAILS_FORMAT            select 1 feature, 1 sd from dual
+RALG_DETAILS_FUNCTION          RPCA_DETAILS
+RALG_SCORE_FUNCTION            RPCA_SCORE
+RALG_WEIGHT_FUNCTION           RPCA_WEIGHT
+
+7行が選択されました。
+
+SQL>
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL METADATA
+SQL> --
+SQL> select model_name, mining_function, algorithm from user_mining_models
+  2  where model_name = 'RPCA_SH_FE_SAMPLE_P';
+
+MODEL_NAME           MINING_FUNCTION      ALGORITHM
+-------------------- -------------------- --------------------
+RPCA_SH_FE_SAMPLE_P  FEATURE_EXTRACTION   R_EXTENSIBLE
+
+1行が選択されました。
+
+SQL>
+SQL>
+SQL> ------------------------------
+SQL> -- DISPLAY MODEL PARTITION INFO
+SQL> --
+SQL> column model_name format a20
+SQL> column partition_name format a15
+SQL> column column_name format a12
+SQL> column column_value format a10
+SQL>
+SQL> select * from user_mining_model_partitions
+  2  where model_name= 'RPCA_SH_FE_SAMPLE_P'
+  3  order by partition_name;
+
+MODEL_NAME           PARTITION_NAME    POSITION COLUMN_NAME  COLUMN_VAL
+-------------------- --------------- ---------- ------------ ----------
+RPCA_SH_FE_SAMPLE_P  F                        1 CUST_GENDER  F
+RPCA_SH_FE_SAMPLE_P  M                        1 CUST_GENDER  M
+
+2行が選択されました。
+
+SQL>
+SQL>
+SQL> ------------------------------------
+SQL> -- DISPLAY MODEL DETAILS BY PARTITION
+SQL> --
+SQL> select * from DM$VDRPCA_SH_FE_SAMPLE_P order by partition_name, feature;
+
+PARTITION_NAME     FEATURE         SD
+--------------- ---------- ----------
+F                        1 14.1651985
+F                        2 1.32900675
+F                        3 .672157597
+F                        4 .350431629
+F                        5 .331560605
+F                        6 .304792662
+F                        7 .236291442
+F                        8  .14629601
+M                        1 13.4013452
+M                        2 1.40382945
+M                        3 .669351007
+M                        4 .451391344
+M                        5 .349208071
+M                        6 .306746735
+M                        7  .23846914
+M                        8 .147462427
+
+16行が選択されました。
+
+SQL>
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                     APPLY THE PARTITIONED MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- List the corresponding partition names of the first 10 new customers
+SQL> column cust_gender format a15
+SQL> select cust_id, cust_gender, age,
+  2         ora_dm_partition_name(RPCA_SH_FE_SAMPLE_P using *) partition_name
+  3  from mining_data_apply_v
+  4  where cust_id < = 100010
+  5  order by cust_id;
+
+   CUST_ID CUST_GENDER            AGE PARTITION_NAME
+---------- --------------- ---------- ---------------
+    100001 F                       51 F
+    100002 F                       30 F
+    100003 M                       23 M
+    100004 F                       39 F
+    100005 M                       35 M
+    100006 F                        9 F
+    100007 F                       29 F
+    100008 M                       30 M
+    100009 M                       18 M
+    100010 M                       17 M
+
+10行が選択されました。
+
+SQL>
+SQL>
+SQL> -- List the PCA projection values of the top two features for 15 customers
+SQL> -- using the partitioned model.
+SQL> -- Each row of new data automatically uses its corresponding partitioned
+SQL> -- model for scoring.
+SQL> --
+SQL> SELECT cust_id, round(FEATURE_VALUE(RPCA_SH_FE_SAMPLE_P, 1 USING *), 3)
+  2  AS PROJV1, round(FEATURE_VALUE(RPCA_SH_FE_SAMPLE_P, 2 USING *), 3)
+  3  AS PROJV2
+  4  FROM mining_data_apply_v
+  5  WHERE cust_id <= 100015
+  6  ORDER BY cust_ID;
+
+   CUST_ID     PROJV1     PROJV2
+---------- ---------- ----------
+    100001     24.805      2.484
+    100002      3.959     -0.254
+    100003     -5.577      2.142
+    100004     13.003      -0.51
+    100005      6.298       .079
+    100006    -17.165       .159
+    100007      3.042     -1.328
+    100008      1.309       .476
+    100009    -10.856     -0.225
+    100010    -11.868     -0.244
+    100011     -8.856     -0.491
+    100012     -4.743       .222
+    100013      2.311       .414
+    100014     12.013     -0.562
+    100015      4.392      1.152
+
+15行が選択されました。
+
+SQL> spool oml4sql-r-extensible-regression-neural-networks

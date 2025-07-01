@@ -1,0 +1,312 @@
+SQL> @oml4sql-classification-text-mining-svm
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Classification - SVM Algorithm with Text Mining - dmtxtsvm.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET serveroutput ON
+SQL> SET trimspool ON
+SQL> SET pages 10000
+SQL> SET echo ON
+SQL>
+SQL> -- Create a policy for text feature extraction
+SQL> BEGIN
+  2    ctx_ddl.drop_policy('dmdemo_svm_policy');
+  3  EXCEPTION WHEN OTHERS THEN NULL; END;
+  4  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> EXECUTE ctx_ddl.create_policy('dmdemo_svm_policy')
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SAMPLE PROBLEM
+SQL> -----------------------------------------------------------------------
+SQL> -- Mine text features using SVM algorithm.
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Cleanup old model and objects for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('T_SVM_Clas_sample');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> ---------------
+SQL> -- CREATE MODEL
+SQL>
+SQL> -- Create SVM model
+SQL> -- Note the transform makes the 'comments' attribute
+SQL> -- to be treated as unstructured text data
+SQL> DECLARE
+  2    xformlist dbms_data_mining_transform.TRANSFORM_LIST;
+  3    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  4  BEGIN
+  5    dbms_data_mining_transform.SET_TRANSFORM(
+  6      xformlist, 'comments', null, 'comments', null, 'TEXT');
+  7
+  8    -- choose linear kernel
+  9    v_setlst('ALGO_NAME')              := 'ALGO_SUPPORT_VECTOR_MACHINES';
+ 10    v_setlst('PREP_AUTO')              := 'ON';
+ 11    v_setlst('SVMS_KERNEL_FUNCTION')   := 'SVMS_LINEAR';
+ 12    v_setlst('SVMS_COMPLEXITY_FACTOR') := '100';
+ 13    v_setlst('ODMS_TEXT_POLICY_NAME')  := 'DMDEMO_SVM_POLICY';
+ 14    v_setlst('SVMS_SOLVER')            := 'SVMS_SOLVER_SGD';
+ 15
+ 16    DBMS_DATA_MINING.CREATE_MODEL2(
+ 17      model_name          => 'T_SVM_Clas_sample',
+ 18      mining_function     => 'CLASSIFICATION',
+ 19      data_query          => 'select * from mining_build_text',
+ 20      set_list            => v_setlst,
+ 21      case_id_column_name => 'cust_id',
+ 22      target_column_name  => 'affinity_card',
+ 23      xform_list          => xformlist);
+ 24  END;
+ 25  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- Display the model settings
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'T_SVM_CLAS_SAMPLE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_SUPPORT_VECTOR_MACHINES
+CLAS_WEIGHTS_BALANCED          OFF
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+ODMS_TEXT_MAX_FEATURES         3000
+ODMS_TEXT_MIN_DOCUMENTS        1
+ODMS_TEXT_POLICY_NAME          DMDEMO_SVM_POLICY
+PREP_AUTO                      ON
+SVMS_COMPLEXITY_FACTOR         100
+SVMS_CONV_TOLERANCE            .0001
+SVMS_KERNEL_FUNCTION           SVMS_LINEAR
+SVMS_SOLVER                    SVMS_SOLVER_SGD
+
+13行が選択されました。
+
+SQL>
+SQL> -- Display the model signature
+SQL> column attribute_name format a40
+SQL> column attribute_type format a20
+SQL> SELECT attribute_name, attribute_type
+  2    FROM user_mining_model_attributes
+  3   WHERE model_name = 'T_SVM_CLAS_SAMPLE'
+  4  ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                           ATTRIBUTE_TYPE
+---------------------------------------- --------------------
+AFFINITY_CARD                            CATEGORICAL
+AGE                                      NUMERICAL
+BOOKKEEPING_APPLICATION                  NUMERICAL
+BULK_PACK_DISKETTES                      NUMERICAL
+COMMENTS                                 TEXT
+COUNTRY_NAME                             CATEGORICAL
+CUST_GENDER                              CATEGORICAL
+CUST_INCOME_LEVEL                        CATEGORICAL
+CUST_MARITAL_STATUS                      CATEGORICAL
+EDUCATION                                CATEGORICAL
+FLAT_PANEL_MONITOR                       NUMERICAL
+HOME_THEATER_PACKAGE                     NUMERICAL
+HOUSEHOLD_SIZE                           CATEGORICAL
+OCCUPATION                               CATEGORICAL
+OS_DOC_SET_KANJI                         NUMERICAL
+PRINTER_SUPPLIES                         NUMERICAL
+YRS_RESIDENCE                            NUMERICAL
+Y_BOX_GAMES                              NUMERICAL
+
+18行が選択されました。
+
+SQL>
+SQL> -- Display model details
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2    WHERE model_name='T_SVM_CLAS_SAMPLE'
+  3    ORDER BY view_name;
+
+VIEW_NAME                      VIEW_TYPE
+------------------------------ --------------------------------------------------
+DM$VCT_SVM_CLAS_SAMPLE         Scoring Cost Matrix
+DM$VGT_SVM_CLAS_SAMPLE         Global Name-Value Pairs
+DM$VLT_SVM_CLAS_SAMPLE         SVM Linear Coefficients
+DM$VNT_SVM_CLAS_SAMPLE         Normalization and Missing Value Handling
+DM$VST_SVM_CLAS_SAMPLE         Computed Settings
+DM$VTT_SVM_CLAS_SAMPLE         Classification Targets
+DM$VWT_SVM_CLAS_SAMPLE         Model Build Alerts
+DM$VXT_SVM_CLAS_SAMPLE         Text Features
+
+8行が選択されました。
+
+SQL>
+SQL> -- Note how several text terms extracted from the COMMENTs documents
+SQL> -- show up as influential predictors.
+SQL> --
+SQL> SET line 120
+SQL> column attribute_name format a25
+SQL> column attribute_subname format a25
+SQL> column attribute_value format a25
+SQL> column coefficient format 9.99
+SQL> SELECT * from
+  2  (SELECT target_value, attribute_name, attribute_subname,
+  3          attribute_value, coefficient,
+  4          rank() over (order by abs(coefficient) desc) rnk
+  5     FROM DM$VLT_SVM_CLAS_SAMPLE)
+  6  WHERE rnk <= 10
+  7  ORDER BY rnk, attribute_name, attribute_subname;
+
+          TARGET_VALUE ATTRIBUTE_NAME            ATTRIBUTE_SUBNAME         ATTRIBUTE_VALUE           COEFFICIENT
+---------------------- ------------------------- ------------------------- ------------------------- -----------
+       RNK
+----------
+          1.0000000000 EDUCATION                                           HS-grad                          -.71
+         1
+
+          1.0000000000 COMMENTS                  TEXAS                                                       .54
+         2
+
+          1.0000000000 HOUSEHOLD_SIZE                                      4-5                               .53
+         3
+
+          1.0000000000 OCCUPATION                                          Exec.                             .46
+         4
+
+          1.0000000000 COMMENTS                  OTHER                                                       .45
+         5
+
+          1.0000000000 COMMENTS                  SHOPS                                                       .45
+         5
+
+          1.0000000000 COMMENTS                  MORE                                                       -.45
+         7
+
+          1.0000000000 OCCUPATION                                          Other                            -.43
+         8
+
+          1.0000000000                                                                                      -.41
+         9
+
+          1.0000000000 COMMENTS                  MUCH                                                       -.40
+        10
+
+
+10行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               TEST THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL> -- See dmsvcdem.sql for examples.
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                SCORE NEW DATA USING SQL DATA MINING FUNCTIONS
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 1
+SQL> --
+SQL> -- Find the 5 customers that are most likely to use an affinity card.
+SQL> -- Note that the SQL data mining functions seamless work against
+SQL> -- tables that contain textual data (comments).
+SQL> -- Also explain why they are likely to use an affinity card.
+SQL> --
+SQL> set long 20000
+SQL> SELECT cust_id, pd FROM
+  2  ( SELECT cust_id,
+  3      PREDICTION_DETAILS(T_SVM_Clas_sample, 1 USING *) pd,
+  4      rank() over (order by PREDICTION_PROBABILITY(T_SVM_Clas_sample, 1 USING *) DESC,
+  5                            cust_id) rnk
+  6    FROM mining_apply_text)
+  7  WHERE rnk <= 5
+  8  order by rnk;
+
+   CUST_ID PD
+---------- ------------------------------------------------------------------------------------------
+    100962 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="EDUCATION" actualValue="Profsc" weight=".078" rank="1"/>
+           <Attribute name="YRS_RESIDENCE" actualValue="11" weight=".065" rank="2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".042" rank="3"/>
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".033" rank="4"/>
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="married" weight=".033" rank="5"/>
+           </Details>
+
+    100210 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="YRS_RESIDENCE" actualValue="14" weight=".145" rank="1"/>
+           <Attribute name="EDUCATION" actualValue="Bach." weight=".072" rank="2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".054" rank="3"/>
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".043" rank="4"/>
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="married" weight=".043" rank="5"/>
+           </Details>
+
+    100573 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="EDUCATION" actualValue="Bach." weight=".081" rank="1"/>
+           <Attribute name="YRS_RESIDENCE" actualValue="9" weight=".062" rank="2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".061" rank="3"/>
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="married" weight=".049" rank="4"/>
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".048" rank="5"/>
+           </Details>
+
+    100668 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="EDUCATION" actualValue="Masters" weight=".129" rank="1"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".065" rank="2"/>
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".052" rank="3"/>
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="married" weight=".052" rank="4"/>
+           <Attribute name="OCCUPATION" actualValue="Exec." weight=".051" rank="5"/>
+           </Details>
+
+    100544 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="EDUCATION" actualValue="Masters" weight=".136" rank="1"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".07" rank="2"/>
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="married" weight=".056" rank="3"/>
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".055" rank="4"/>
+           <Attribute name="OCCUPATION" actualValue="Exec." weight=".054" rank="5"/>
+           </Details>
+
+
+5行が選択されました。
+
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 2
+SQL> -- Find the average age of customers who are likely to use an
+SQL> -- affinity card. Break out the results by gender.
+SQL> --
+SQL> column cust_gender format a12
+SQL> SELECT cust_gender,
+  2         COUNT(*) AS cnt,
+  3         ROUND(AVG(age)) AS avg_age
+  4    FROM mining_apply_text
+  5   WHERE PREDICTION(T_SVM_Clas_sample USING *) = 1
+  6  GROUP BY cust_gender
+  7  ORDER BY cust_gender;
+
+CUST_GENDER         CNT    AVG_AGE
+------------ ---------- ----------
+F                    36         29
+M                   267         35
+
+2行が選択されました。
+
+SQL> spool oml4sql-clustering-expectation-maximization

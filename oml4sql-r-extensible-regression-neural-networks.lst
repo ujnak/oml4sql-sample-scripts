@@ -1,0 +1,652 @@
+SQL> @oml4sql-r-extensible-regression-neural-networks
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   OML R Extensible - Regression - Neural Networks Algorithm - dmrnndemo.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET ECHO ON
+SQL> SET FEEDBACK 1
+SQL> SET NUMWIDTH 10
+SQL> SET LINESIZE 80
+SQL> SET TRIMSPOOL ON
+SQL> SET TAB OFF
+SQL> SET PAGESIZE 100
+SQL> SET LONG 10000
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                         NEURAL NETWORK REGRESSION DEMO
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explaination:
+SQL> -- This demo shows how to implement the neural network regression algorithm in
+SQL> -- Oracle Data Mining using R nnet algorithm.
+SQL>
+SQL> Begin
+  2    sys.rqScriptDrop('NN_RDEMO_BUILD_REGRESSION', v_silent => TRUE);
+  3    sys.rqScriptDrop('NN_RDEMO_SCORE_REGRESSION', v_silent => TRUE);
+  4    sys.rqScriptDrop('NN_RDEMO_DETAILS_REGRESSION', v_silent => TRUE);
+  5  End;
+  6  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> Begin
+  2  -- Build R Function -----------------------------------------------------------
+  3  -- Explanation:
+  4  -- User can define their own R script function to build the model they want.
+  5  -- For example, here a script named NN_RDEMO_BUILD_REGRESSION is defined. This
+  6  -- function builds and returns a neural network regression model using R nnet
+  7  -- algorithm. User can also choose other R algorithm to implement the neural
+  8  -- network regression algorithm.
+  9
+ 10    sys.rqScriptCreate('NN_RDEMO_BUILD_REGRESSION', 'function(dat) {
+ 11     require(nnet);
+ 12     set.seed(1234);
+ 13     mod <- nnet(formula=AGE ~ ., data=dat,
+ 14                 size=0, skip=TRUE, linout=TRUE, trace=FALSE); mod}');
+ 15
+ 16  -- Score R Function -----------------------------------------------------------
+ 17  -- Explanation:
+ 18  -- User can define their own R script function to do the scoring using the built
+ 19  -- model. For example, here a script named NN_RDEMO_SCORE_REGRESSION is defined.
+ 20  -- This function creates and returns an R data.frame containing the target
+ 21  -- predictions. User can also define other prediction functions with different
+ 22  -- settings.
+ 23
+ 24    sys.rqScriptCreate('NN_RDEMO_SCORE_REGRESSION', 'function(mod, dat) {
+ 25     require(nnet);
+ 26     res <- predict(mod, newdata = dat);
+ 27     data.frame(pred=res)}');
+ 28
+ 29  -- Detail R Function ----------------------------------------------------------
+ 30  -- Explanation:
+ 31  -- User can define their own R script function to show the model details they
+ 32  -- want to display. For example, here a script named NN_RDEMO_DETAILS_REGRESSION
+ 33  -- is defined. This function creates and returns an R data.frame containing the
+ 34  -- weights of the built neural network regression model. User can also display
+ 35  -- other details.
+ 36
+ 37    sys.rqScriptCreate('NN_RDEMO_DETAILS_REGRESSION', 'function(object, x) {
+ 38      mod <- object;
+ 39      data.frame(wts=mod$wts)}');
+ 40  End;
+ 41  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('NN_RDEMO_REGRESSION');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL BUILD
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Build the model using the R script user defined. Here R script
+SQL> -- NN_RDEMO_BUILD_REGRESSION will be used to create the neural network
+SQL> -- regression model NN_RDEMO_REGRESSION using dataset mining_data_build_v.
+SQL>
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- Model Settings -----------------------------------------------------------
+  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  6    v_setlst('RALG_BUILD_FUNCTION')   := 'NN_RDEMO_BUILD_REGRESSION';
+  7    v_setlst('RALG_SCORE_FUNCTION')   := 'NN_RDEMO_SCORE_REGRESSION';
+  8    v_setlst('RALG_DETAILS_FUNCTION') := 'NN_RDEMO_DETAILS_REGRESSION';
+  9
+ 10    -- Once this setting is specified, a model view will be created. This model
+ 11    -- view will be generated to display the model details, which contains the
+ 12    -- weights of the built neural network regression model.
+ 13
+ 14    v_setlst('RALG_DETAILS_FORMAT') := 'select 1 wts from dual';
+ 15
+ 16    DBMS_DATA_MINING.CREATE_MODEL2(
+ 17      model_name          => 'NN_RDEMO_REGRESSION',
+ 18      mining_function     => 'REGRESSION',
+ 19      data_query          => 'select * from mining_data_build_v',
+ 20      case_id_column_name => 'CUST_ID',
+ 21      target_column_name  => 'AGE',
+ 22      set_list            => v_setlst);
+ 23  END;
+ 24  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL DETAIL
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Display the details of the built model using the R script user defined.
+SQL> -- Here R script NN_RDEMO_DETAIL_REGRESSION will be used to display the model
+SQL> -- details.
+SQL>
+SQL> select round(wts, 3) as wts from DM$VDNN_RDEMO_REGRESSION where wts >= 4
+  2  order by wts;
+
+       WTS
+----------
+     4.071
+     4.134
+      4.64
+     5.165
+     5.772
+     5.989
+     6.241
+     8.482
+     8.648
+    11.615
+    13.493
+
+11行が選択されました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL SCORE
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Score the model using the R script user defined. Here R script
+SQL> -- NN_RDEMO_SCORE_REGRESSION will be used to do the scoring.
+SQL>
+SQL> -- PREDICTION/PREDICTION_PROBABILITY ------------------------------------------
+SQL> -- Explanation:
+SQL> -- Show actual target value and predicted target values.
+SQL>
+SQL> SELECT CUST_ID, AGE as AGE_act,
+  2  round(PREDICTION(NN_RDEMO_REGRESSION USING *), 3) as AGE_pred
+  3  FROM mining_data_apply_v where CUST_ID <= 100010
+  4  order by CUST_ID;
+
+   CUST_ID    AGE_ACT   AGE_PRED
+---------- ---------- ----------
+    100001         51     46.345
+    100002         30     32.736
+    100003         23     25.708
+    100004         39     35.772
+    100005         35     35.826
+    100006          9     12.428
+    100007         29     34.614
+    100008         30     34.189
+    100009         18     16.662
+    100010         17     14.355
+
+10行が選択されました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                        NEURAL NETWORK CLASSIFICATION DEMO
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explaination:
+SQL> -- This demo shows how to implement the neural network classification algorithm
+SQL> -- in Oracle Data Mining using R nnet algorithm.
+SQL>
+SQL> Begin
+  2    sys.rqScriptDrop('NN_RDEMO_BUILD_CLASSIFICATION', v_silent => TRUE);
+  3    sys.rqScriptDrop('NN_RDEMO_SCORE_CLASSIFICATION', v_silent => TRUE);
+  4    sys.rqScriptDrop('NN_RDEMO_DETAILS_CLASSIFICATION', v_silent => TRUE);
+  5    sys.rqScriptDrop('NN_RDEMO_WEIGHT_CLASSIFICATION', v_silent => TRUE);
+  6  End;
+  7  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> Begin
+  2  -- Build R Function -----------------------------------------------------------
+  3  -- Explanation:
+  4  -- User can define their own R script function to build the model they want.
+  5  -- For example, here a script named NN_RDEMO_BUILD_CLASSIFICATION is defined.
+  6  -- This function builds and returns a neural network classification model using
+  7  -- R nnet algorithm. User can also choose other R algorithm to implement the
+  8  -- neural network classification algorithm.
+  9
+ 10    sys.rqScriptCreate('NN_RDEMO_BUILD_CLASSIFICATION', 'function(dat) {
+ 11     require(nnet);
+ 12     set.seed(1234);
+ 13     mod <- nnet(formula=HOUSEHOLD_SIZE ~ ., data=dat,
+ 14                 size=0, skip=TRUE, linout=TRUE, trace=FALSE);
+ 15     mod}');
+ 16
+ 17  -- Score R Function -----------------------------------------------------------
+ 18  -- Explanation:
+ 19  -- User can define their own R script function to do the scoring using the built
+ 20  -- model. For example, here a script named NN_RDEMO_SCORE_CLASSIFICATION is
+ 21  -- defined. This function creates and returns an R data.frame containing the
+ 22  -- target predictions. User can also define other prediction functions with
+ 23  -- different types.
+ 24
+ 25    sys.rqScriptCreate('NN_RDEMO_SCORE_CLASSIFICATION', 'function(mod, dat) {
+ 26     require(nnet);
+ 27     res <- predict(mod, newdata = dat);
+ 28     res=data.frame(res);
+ 29     names(res) <- sort(mod$lev); res}');
+ 30
+ 31  -- Detail R Function ----------------------------------------------------------
+ 32  -- Explanation:
+ 33  -- User can define their own R script function to show the model details they
+ 34  -- want to display. For example, here a script named
+ 35  -- NN_RDEMO_DETAILS_CLASSIFICATION is defined. This function creates and
+ 36  -- returns an R data.frame containing the weights of the built neural network
+ 37  -- classification model. User can also display other details.
+ 38
+ 39    sys.rqScriptCreate('NN_RDEMO_DETAILS_CLASSIFICATION', 'function(object, x) {
+ 40     mod <- object;
+ 41     data.frame(wts=mod$wts)}');
+ 42
+ 43  -- Weight R Function ----------------------------------------------------------
+ 44  -- Explanation:
+ 45  -- User can define their own R script function to provide the attribute weights
+ 46  -- of the scoring data. For example, here a script named
+ 47  -- NN_RDEMO_WEIGHT_CLASSIFICATION is defined. This function creates and returns
+ 48  -- an R data.frame containing the weights of each attribute of the scoring data.
+ 49  -- Here we simply use the ratio of the predicted target probability with all
+ 50  -- attribute values present to the predicted target probability with one
+ 51  -- attribute value missing as the weight of the missing attribute. User can
+ 52  -- define their own method to calculate the attribute weight.
+ 53
+ 54    sys.rqScriptCreate('NN_RDEMO_WEIGHT_CLASSIFICATION', 'function(mod, dat, clas) {
+ 55     require(nnet);
+ 56     Sys.setlocale(, "C");
+ 57     v0 <- as.data.frame(predict(mod, newdata=dat, type = "raw"));
+ 58     res <- data.frame(lapply(seq_along(dat),
+ 59     function(x, dat) {
+ 60     if(is.numeric(dat[[x]])) dat[,x] <- as.numeric(0)
+ 61     else dat[,x] <- mod$xlevels[[names(dat[x])]][1];
+ 62     vv <- as.data.frame(predict(mod, newdata = dat, type = "raw"));
+ 63     max((v0[[clas]]-vv[[clas]])/v0[[clas]], 0)}, dat = dat));
+ 64     res <- res[,order(names(dat))];
+ 65     names(res) <- sort(names(dat));
+ 66     res}');
+ 67  End;
+ 68  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('NN_RDEMO_CLASSIFICATION');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL BUILD
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Build the model using the R script user defined. Here R script
+SQL> -- NN_RDEMO_BUILD_CLASSIFICATION will be used to create the neural network
+SQL> -- classification model NN_RDEMO_CLASSIFICATION using dataset mining_data_build_v.
+SQL>
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- Model Settings -----------------------------------------------------------
+  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  6    v_setlst('RALG_BUILD_FUNCTION')   := 'NN_RDEMO_BUILD_CLASSIFICATION';
+  7    v_setlst('RALG_SCORE_FUNCTION')   := 'NN_RDEMO_SCORE_CLASSIFICATION';
+  8    v_setlst('RALG_DETAILS_FUNCTION') := 'NN_RDEMO_DETAILS_CLASSIFICATION';
+  9    v_setlst('RALG_WEIGHT_FUNCTION')  := 'NN_RDEMO_WEIGHT_CLASSIFICATION';
+ 10
+ 11    -- Once this setting is specified, a model view will be created. This model
+ 12    -- view will be generated to display the model details, which contains the
+ 13    -- weights of the built neural network classification model.
+ 14
+ 15    v_setlst('RALG_DETAILS_FORMAT') := 'select 1 wts from dual';
+ 16
+ 17    DBMS_DATA_MINING.CREATE_MODEL2(
+ 18      model_name          => 'NN_RDEMO_CLASSIFICATION',
+ 19      mining_function     => 'CLASSIFICATION',
+ 20      data_query          => 'select * from mining_data_build_v',
+ 21      case_id_column_name => 'CUST_ID',
+ 22      target_column_name  => 'HOUSEHOLD_SIZE',
+ 23      set_list            => v_setlst);
+ 24  END;
+ 25  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL DETAIL
+SQL> -------------------------------------------------------------------------------
+SQL> -- Display the details of the built model using the R script user defined.
+SQL> -- Here R script NN_RDEMO_DETAIL_CLASSIFICATION will be used to display the
+SQL> -- model details.
+SQL>
+SQL> select round(wts, 3) as wts from DM$VDNN_RDEMO_CLASSIFICATION where wts >= 10
+  2  order by wts;
+
+       WTS
+----------
+    10.051
+    10.209
+    10.591
+    10.658
+    10.694
+    11.174
+      11.2
+    11.572
+    11.835
+    11.989
+    12.159
+    12.344
+    12.363
+    12.617
+    12.652
+    13.259
+    13.275
+    13.399
+    13.447
+    13.934
+     14.05
+    14.101
+    14.607
+    14.689
+    15.156
+    15.746
+    16.218
+    16.419
+    16.528
+    16.734
+    16.798
+    17.242
+    17.251
+    17.285
+    17.782
+    17.861
+    18.014
+    18.066
+    18.085
+    18.132
+    18.401
+    18.585
+    18.855
+    18.881
+    18.937
+    19.089
+    19.394
+    19.845
+    19.927
+    21.311
+    21.787
+    22.184
+    23.835
+    24.499
+    24.833
+    25.453
+    25.968
+    26.216
+    26.444
+    26.939
+    27.629
+    28.172
+    29.172
+    29.213
+     30.76
+    32.757
+    33.049
+     34.51
+    35.523
+    36.668
+    37.056
+    38.449
+    39.272
+    40.473
+    43.604
+    44.112
+    45.133
+    45.301
+    45.466
+    46.483
+    48.766
+    50.074
+    52.203
+     57.03
+    59.571
+     78.87
+    86.294
+   105.348
+
+88行が選択されました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL SCORE
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Score the model using the R script user defined.
+SQL>
+SQL> -- PREDICTION/PREDICTION_PROBABILITY ------------------------------------------
+SQL> -- Explanation:
+SQL> -- Here R script NN_RDEMO_SCORE_CLASSIFICATION is used to get the prediction
+SQL> -- value and the prediction probability. Actual target value and predicted
+SQL> -- target values are provided.
+SQL>
+SQL> SELECT CUST_ID, HOUSEHOLD_SIZE as HOUSEHOLD_SIZE_act,
+  2  PREDICTION(NN_RDEMO_CLASSIFICATION USING *) HOUSEHOLD_SIZE_pred,
+  3  round(PREDICTION_PROBABILITY(NN_RDEMO_CLASSIFICATION USING *), 3)
+  4  as HOUSEHOLD_SIZE_prob
+  5  FROM mining_data_apply_v where CUST_ID <= 100010
+  6  order by CUST_ID;
+
+   CUST_ID HOUSEHOLD_SIZE_ACT    HOUSEHOLD_SIZE_PRED   HOUSEHOLD_SIZE_PROB
+---------- --------------------- --------------------- -------------------
+    100001 2                     2                                    .522
+    100002 2                     2                                    .682
+    100003 2                     2                                    .913
+    100004 2                     2                                    .496
+    100005 3                     3                                       1
+    100006 9+                    1                                    .587
+    100007 2                     9+                                   .802
+    100008 2                     2                                    .824
+    100009 3                     3                                       1
+    100010 3                     3                                       1
+
+10行が選択されました。
+
+SQL>
+SQL> -- PREDICTION_SET -------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Here R script NN_RDEMO_SCORE_CLASSIFICATION is used to get the
+SQL> -- prediction set. Actual target value and predicted target values are provided.
+SQL>
+SQL> select T.CUST_ID, T.HOUSEHOLD_SIZE, S.prediction,
+  2  round(S.probability, 3) as probability
+  3  from (select CUST_ID, HOUSEHOLD_SIZE,
+  4  PREDICTION_SET(NN_RDEMO_CLASSIFICATION USING *) pset
+  5  from mining_data_apply_v where CUST_ID <= 100005) T, TABLE(T.pset) S
+  6  where S.probability > 0
+  7  order by T.CUST_ID, S.prediction;
+
+   CUST_ID HOUSEHOLD_SIZE        PREDICTION            PROBABILITY
+---------- --------------------- --------------------- -----------
+    100001 2                     1                      .000000000
+    100001 2                     2                      .522000000
+    100001 2                     3                      .000000000
+    100001 2                     4-5                    .000000000
+    100001 2                     6-8                    .000000000
+    100001 2                     9+                     .478000000
+    100002 2                     1                      .047000000
+    100002 2                     2                      .682000000
+    100002 2                     3                      .000000000
+    100002 2                     4-5                    .000000000
+    100002 2                     6-8                    .011000000
+    100002 2                     9+                     .261000000
+    100003 2                     1                      .035000000
+    100003 2                     2                      .913000000
+    100003 2                     3                      .000000000
+    100003 2                     4-5                    .000000000
+    100003 2                     6-8                    .012000000
+    100003 2                     9+                     .041000000
+    100004 2                     1                      .017000000
+    100004 2                     2                      .496000000
+    100004 2                     3                      .000000000
+    100004 2                     4-5                    .000000000
+    100004 2                     6-8                    .002000000
+    100004 2                     9+                     .484000000
+    100005 3                     1                      .000000000
+    100005 3                     2                      .000000000
+    100005 3                     3                     1.000000000
+    100005 3                     4-5                    .000000000
+    100005 3                     6-8                    .000000000
+    100005 3                     9+                     .000000000
+
+30行が選択されました。
+
+SQL>
+SQL> -- PREDICTION_DETAILS ---------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- The R script NN_RDEMO_WEIGHT_CLASSIFICATION is used to get the prediction
+SQL> -- details. The HOUSEHOLD_SIZE and the prediction details with the weight of each
+SQL> -- attribute are provided.
+SQL>
+SQL> column pred_det format a60
+SQL> SELECT CUST_ID,
+  2  PREDICTION_DETAILS(NN_RDEMO_CLASSIFICATION, '2' USING *) pred_det
+  3  FROM mining_data_apply_v where CUST_ID <= 100010 order by CUST_ID;
+
+   CUST_ID PRED_DET
+---------- ------------------------------------------------------------
+    100001 <Details algorithm="R Extensible" class="2">
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="widowed"
+           weight="1" rank="1"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight="1" rank="2"/>
+           <Attribute name="AGE" actualValue="51" weight=".771" rank="3
+           "/>
+           <Attribute name="EDUCATION" actualValue="&lt; Bach." weight=
+           ".289" rank="4"/>
+           <Attribute name="YRS_RESIDENCE" actualValue="3" weight=".196
+           " rank="5"/>
+           </Details>
+
+    100002 <Details algorithm="R Extensible" class="2">
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="never mar
+           ried" weight="1" rank="1"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight="1" rank="2"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight
+           =".997" rank="3"/>
+           <Attribute name="AGE" actualValue="30" weight=".477" rank="4
+           "/>
+           <Attribute name="YRS_RESIDENCE" actualValue="4" weight=".425
+           " rank="5"/>
+           </Details>
+
+    100003 <Details algorithm="R Extensible" class="2">
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="never mar
+           ried" weight="1" rank="1"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight="1" rank="2"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight
+           =".997" rank="3"/>
+           <Attribute name="YRS_RESIDENCE" actualValue="6" weight=".607
+           " rank="4"/>
+           <Attribute name="AGE" actualValue="23" weight=".152" rank="5
+           "/>
+           </Details>
+
+    100004 <Details algorithm="R Extensible" class="2">
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="divorced"
+            weight="1" rank="1"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight="1" rank="2"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight
+           =".986" rank="3"/>
+           <Attribute name="AGE" actualValue="39" weight=".678" rank="4
+           "/>
+           <Attribute name="YRS_RESIDENCE" actualValue="5" weight=".464
+           " rank="5"/>
+           </Details>
+
+    100005 <Details algorithm="R Extensible" class="2">
+           <Attribute name="YRS_RESIDENCE" actualValue="5" weight="1" r
+           ank="1"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weigh
+           t="1" rank="2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight=".972" rank="3"/>
+           </Details>
+
+    100006 <Details algorithm="R Extensible" class="2">
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="never mar
+           ried" weight="1" rank="1"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight="1" rank="2"/>
+           <Attribute name="YRS_RESIDENCE" actualValue="2" weight=".602
+           " rank="3"/>
+           <Attribute name="AGE" actualValue="9" weight=".327" rank="4"
+           />
+           <Attribute name="CUST_INCOME_LEVEL" actualValue="G: 130,000
+           - 149,999" weight=".272" rank="5"/>
+           </Details>
+
+    100007 <Details algorithm="R Extensible" class="2">
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="divorced"
+            weight="1" rank="1"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight="1" rank="2"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight
+           =".992" rank="3"/>
+           <Attribute name="AGE" actualValue="29" weight=".651" rank="4
+           "/>
+           <Attribute name="YRS_RESIDENCE" actualValue="5" weight=".488
+           " rank="5"/>
+           </Details>
+
+    100008 <Details algorithm="R Extensible" class="2">
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="never mar
+           ried" weight="1" rank="1"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight="1" rank="2"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight
+           =".997" rank="3"/>
+           <Attribute name="YRS_RESIDENCE" actualValue="5" weight=".764
+           " rank="4"/>
+           <Attribute name="AGE" actualValue="30" weight=".48" rank="5"
+
+   CUST_ID PRED_DET
+---------- ------------------------------------------------------------
+           />
+           </Details>
+
+    100009 <Details algorithm="R Extensible" class="2">
+           <Attribute name="YRS_RESIDENCE" actualValue="3" weight="1" r
+           ank="1"/>
+           <Attribute name="EDUCATION" actualValue="Bach." weight="1" r
+           ank="2"/>
+           <Attribute name="OCCUPATION" actualValue="Prof." weight=".99
+           7" rank="3"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight=".972" rank="4"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="1" weight=".933"
+           rank="5"/>
+           </Details>
+
+    100010 <Details algorithm="R Extensible" class="2">
+           <Attribute name="YRS_RESIDENCE" actualValue="3" weight="1" r
+           ank="1"/>
+           <Attribute name="CUST_INCOME_LEVEL" actualValue="L: 300,000
+           and above" weight="1" rank="2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" we
+           ight=".972" rank="3"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="1" weight=".933"
+           rank="4"/>
+           </Details>
+
+
+10行が選択されました。
+
+SQL> spool oml4sql-r-extensible-regression-tree

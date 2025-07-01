@@ -1,0 +1,836 @@
+SQL> @oml4sql-clustering-expectation-maximization
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Clustering - Expectation-Maximization Algorithm - dmemdemo.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET serveroutput ON
+SQL> SET trimspool ON
+SQL> SET pages 10000
+SQL> SET linesize 140
+SQL> SET echo ON
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SAMPLE PROBLEM
+SQL> -----------------------------------------------------------------------
+SQL> -- Segment the demographic data into 10 clusters and study the individual
+SQL> -- clusters.
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SET UP AND ANALYZE THE DATA
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- The data for this sample is composed from base tables in SH Schema
+SQL> -- (See Sample Schema Documentation) and presented through these views:
+SQL> -- mining_data_build_parallel_v (build data)
+SQL> -- mining_data_test_parallel_v  (test data)
+SQL> -- mining_data_apply_parallel_v (apply data)
+SQL> -- (See dmsh.sql for view definitions).
+SQL> --
+SQL>
+SQL> -----------
+SQL> -- ANALYSIS
+SQL> -----------
+SQL> -- For clustering using EM, perform the following on mining data.
+SQL> --
+SQL> -- 1. Use Data Auto Preparation
+SQL> --
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL> -- Cleanup old model with same name for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('EM_SH_Clus_sample');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------
+SQL> -- SPECIFY SETTINGS
+SQL> --
+SQL> -- K-Means is the default Clustering algorithm. For this sample,
+SQL> -- we skip specification of any overrides to defaults
+SQL> --
+SQL> -- Uncomment the appropriate sections of the code below for
+SQL> -- changing settings values.
+SQL> --
+SQL> ---------------------
+SQL> -- CREATE A NEW MODEL
+SQL> --
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    v_setlst('ALGO_NAME') := 'ALGO_EXPECTATION_MAXIMIZATION';
+  5    v_setlst('PREP_AUTO') := 'ON';
+  6    -- Other examples of overrides are:
+  7    -- v_setlst('EMCS_NUM_COMPONENTS')      := '15';
+  8    -- v_setlst('CLUS_NUM_CLUSTERS')        := '5';
+  9    -- v_setlst('EMCS_CLUSTER_COMP_ENABLE') := 'EMCS_CLUSTER_COMP_DISABLE';
+ 10    -- v_setlst('EMCS_ATTRIBUTE_FILTER')    := 'EMCS_ATTR_FILTER_DISABLE';
+ 11    -- v_setlst('EMCS_LINKAGE_FUNCTION')    := 'EMCS_LINKAGE_AVERAGE';
+ 12    -- v_setlst('EMCS_NUM_ITERATIONS')      := '200';
+ 13    -- v_setlst('EMCS_LOGLIKE_IMPROVEMENT') := '1e-10';
+ 14
+ 15    DBMS_DATA_MINING.CREATE_MODEL2(
+ 16      model_name          => 'EM_SH_Clus_sample',
+ 17      mining_function     => 'CLUSTERING',
+ 18      data_query          => 'select * from mining_data_build_parallel_v',
+ 19      set_list            => v_setlst,
+ 20      case_id_column_name => 'cust_id');
+ 21  END;
+ 22  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'EM_SH_CLUS_SAMPLE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_EXPECTATION_MAXIMIZATION
+CLUS_NUM_CLUSTERS              10
+EMCS_CLUSTER_COMPONENTS        EMCS_CLUSTER_COMP_ENABLE
+EMCS_CLUSTER_STATISTICS        EMCS_CLUS_STATS_ENABLE
+EMCS_CLUSTER_THRESH            2
+EMCS_LINKAGE_FUNCTION          EMCS_LINKAGE_SINGLE
+EMCS_LOGLIKE_IMPROVEMENT       .001
+EMCS_MAX_NUM_ATTR_2D           50
+EMCS_MIN_PCT_ATTR_SUPPORT      .1
+EMCS_MODEL_SEARCH              EMCS_MODEL_SEARCH_DISABLE
+EMCS_NUM_COMPONENTS            20
+EMCS_NUM_DISTRIBUTION          EMCS_NUM_DISTR_SYSTEM
+EMCS_NUM_EQUIWIDTH_BINS        11
+EMCS_NUM_ITERATIONS            100
+EMCS_NUM_PROJECTIONS           50
+EMCS_RANDOM_SEED               0
+EMCS_REMOVE_COMPONENTS         EMCS_REMOVE_COMPS_ENABLE
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+PREP_AUTO                      ON
+
+21行が選択されました。
+
+SQL>
+SQL> --------------------------
+SQL> -- DISPLAY MODEL SIGNATURE
+SQL> --
+SQL> column attribute_name format a40
+SQL> column attribute_type format a20
+SQL> SELECT attribute_name, attribute_type
+  2    FROM user_mining_model_attributes
+  3   WHERE model_name = 'EM_SH_CLUS_SAMPLE'
+  4  ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                           ATTRIBUTE_TYPE
+---------------------------------------- --------------------
+AFFINITY_CARD                            NUMERICAL
+AGE                                      NUMERICAL
+BOOKKEEPING_APPLICATION                  NUMERICAL
+BULK_PACK_DISKETTES                      NUMERICAL
+CUST_GENDER                              CATEGORICAL
+CUST_INCOME_LEVEL                        CATEGORICAL
+CUST_MARITAL_STATUS                      CATEGORICAL
+EDUCATION                                CATEGORICAL
+FLAT_PANEL_MONITOR                       NUMERICAL
+HOME_THEATER_PACKAGE                     NUMERICAL
+HOUSEHOLD_SIZE                           CATEGORICAL
+OCCUPATION                               CATEGORICAL
+YRS_RESIDENCE                            NUMERICAL
+Y_BOX_GAMES                              NUMERICAL
+
+14行が選択されました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL METADATA
+SQL> --
+SQL> column mining_function format a20
+SQL> column algorithm format a30
+SQL> SELECT mining_function, algorithm
+  2    FROM user_mining_models
+  3   WHERE model_name = 'EM_SH_CLUS_SAMPLE';
+
+MINING_FUNCTION      ALGORITHM
+-------------------- ------------------------------
+CLUSTERING           EXPECTATION_MAXIMIZATION
+
+1行が選択されました。
+
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY MODEL DETAILS
+SQL> --
+SQL>
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2    WHERE model_name='EM_SH_CLUS_SAMPLE'
+  3    ORDER BY view_name;
+
+VIEW_NAME                      VIEW_TYPE
+------------------------------ --------------------------------------------------
+DM$VAEM_SH_CLUS_SAMPLE         Clustering Attribute Statistics
+DM$VBEM_SH_CLUS_SAMPLE         Attribute Pair Kullback-Leibler Divergence
+DM$VDEM_SH_CLUS_SAMPLE         Clustering Description
+DM$VFEM_SH_CLUS_SAMPLE         Expectation Maximization Bernoulli parameters
+DM$VGEM_SH_CLUS_SAMPLE         Global Name-Value Pairs
+DM$VHEM_SH_CLUS_SAMPLE         Clustering Histograms
+DM$VIEM_SH_CLUS_SAMPLE         Unsupervised Attribute Importance
+DM$VMEM_SH_CLUS_SAMPLE         Expectation Maximization Gaussian parameters
+DM$VNEM_SH_CLUS_SAMPLE         Normalization and Missing Value Handling
+DM$VOEM_SH_CLUS_SAMPLE         Expectation Maximization Components
+DM$VPEM_SH_CLUS_SAMPLE         Expectation Maximization Projections
+DM$VREM_SH_CLUS_SAMPLE         Clustering Rules
+DM$VSEM_SH_CLUS_SAMPLE         Computed Settings
+DM$VWEM_SH_CLUS_SAMPLE         Model Build Alerts
+
+14行が選択されました。
+
+SQL>
+SQL> -- Attribute importance
+SQL> -- 2D attributes are ranked based on their interactions with other attributes.
+SQL> -- The ranking is based on the scaled pairwise Kullback-Leibler divergence.
+SQL> col attribute_name format a25
+SQL> col attribute_name_1 format a25
+SQL> col attribute_name_2 format a25
+SQL> col attribute_importance_value format 999.9999
+SQL> col dependency format 999.9999
+SQL>
+SQL> SELECT attribute_name, attribute_importance_value, attribute_rank
+  2  FROM DM$VIEM_SH_CLUS_sample ORDER BY attribute_rank;
+
+ATTRIBUTE_NAME            ATTRIBUTE_IMPORTANCE_VALUE ATTRIBUTE_RANK
+------------------------- -------------------------- --------------
+AGE                                            .4440              1
+HOME_THEATER_PACKAGE                           .4076              2
+Y_BOX_GAMES                                    .4026              3
+CUST_INCOME_LEVEL                              .3807              4
+FLAT_PANEL_MONITOR                             .3764              5
+BULK_PACK_DISKETTES                            .3391              6
+YRS_RESIDENCE                                  .2631              7
+HOUSEHOLD_SIZE                                 .2400              8
+CUST_MARITAL_STATUS                            .2102              9
+CUST_GENDER                                    .1685             10
+EDUCATION                                      .1479             11
+BOOKKEEPING_APPLICATION                        .1350             12
+AFFINITY_CARD                                  .1119             13
+OCCUPATION                                     .0673             14
+COUNTRY_NAME                                   .0160             15
+OS_DOC_SET_KANJI                               .0031             16
+PRINTER_SUPPLIES                               .0000             17
+
+17行が選択されました。
+
+SQL>
+SQL> SELECT * FROM (
+  2  SELECT attribute_name_1, attribute_name_2, dependency
+  3  FROM DM$VBEM_SH_CLUS_sample
+  4  WHERE attribute_name_1 < attribute_name_2 ORDER BY dependency desc)
+  5  WHERE ROWNUM < 11;
+
+ATTRIBUTE_NAME_1          ATTRIBUTE_NAME_2          DEPENDENCY
+------------------------- ------------------------- ----------
+CUST_INCOME_LEVEL         FLAT_PANEL_MONITOR             .8845
+AGE                       HOME_THEATER_PACKAGE           .8732
+AGE                       Y_BOX_GAMES                    .8644
+BULK_PACK_DISKETTES       CUST_INCOME_LEVEL              .7607
+BULK_PACK_DISKETTES       FLAT_PANEL_MONITOR             .7432
+HOME_THEATER_PACKAGE      YRS_RESIDENCE                  .5001
+HOME_THEATER_PACKAGE      Y_BOX_GAMES                    .4781
+CUST_GENDER               HOUSEHOLD_SIZE                 .4183
+CUST_MARITAL_STATUS       HOUSEHOLD_SIZE                 .4176
+BOOKKEEPING_APPLICATION   EDUCATION                      .4128
+
+10行が選択されました。
+
+SQL>
+SQL> -- Cluster details are best seen in pieces - based on the kind of
+SQL> -- associations and groupings that are needed to be observed.
+SQL> --
+SQL> -- CLUSTERS
+SQL> -- For each cluster_id, provides the number of records in the cluster,
+SQL> -- the parent cluster id, the level in the hierarchy, and dispersion -
+SQL> -- which is a measure of the quality of the cluster, and computationally,
+SQL> -- the sum of square errors.
+SQL> --
+SQL> SELECT cluster_id clu_id, record_count rec_cnt, parent, tree_level
+  2    FROM DM$VDEM_SH_CLUS_SAMPLE
+  3   ORDER BY cluster_id;
+
+    CLU_ID    REC_CNT     PARENT TREE_LEVEL
+---------- ---------- ---------- ----------
+         1       1500                     1
+         2       1183          1          2
+         3        317          1          2
+         4       1105          2          3
+         5         78          2          3
+         6       1092          4          4
+         7         13          4          4
+         8        915          6          5
+         9        177          6          5
+        10        143          9          6
+        11         34          9          6
+        12        483          8          6
+        13        432          8          6
+        14        447         12          7
+        15         36         12          7
+        16        236         14          8
+        17        211         14          8
+        18        141         13          7
+        19        291         13          7
+
+19行が選択されました。
+
+SQL>
+SQL> -- TAXONOMY
+SQL> --
+SQL> SELECT cluster_id, left_child_id, right_child_id
+  2    FROM DM$VDEM_SH_CLUS_SAMPLE
+  3  ORDER BY cluster_id;
+
+CLUSTER_ID LEFT_CHILD_ID RIGHT_CHILD_ID
+---------- ------------- --------------
+         1             2              3
+         2             4              5
+         3
+         4             6              7
+         5
+         6             8              9
+         7
+         8            12             13
+         9            10             11
+        10
+        11
+        12            14             15
+        13            18             19
+        14            16             17
+        15
+        16
+        17
+        18
+        19
+
+19行が選択されました。
+
+SQL>
+SQL> -- CENTROIDS FOR LEAF CLUSTERS
+SQL> -- For cluster_id 17, this output lists all the attributes that
+SQL> -- constitute the centroid, with the mean (for numericals) or
+SQL> -- mode (for categoricals), along with the variance from mean
+SQL> --
+SQL> column attribute_name format a20
+SQL> column attribute_subname format a20
+SQL> column mean format 9999999.999
+SQL> column variance format 9999999.999
+SQL> column lower_bin_boundary format 9999999.999
+SQL> column upper_bin_boundary format 9999999.999
+SQL> column attribute_value format a20
+SQL> column mode_value format a20
+SQL>
+SQL> SELECT cluster_id, attribute_name, attribute_subname, mean, variance,
+  2      mode_value
+  3  FROM DM$VAEM_SH_CLUS_SAMPLE
+  4  WHERE cluster_id = 17
+  5  ORDER BY attribute_name, attribute_subname;
+
+CLUSTER_ID ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME            MEAN     VARIANCE MODE_VALUE
+---------- -------------------- -------------------- ------------ ------------ --------------------
+        17 AFFINITY_CARD                                     .128         .112
+        17 AGE                                             36.882      110.495
+        17 BOOKKEEPING_APPLICAT                              .758         .184
+           ION
+
+        17 BULK_PACK_DISKETTES                              1.000         .000
+        17 CUST_GENDER                                                         F
+        17 CUST_INCOME_LEVEL                                                   J: 190,000 - 249,999
+        17 CUST_MARITAL_STATUS                                                 divorced
+        17 EDUCATION                                                           HS-grad
+        17 FLAT_PANEL_MONITOR                               1.000         .000
+        17 HOME_THEATER_PACKAGE                             1.000         .000
+        17 HOUSEHOLD_SIZE                                                      2
+        17 OCCUPATION                                                          'Other'
+        17 YRS_RESIDENCE                                    4.877        2.442
+        17 Y_BOX_GAMES                                       .000         .000
+
+14行が選択されました。
+
+SQL>
+SQL> -- HISTOGRAM FOR ATTRIBUTE OF A LEAF CLUSTER
+SQL> -- For cluster 17, provide the histogram for the AGE attribute.
+SQL> --
+SQL> SELECT cluster_id, attribute_name, attribute_subname,
+  2          bin_id, lower_bin_boundary, upper_bin_boundary, attribute_value, count
+  3  FROM DM$VHEM_SH_CLUS_SAMPLE
+  4  WHERE cluster_id = 17 AND attribute_name = 'AGE'
+  5  ORDER BY bin_id;
+
+CLUSTER_ID ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME        BIN_ID LOWER_BIN_BOUNDARY UPPER_BIN_BOUNDARY ATTRIBUTE_VALUE            COUNT
+---------- -------------------- -------------------- ---------- ------------------ ------------------ -------------------- -----------
+        17 AGE                                                1              6.000             13.300                                0
+        17 AGE                                                2             13.300             20.600                                0
+        17 AGE                                                3             20.600             27.900                               46
+        17 AGE                                                4             27.900             35.200                               67
+        17 AGE                                                5             35.200             42.500                               42
+        17 AGE                                                6             42.500             49.800                               29
+        17 AGE                                                7             49.800             57.100                               15
+        17 AGE                                                8             57.100             64.400                               10
+        17 AGE                                                9             64.400             71.700                                2
+        17 AGE                                               10             71.700             79.000                                0
+        17 AGE                                               11                                                                      0
+
+11行が選択されました。
+
+SQL>
+SQL> -- RULES FOR LEAF CLUSTERS
+SQL> -- A rule_id corresponds to the associated cluster_id. The support
+SQL> -- indicates the number of records (say M) that satisfies this rule.
+SQL> -- This is an upper bound on the  number of records that fall within
+SQL> -- the bounding box defined by the rule. Each predicate in the rule
+SQL> -- antecedent defines a range for an attribute, and it can be
+SQL> -- interpreted as the side of a bounding box which envelops most of
+SQL> -- the data in the cluster.
+SQL> -- Confidence = M/N, where N is the number of records in the cluster
+SQL> -- and M is the rule support defined as above.
+SQL> --
+SQL> column numeric_value format 999999.999
+SQL> column confidence format 999999.999
+SQL> column rule_confidence format 999999.999
+SQL> column support format 9999
+SQL> column rule_support format 9999
+SQL> column operator format a2
+SQL>
+SQL> SELECT distinct cluster_id, rule_support, rule_confidence
+  2  FROM DM$VREM_SH_CLUS_SAMPLE ORDER BY cluster_id;
+
+CLUSTER_ID RULE_SUPPORT RULE_CONFIDENCE
+---------- ------------ ---------------
+         1         1280            .853
+         2          918            .776
+         3          275            .868
+         4          841            .761
+         5           62            .795
+         6          838            .767
+         7           10            .769
+         8          817            .893
+         9          153            .864
+        10          120            .839
+        11           27            .794
+        12          429            .888
+        13          362            .838
+        14          394            .881
+        15           33            .917
+        16          211            .894
+        17          160            .758
+        18          123            .872
+        19          251            .863
+
+19行が選択されました。
+
+SQL>
+SQL> -- RULE DETAILS FOR LEAF CLUSTERS
+SQL> -- Attribute level details of each rule/cluster id.
+SQL> -- For an attribute, support (say M) indicates the number of records that
+SQL> -- fall in the attribute range specified in the rule antecedent where the
+SQL> -- given attribute is not null. Confidence is a number between 0 and 1
+SQL> -- that indicates how relevant this attribute is in distinguishing the
+SQL> -- the records in the cluster from all the records in the whole data. The
+SQL> -- larger the number, more relevant the attribute.
+SQL> --
+SQL> -- The query shown below reverse-transforms the data to its original
+SQL> -- values, since build data was normalized.
+SQL> --
+SQL> SELECT cluster_id, attribute_name, attribute_subname, operator,
+  2          numeric_value, attribute_value, support, confidence
+  3  FROM DM$VREM_SH_CLUS_SAMPLE
+  4  WHERE cluster_id < 3
+  5  ORDER BY cluster_id, attribute_name, attribute_subname, operator,
+  6    numeric_value, attribute_value;
+
+CLUSTER_ID ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME    OP NUMERIC_VALUE ATTRIBUTE_VALUE      SUPPORT  CONFIDENCE
+---------- -------------------- -------------------- -- ------------- -------------------- ------- -----------
+         1 AFFINITY_CARD                             <=         1.000                         1500        .000
+         1 AFFINITY_CARD                             >=          .000                         1500        .000
+         1 AGE                                       <=        49.800                         1386        .400
+         1 AGE                                       >=         6.000                         1386        .400
+         1 BOOKKEEPING_APPLICAT                      <=         1.000                         1321        .500
+           ION
+
+         1 BOOKKEEPING_APPLICAT                      >           .000                         1321        .500
+           ION
+
+         1 BULK_PACK_DISKETTES                       <=         1.000                         1500        .000
+         1 BULK_PACK_DISKETTES                       >=          .000                         1500        .000
+         1 CUST_GENDER                               IN               F                       1500        .000
+         1 CUST_GENDER                               IN               M                       1500        .000
+         1 CUST_INCOME_LEVEL                         IN               'Other'                 1500        .000
+         1 CUST_INCOME_LEVEL                         IN               E: 90,000 - 109,999     1500        .000
+         1 CUST_INCOME_LEVEL                         IN               F: 110,000 - 129,999    1500        .000
+         1 CUST_INCOME_LEVEL                         IN               G: 130,000 - 149,999    1500        .000
+         1 CUST_INCOME_LEVEL                         IN               I: 170,000 - 189,999    1500        .000
+         1 CUST_INCOME_LEVEL                         IN               J: 190,000 - 249,999    1500        .000
+         1 CUST_INCOME_LEVEL                         IN               K: 250,000 - 299,999    1500        .000
+         1 CUST_INCOME_LEVEL                         IN               L: 300,000 and above    1500        .000
+         1 CUST_MARITAL_STATUS                       IN               divorced                1384        .500
+         1 CUST_MARITAL_STATUS                       IN               married                 1384        .500
+         1 CUST_MARITAL_STATUS                       IN               never married           1384        .500
+         1 EDUCATION                                 IN               'Other'                 1280        .500
+         1 EDUCATION                                 IN               < Bach.                 1280        .500
+         1 EDUCATION                                 IN               Bach.                   1280        .500
+         1 EDUCATION                                 IN               HS-grad                 1280        .500
+         1 FLAT_PANEL_MONITOR                        <=         1.000                         1500        .000
+         1 FLAT_PANEL_MONITOR                        >=          .000                         1500        .000
+         1 HOME_THEATER_PACKAGE                      <=         1.000                         1500        .000
+         1 HOME_THEATER_PACKAGE                      >=          .000                         1500        .000
+         1 HOUSEHOLD_SIZE                            IN               1                       1381        .333
+         1 HOUSEHOLD_SIZE                            IN               2                       1381        .333
+         1 HOUSEHOLD_SIZE                            IN               3                       1381        .333
+         1 HOUSEHOLD_SIZE                            IN               9+                      1381        .333
+         1 OCCUPATION                                IN               'Other'                 1500        .000
+         1 OCCUPATION                                IN               Cleric.                 1500        .000
+         1 OCCUPATION                                IN               Crafts                  1500        .000
+         1 OCCUPATION                                IN               Exec.                   1500        .000
+         1 OCCUPATION                                IN               Machine                 1500        .000
+         1 OCCUPATION                                IN               Other                   1500        .000
+         1 OCCUPATION                                IN               Prof.                   1500        .000
+         1 OCCUPATION                                IN               Sales                   1500        .000
+         1 YRS_RESIDENCE                             <=         8.400                         1465        .400
+         1 YRS_RESIDENCE                             >=          .000                         1465        .400
+         1 Y_BOX_GAMES                               <=         1.000                         1500        .000
+         1 Y_BOX_GAMES                               >=          .000                         1500        .000
+         2 AFFINITY_CARD                             <=         1.000                         1183        .001
+         2 AFFINITY_CARD                             >=          .000                         1183        .001
+         2 AGE                                       <=        57.100                         1139        .008
+         2 AGE                                       >=         6.000                         1139        .008
+         2 BOOKKEEPING_APPLICAT                      <=         1.000                         1046        .000
+           ION
+
+         2 BOOKKEEPING_APPLICAT                      >           .000                         1046        .000
+           ION
+
+         2 BULK_PACK_DISKETTES                       <=         1.000                         1183        .000
+         2 BULK_PACK_DISKETTES                       >=          .000                         1183        .000
+         2 CUST_GENDER                               IN               F                       1183        .000
+         2 CUST_GENDER                               IN               M                       1183        .000
+         2 CUST_INCOME_LEVEL                         IN               'Other'                 1183        .000
+         2 CUST_INCOME_LEVEL                         IN               E: 90,000 - 109,999     1183        .000
+         2 CUST_INCOME_LEVEL                         IN               F: 110,000 - 129,999    1183        .000
+         2 CUST_INCOME_LEVEL                         IN               G: 130,000 - 149,999    1183        .000
+         2 CUST_INCOME_LEVEL                         IN               I: 170,000 - 189,999    1183        .000
+         2 CUST_INCOME_LEVEL                         IN               J: 190,000 - 249,999    1183        .000
+         2 CUST_INCOME_LEVEL                         IN               K: 250,000 - 299,999    1183        .000
+         2 CUST_INCOME_LEVEL                         IN               L: 300,000 and above    1183        .000
+         2 CUST_MARITAL_STATUS                       IN               divorced                1090        .000
+         2 CUST_MARITAL_STATUS                       IN               married                 1090        .000
+         2 CUST_MARITAL_STATUS                       IN               never married           1090        .000
+         2 EDUCATION                                 IN               'Other'                  995        .000
+         2 EDUCATION                                 IN               < Bach.                  995        .000
+         2 EDUCATION                                 IN               Bach.                    995        .000
+         2 EDUCATION                                 IN               HS-grad                  995        .000
+         2 FLAT_PANEL_MONITOR                        <=         1.000                         1183        .000
+         2 FLAT_PANEL_MONITOR                        >=          .000                         1183        .000
+         2 HOME_THEATER_PACKAGE                      <=         1.000                         1183        .015
+         2 HOME_THEATER_PACKAGE                      >=          .000                         1183        .015
+         2 HOUSEHOLD_SIZE                            IN               1                       1096        .000
+         2 HOUSEHOLD_SIZE                            IN               2                       1096        .000
+         2 HOUSEHOLD_SIZE                            IN               3                       1096        .000
+         2 HOUSEHOLD_SIZE                            IN               9+                      1096        .000
+         2 OCCUPATION                                IN               'Other'                 1183        .000
+         2 OCCUPATION                                IN               Cleric.                 1183        .000
+         2 OCCUPATION                                IN               Crafts                  1183        .000
+         2 OCCUPATION                                IN               Exec.                   1183        .000
+         2 OCCUPATION                                IN               Machine                 1183        .000
+         2 OCCUPATION                                IN               Other                   1183        .000
+         2 OCCUPATION                                IN               Prof.                   1183        .000
+         2 OCCUPATION                                IN               Sales                   1183        .000
+         2 YRS_RESIDENCE                             <=         8.400                         1148        .006
+         2 YRS_RESIDENCE                             >=          .000                         1148        .006
+         2 Y_BOX_GAMES                               <=          .000                          918        .004
+         2 Y_BOX_GAMES                               >=          .000                          918        .004
+
+90行が選択されました。
+
+SQL>
+SQL> -- Global EM model statistics
+SQL> -- This view shows high-level model statistics, including
+SQL> -- number of components, number of clusters, and log likelihood value
+SQL> column numeric_value format 9999999.999
+SQL> column string_value format a20
+SQL> select name, numeric_value, string_value from DM$VGEM_SH_CLUS_SAMPLE
+  2  ORDER BY name;
+
+NAME                           NUMERIC_VALUE STRING_VALUE
+------------------------------ ------------- --------------------
+CONVERGED                                    YES
+LOGLIKELIHOOD                         -9.109
+NUM_CLUSTERS                          10.000
+NUM_COMPONENTS                        18.000
+NUM_ROWS                            1500.000
+RANDOM_SEED                             .000
+REMOVED_COMPONENTS                     2.000
+
+7行が選択されました。
+
+SQL>
+SQL> -- EM component details
+SQL> -- Component priors and mapping to leaf clusters view
+SQL> col prior_probability format 9.999
+SQL> select component_id, cluster_id, prior_probability
+  2  from DM$VOEM_SH_CLUS_SAMPLE
+  3  ORDER BY component_id;
+
+COMPONENT_ID CLUSTER_ID PRIOR_PROBABILITY
+------------ ---------- -----------------
+           1         16              .064
+           2         16              .094
+           3         15              .025
+           4          5              .048
+           5          3              .203
+           6         17              .055
+           7         17              .033
+           8         18              .036
+           9         19              .072
+          10         17              .055
+          11         10              .096
+          12         19              .017
+          13         19              .058
+          14         18              .061
+          15         19              .032
+          16         11              .024
+          17         19              .018
+          18          7              .009
+
+18行が選択されました。
+
+SQL>
+SQL> -- Means and variances for attributes modeled with Gaussian distributions
+SQL> column attribute_name format a25
+SQL> select component_id, attribute_name, mean, variance
+  2  from DM$VMEM_SH_CLUS_sample
+  3  WHERE component_id = 11
+  4  ORDER BY attribute_name;
+
+COMPONENT_ID ATTRIBUTE_NAME                    MEAN     VARIANCE
+------------ ------------------------- ------------ ------------
+          11 AGE                             10.098        5.987
+          11 YRS_RESIDENCE                    1.642         .359
+
+2行が選択されました。
+
+SQL>
+SQL> -- Frequences for attributes modeled with multivalued Bernoulli
+SQL> -- distributions
+SQL> column attribute_value format a15
+SQL> column frequency format 9999999.999
+SQL> select component_id, attribute_name, attribute_value, frequency
+  2  from DM$VFEM_SH_CLUS_SAMPLE
+  3  WHERE component_id=11
+  4  ORDER BY attribute_name, attribute_value;
+
+COMPONENT_ID ATTRIBUTE_NAME            ATTRIBUTE_VALUE    FREQUENCY
+------------ ------------------------- --------------- ------------
+          11 AFFINITY_CARD             (0 : 0]                 .999
+          11 AFFINITY_CARD             (0 : 1]                 .001
+          11 AFFINITY_CARD                                     .001
+          11 BOOKKEEPING_APPLICATION   (0 : 0]                 .175
+          11 BOOKKEEPING_APPLICATION   (0 : 1]                 .825
+          11 BOOKKEEPING_APPLICATION                           .001
+          11 BULK_PACK_DISKETTES       (0 : 0]                 .001
+          11 BULK_PACK_DISKETTES       (0 : 1]                 .999
+          11 BULK_PACK_DISKETTES                               .001
+          11 CUST_GENDER               'Other'                 .001
+          11 CUST_GENDER               F                       .458
+          11 CUST_GENDER               M                       .541
+          11 CUST_INCOME_LEVEL         'Other'                 .028
+          11 CUST_INCOME_LEVEL         E: 90,000 - 109         .001
+                                       ,999
+
+          11 CUST_INCOME_LEVEL         F: 110,000 - 12         .001
+                                       9,999
+
+          11 CUST_INCOME_LEVEL         G: 130,000 - 14         .001
+                                       9,999
+
+          11 CUST_INCOME_LEVEL         I: 170,000 - 18         .202
+                                       9,999
+
+          11 CUST_INCOME_LEVEL         J: 190,000 - 24         .384
+                                       9,999
+
+          11 CUST_INCOME_LEVEL         K: 250,000 - 29         .129
+                                       9,999
+
+          11 CUST_INCOME_LEVEL         L: 300,000 and          .256
+                                       above
+
+          11 CUST_MARITAL_STATUS       'Other'                 .001
+          11 CUST_MARITAL_STATUS       divorced                .028
+          11 CUST_MARITAL_STATUS       married                 .010
+          11 CUST_MARITAL_STATUS       never married           .951
+          11 CUST_MARITAL_STATUS       separated               .001
+          11 CUST_MARITAL_STATUS       widowed                 .001
+          11 CUST_MARITAL_STATUS                               .010
+          11 EDUCATION                 'Other'                 .110
+          11 EDUCATION                 10th                    .064
+          11 EDUCATION                 < Bach.                 .403
+          11 EDUCATION                 Assoc-A                 .019
+          11 EDUCATION                 Assoc-V                 .046
+          11 EDUCATION                 Bach.                   .064
+          11 EDUCATION                 HS-grad                 .293
+          11 EDUCATION                 Masters                 .001
+          11 FLAT_PANEL_MONITOR        (0 : 0]                 .001
+          11 FLAT_PANEL_MONITOR        (0 : 1]                 .999
+          11 FLAT_PANEL_MONITOR                                .001
+          11 HOME_THEATER_PACKAGE      (0 : 0]                 .999
+          11 HOME_THEATER_PACKAGE      (0 : 1]                 .001
+          11 HOME_THEATER_PACKAGE                              .001
+          11 HOUSEHOLD_SIZE            'Other'                 .001
+          11 HOUSEHOLD_SIZE            1                       .659
+          11 HOUSEHOLD_SIZE            2                       .247
+          11 HOUSEHOLD_SIZE            3                       .001
+          11 HOUSEHOLD_SIZE            4-5                     .001
+          11 HOUSEHOLD_SIZE            6-8                     .046
+          11 HOUSEHOLD_SIZE            9+                      .046
+          11 OCCUPATION                'Other'                 .311
+          11 OCCUPATION                Cleric.                 .165
+          11 OCCUPATION                Crafts                  .074
+          11 OCCUPATION                Exec.                   .019
+          11 OCCUPATION                Machine                 .019
+          11 OCCUPATION                Other                   .238
+          11 OCCUPATION                Prof.                   .064
+          11 OCCUPATION                Sales                   .110
+          11 Y_BOX_GAMES               (0 : 0]                 .001
+          11 Y_BOX_GAMES               (0 : 1]                 .999
+          11 Y_BOX_GAMES                                       .001
+
+59行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               TEST THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- There is no specific set of testing parameters for Clustering.
+SQL> -- Examination and analysis of clusters is the main method to prove
+SQL> -- the efficacy of a clustering model.
+SQL> --
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               APPLY THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL> -- For a descriptive mining function like Clustering, "Scoring" involves
+SQL> -- providing the probability values for each cluster.
+SQL>
+SQL> -------------------------------------------------
+SQL> -- SCORE NEW DATA USING SQL DATA MINING FUNCTIONS
+SQL> --
+SQL> ------------------
+SQL> -- BUSINESS CASE 1
+SQL> -- List the clusters into which the customers in this
+SQL> -- given dataset have been grouped.
+SQL> --
+SQL> SELECT CLUSTER_ID(em_sh_clus_sample USING *) AS clus, COUNT(*) AS cnt
+  2    FROM mining_data_apply_parallel_v
+  3  GROUP BY CLUSTER_ID(em_sh_clus_sample USING *)
+  4  ORDER BY cnt DESC;
+
+      CLUS        CNT
+---------- ----------
+         3        294
+        19        261
+        17        233
+        16        223
+        10        161
+        18        148
+         5        114
+        15         36
+        11         25
+         7          5
+
+10行が選択されました。
+
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 2
+SQL> -- List ten most representative (based on likelihood) customers of cluster 7
+SQL> --
+SQL> SELECT cust_id
+  2  FROM (SELECT cust_id, rank() over (order by prob desc, cust_id) rnk_clus2
+  3    FROM (SELECT cust_id,
+  4            round(CLUSTER_PROBABILITY(em_sh_clus_sample, 7 USING *),3) prob
+  5            FROM mining_data_apply_parallel_v))
+  6  WHERE rnk_clus2 <= 10
+  7  order by rnk_clus2;
+
+   CUST_ID
+----------
+    100356
+    100361
+    100571
+    100727
+    100055
+    100610
+    101456
+    100291
+    101271
+    101188
+
+10行が選択されました。
+
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 3
+SQL> -- List the five most relevant attributes for likely cluster assignments
+SQL> -- for customer id 100955 (> 20% likelihood of assignment).
+SQL> --
+SQL> column prob format 9.9999
+SQL> set long 10000
+SQL> SELECT S.cluster_id, probability prob,
+  2         CLUSTER_DETAILS(em_sh_clus_sample, S.cluster_id, 5 using T.*) det
+  3  FROM
+  4    (SELECT v.*, CLUSTER_SET(em_sh_clus_sample, NULL, 0.2 USING *) pset
+  5      FROM mining_data_apply_parallel_v v
+  6     WHERE cust_id = 100955) T,
+  7    TABLE(T.pset) S
+  8  order by 2 desc;
+
+CLUSTER_ID PROB DET
+---------- ---- --------------------------------------------------------------------------------
+        19 .7489 <Details algorithm="Expectation Maximization" cluster="19">
+                <Attribute name="AGE" actualValue="40" weight=".749" rank="1"/>
+                <Attribute name="CUST_MARITAL_STATUS" actualValue="married" weight=".704" rank="
+                2"/>
+                <Attribute name="EDUCATION" actualValue="HS-grad" weight=".544" rank="3"/>
+                <Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight=".416" rank="4"/>
+                <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".36" rank="5"/>
+                </Details>
+
+         3 .2502 <Details algorithm="Expectation Maximization" cluster="3">
+                <Attribute name="YRS_RESIDENCE" actualValue="3" weight=".25" rank="1"/>
+                <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".237" rank="2"/>
+                <Attribute name="AFFINITY_CARD" actualValue="0" weight=".172" rank="3"/>
+                <Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight=".141" rank="4"/>
+                <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".134" rank="5"
+                />
+                </Details>
+
+
+2行が選択されました。
+
+SQL> spool oml4sql-clustering-kmeans-star-schema

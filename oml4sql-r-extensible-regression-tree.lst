@@ -1,0 +1,571 @@
+SQL> @oml4sql-r-extensible-regression-tree
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   OML R Extensible - Regression Tree Algorithm - dmrdtdemo.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET ECHO ON
+SQL> SET FEEDBACK 1
+SQL> SET NUMWIDTH 10
+SQL> SET LINESIZE 80
+SQL> SET TRIMSPOOL ON
+SQL> SET TAB OFF
+SQL> SET PAGESIZE 100
+SQL> SET LONG 10000
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                         REGRESSION TREE DEMO
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explaination:
+SQL> -- This demo shows how to implement the regression tree algorithm in Oracle Data
+SQL> -- Mining using R rpart algorithm
+SQL>
+SQL> BEGIN
+  2   sys.rqScriptDrop('DT_RDEMO_BUILD_REGRESSION', v_silent => TRUE);
+  3   sys.rqScriptDrop('DT_RDEMO_SCORE_REGRESSION', v_silent => TRUE);
+  4   sys.rqScriptDrop('DT_RDEMO_DETAILS_REGRESSION', v_silent => TRUE);
+  5   sys.rqScriptDrop('DT_RDEMO_WEIGHT_REGRESSION', v_silent => TRUE);
+  6  END;
+  7  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('DT_RDEMO_REGRESSION');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> BEGIN
+  2  -- Build R Function -----------------------------------------------------------
+  3  -- Explanation:
+  4  -- User can define their own R script function to build the model they want.
+  5  -- For example, here a script named DT_RDEMO_BUILD_REGRESSION is defined. This
+  6  -- function builds and returns a regression tree model using R rpart algorithm.
+  7  -- User can also choose other R algorithm to implement the regression tree
+  8  -- algorithm.
+  9
+ 10    sys.rqScriptCreate('DT_RDEMO_BUILD_REGRESSION', 'function(dat) {
+ 11     require(rpart);
+ 12     set.seed(1234);
+ 13     mod <- rpart(AGE ~ ., data=dat, method="anova");
+ 14     mod}');
+ 15
+ 16  -- Score R Function -----------------------------------------------------------
+ 17  -- Explanation:
+ 18  -- User can define their own R script function to do the scoring using the built
+ 19  -- model. For example, here a script named DT_RDEMO_SCORE_REGRESSION is defined.
+ 20  -- This function creates and returns an R data.frame containing the target
+ 21  -- predictions using vector type. User can also define other prediction function
+ 22  -- with different types.
+ 23
+ 24    sys.rqScriptCreate('DT_RDEMO_SCORE_REGRESSION', 'function(mod, dat) {
+ 25     require(rpart);
+ 26     res <- predict(mod, newdata=dat, type = "vector");
+ 27     data.frame(res)}');
+ 28
+ 29  -- Detail R Function ----------------------------------------------------------
+ 30  -- Explanation:
+ 31  -- User can define their own R script function to show the model details they
+ 32  -- want to display. For example, here a script named DT_RDEMO_DETAILS_REGRESSION
+ 33  -- is defined. This function creates and returns an R data.frame containing the
+ 34  -- split attributes, node counts, weights, deviation and mean of the built model.
+ 35  -- User can also display other details.
+ 36
+ 37    sys.rqScriptCreate('DT_RDEMO_DETAILS_REGRESSION', 'function(object, x) {
+ 38     mod.frm <- object$frame
+ 39     data.frame(node = row.names(mod.frm), split = mod.frm$var, n = mod.frm$n,
+ 40     wt = mod.frm$wt, dev = mod.frm$dev, yval = mod.frm$yval)}');
+ 41  END;
+ 42  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL BUILD
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Build the model using the R script user defined. Here R script
+SQL> -- DT_RDEMO_BUILD_REGRESSION will be used to create the regression tree model
+SQL> -- DT_RDEMO_REGRESSION using dataset mining_data_build_v.
+SQL>
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- Model Settings -----------------------------------------------------------
+  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  6    v_setlst('RALG_BUILD_FUNCTION')   := 'DT_RDEMO_BUILD_REGRESSION';
+  7    v_setlst('RALG_SCORE_FUNCTION')   := 'DT_RDEMO_SCORE_REGRESSION';
+  8    v_setlst('RALG_DETAILS_FUNCTION') := 'DT_RDEMO_DETAILS_REGRESSION';
+  9
+ 10    -- Once this setting is specified, a model view will be created. This model
+ 11    -- view will be generated to display the model details, which contains the
+ 12    -- split attributes, node counts, weights, deviation and mean of the built model
+ 13
+ 14    v_setlst('RALG_DETAILS_FORMAT') :=
+ 15      'select cast(''a'' as varchar2(20)) node, ' ||
+ 16      'cast(''a'' as varchar2(20)) split, ' ||
+ 17      '1 NodeCnt, 1 wt, 1 deviation, 1 mean from dual';
+ 18
+ 19    DBMS_DATA_MINING.CREATE_MODEL2(
+ 20      model_name          => 'DT_RDEMO_REGRESSION',
+ 21      mining_function     => 'REGRESSION',
+ 22      data_query          => 'select * from mining_data_build_v',
+ 23      case_id_column_name => 'CUST_ID',
+ 24      target_column_name  => 'AGE',
+ 25      set_list            => v_setlst);
+ 26  END;
+ 27  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL DETAIL
+SQL> -------------------------------------------------------------------------------
+SQL> -- Display the details of the built model using the R script user defined.
+SQL> -- Here R script DT_RDEMO_DETAIL_REGRESSION will be used to display the model
+SQL> -- details.
+SQL>
+SQL> column SPLIT format a12
+SQL> select to_number(node) as node, split, NodeCnt, wt,
+  2  round(deviation, 3) as deviation, round(mean, 3) as mean
+  3  from DM$VDDT_RDEMO_REGRESSION
+  4  order by node, split;
+
+      NODE SPLIT           NODECNT         WT  DEVIATION         MEAN
+---------- ------------ ---------- ---------- ---------- ------------
+         1 HOME_THEATER       1500       1500 278740.504       27.892
+           _PACKAGE
+
+         2 Y_BOX_GAMES         637        637  16194.923       15.418
+         3 YRS_RESIDENC        863        863   90255.43       37.100
+           E
+
+         4 YRS_RESIDENC        430        430   5472.719       12.626
+           E
+
+         5 <leaf>              207        207    407.217       21.217
+         6 CUST_MARITAL        575        575  48530.515       34.308
+           _STATUS
+
+         7 <leaf>              288        288  28295.319       42.674
+         8 <leaf>              236        236   1603.797       10.186
+         9 <leaf>              194        194     756.83       15.593
+        12 OCCUPATION          551        551  38961.405       33.637
+        13 <leaf>               24         24   3628.958       49.708
+        24 <leaf>              519        519  28534.674       32.975
+        25 HOUSEHOLD_SI         32         32     6509.5       44.375
+           ZE
+
+        50 <leaf>               16         16    964.938       34.063
+        51 <leaf>               16         16   2141.438       54.688
+
+15行が選択されました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL SCORE
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Score the model using the R script user defined. Here R script
+SQL> -- DT_RDEMO_SCORE_REGRESSION will be used to do the scoring. Actual target value
+SQL> -- and predicted target values are provided.
+SQL>
+SQL> -- PREDICTION/PREDICTION_PROBABILITY ------------------------------------------
+SQL> SELECT CUST_ID, AGE as AGE_act, round(PREDICTION(DT_RDEMO_REGRESSION USING *),3)
+  2   AGE_pred FROM mining_data_apply_v where CUST_ID <= 100010
+  3  order by CUST_ID;
+
+   CUST_ID    AGE_ACT   AGE_PRED
+---------- ---------- ----------
+    100001         51     49.708
+    100002         30     32.975
+    100003         23     21.217
+    100004         39     32.975
+    100005         35     32.975
+    100006          9     10.186
+    100007         29     32.975
+    100008         30     32.975
+    100009         18     15.593
+    100010         17     15.593
+
+10行が選択されました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                        CLASSIFICATION TREE DEMO
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explaination:
+SQL> -- This demo shows how to implement the classification tree algorithm in Oracle
+SQL> -- Data Mining using R rpart algorithm
+SQL>
+SQL> Begin
+  2    sys.rqScriptDrop('DT_RDEMO_BUILD_CLASSIFICATION', v_silent => TRUE);
+  3    sys.rqScriptDrop('DT_RDEMO_SCORE_CLASSIFICATION', v_silent => TRUE);
+  4    sys.rqScriptDrop('DT_RDEMO_DETAILS_CLASSIFICATION', v_silent => TRUE);
+  5    sys.rqScriptDrop('DT_RDEMO_WEIGHT_CLASSIFICATION', v_silent => TRUE);
+  6  End;
+  7  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('DT_RDEMO_CLASSIFICATION');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> BEGIN
+  2  -- Build R Function -----------------------------------------------------------
+  3  -- Explanation:
+  4  -- User can define their own R script function to build the model they want.
+  5  -- For example, here a script named DT_RDEMO_BUILD_CLASSIFICATION is defined.
+  6  -- This function builds and returns a classification tree model using R rpart
+  7  -- algorithm. User can also choose other R algorithm to implement the
+  8  -- classification tree algorithm.
+  9
+ 10    sys.rqScriptCreate('DT_RDEMO_BUILD_CLASSIFICATION', 'function(dat) {
+ 11     require(rpart);
+ 12     set.seed(1234);
+ 13     mod <- rpart(AFFINITY_CARD ~ ., method="class", data=dat);
+ 14     mod}');
+ 15
+ 16  -- Score R Function -----------------------------------------------------------
+ 17  -- Explanation:
+ 18  -- User can define their own R script function to do the scoring using the built
+ 19  -- model. For example, here a script named DT_RDEMO_SCORE_CLASSIFICATION is
+ 20  -- defined. This function creates and returns an R data.frame containing the
+ 21  -- target predictions using prob type. User can also define other prediction
+ 22  -- function with different types.
+ 23
+ 24    sys.rqScriptCreate('DT_RDEMO_SCORE_CLASSIFICATION', 'function(mod, dat) {
+ 25     require(rpart);
+ 26     res <- data.frame(predict(mod, newdata=dat, type = "prob"));
+ 27     names(res) <- c("0", "1");
+ 28     res}');
+ 29
+ 30  -- Detail R Function ----------------------------------------------------------
+ 31  -- Explanation:
+ 32  -- User can define their own R script function to show the model details they
+ 33  -- want to display. For example, here a script named
+ 34  -- DT_RDEMO_DETAILS_CLASSIFICATION is defined. This function creates and
+ 35  -- returns an R data.frame containing the split attributes, node counts, left
+ 36  -- node counts, right node counts of the built model. User can also display
+ 37  -- other details.
+ 38
+ 39    sys.rqScriptCreate('DT_RDEMO_DETAILS_CLASSIFICATION', 'function(object, x) {
+ 40     mod.frm <- object$frame
+ 41     data.frame(node = row.names(mod.frm), split = mod.frm$var, n = mod.frm$n,
+ 42     ln = mod.frm$yval2[,2], rn = mod.frm$yval2[,3])}');
+ 43
+ 44  -- Weight R Function ----------------------------------------------------------
+ 45  -- Explanation:
+ 46  -- User can define their own R script function to provide attribute relative
+ 47  -- contribution to the prediction. For example, here a script named
+ 48  -- DT_RDEMO_WEIGHT_CLASSIFICATION is defined. This function creates and returns
+ 49  -- an R data.frame containing the contribution weight of each attribute to the
+ 50  -- prediction probability of the specified class. Here we simply use the ratio
+ 51  -- of the predicted target probability with all attribute values present to the
+ 52  -- predicted target probability with one attribute value missing as the weight
+ 53  -- of the missing attribute for the specified class. User can define their own
+ 54  -- method to calculate the attribute weight.
+ 55
+ 56    sys.rqScriptCreate('DT_RDEMO_WEIGHT_CLASSIFICATION', 'function(mod, dat, clas) {
+ 57     require(rpart);
+ 58
+ 59     v0 <- as.data.frame(predict(mod, newdata=dat, type = "prob"));
+ 60     res <- data.frame(lapply(seq_along(dat),
+ 61     function(x, dat) {
+ 62     if(is.numeric(dat[[x]])) dat[,x] <- as.numeric(NA)
+ 63     else dat[,x] <- as.factor(NA);
+ 64     vv <- as.data.frame(predict(mod, newdata = dat, type = "prob"));
+ 65     v0[[clas]] / vv[[clas]]}, dat = dat));
+ 66     names(res) <- names(dat);
+ 67     res}');
+ 68  END;
+ 69  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL BUILD
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Build the model using the R script user defined. Here R script
+SQL> -- DT_RDEMO_BUILD_CLASSIFICATION will be used to create the classification tree
+SQL> -- model DT_RDEMO_CLASSIFICATION using dataset mining_data_build_v.
+SQL>
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- Model Settings -------------------------------------------------------------
+  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  6    v_setlst('RALG_BUILD_FUNCTION')   := 'DT_RDEMO_BUILD_CLASSIFICATION';
+  7    v_setlst('RALG_SCORE_FUNCTION')   := 'DT_RDEMO_SCORE_CLASSIFICATION';
+  8    v_setlst('RALG_DETAILS_FUNCTION') := 'DT_RDEMO_DETAILS_CLASSIFICATION';
+  9    v_setlst('RALG_WEIGHT_FUNCTION')  := 'DT_RDEMO_WEIGHT_CLASSIFICATION';
+ 10
+ 11    -- Once this setting is specified, a model view will be created. This model
+ 12    -- view will be generated to display the model details, which contains the
+ 13    -- split attributes, node counts, left node counts, right node counts of
+ 14    -- the built model
+ 15
+ 16    v_setlst('RALG_DETAILS_FORMAT') :=
+ 17      'select cast(''a'' as varchar2(20)) node, ' ||
+ 18      'cast(''a'' as varchar2(20)) split, ' ||
+ 19      '1 NodeCnt, 1 LeftNodeCnt, 1 RightNodeCnt from dual';
+ 20
+ 21    DBMS_DATA_MINING.CREATE_MODEL2(
+ 22      model_name          => 'DT_RDEMO_CLASSIFICATION',
+ 23      mining_function     => 'CLASSIFICATION',
+ 24      data_query          => 'select * from mining_data_build_v',
+ 25      case_id_column_name => 'CUST_ID',
+ 26      target_column_name  => 'AFFINITY_CARD',
+ 27      set_list            => v_setlst);
+ 28  END;
+ 29  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL DETAIL
+SQL> -------------------------------------------------------------------------------
+SQL> -- Display the details of the built model using the R script user defined.
+SQL> -- Here R script DT_RDEMO_DETAIL_CLASSIFICATION will be used to display the model
+SQL> -- details.
+SQL>
+SQL> column SPLIT format a12
+SQL> select to_number(node) as node, split, nodecnt, leftnodecnt, rightnodecnt
+  2  from DM$VDDT_RDEMO_CLASSIFICATION
+  3  order by node, split;
+
+      NODE SPLIT           NODECNT LEFTNODECNT RIGHTNODECNT
+---------- ------------ ---------- ----------- ------------
+         1 HOUSEHOLD_SI       1500        1120          380
+           ZE
+
+         2 <leaf>              794         743           51
+         3 EDUCATION           706         377          329
+         6 OCCUPATION          463         313          150
+         7 COUNTRY_NAME        243          64          179
+        12 <leaf>              346         260           86
+        13 AGE                 117          53           64
+        14 <leaf>                9           8            1
+        15 <leaf>              234          56          178
+        26 <leaf>               28          21            7
+        27 <leaf>               89          32           57
+
+11行が選択されました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL SCORE
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Score the model using the R script user defined.
+SQL>
+SQL> -- PREDICTION/PREDICTION_PROBABILITY ------------------------------------------
+SQL> -- Explanation:
+SQL> -- Here R script DT_RDEMO_SCORE_CLASSIFICATION is used to get the prediction
+SQL> -- value and the prediction probability. Actual target value and predicted
+SQL> -- target values are provided.
+SQL>
+SQL> SELECT cust_id, affinity_card as affinity_card_act,
+  2  PREDICTION(DT_RDEMO_CLASSIFICATION USING *) affinity_card_pred,
+  3  round(PREDICTION_PROBABILITY(DT_RDEMO_CLASSIFICATION USING *), 3)
+  4  affinity_card_prob
+  5  FROM mining_data_apply_v where CUST_ID <= 100010
+  6  order by cust_id;
+
+   CUST_ID AFFINITY_CARD_ACT AFFINITY_CARD_PRED AFFINITY_CARD_PROB
+---------- ----------------- ------------------ ------------------
+    100001                 0                  0               .936
+    100002                 0                  0               .936
+    100003                 0                  0               .936
+    100004                 0                  0               .936
+    100005                 1                  1               .761
+    100006                 0                  0               .936
+    100007                 0                  0               .936
+    100008                 0                  0               .936
+    100009                 1                  1               .761
+    100010                 0                  0               .751
+
+10行が選択されました。
+
+SQL>
+SQL> -- PREDICTION_SET -------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Here R script DT_RDEMO_SCORE_CLASSIFICATION is used to get the
+SQL> -- prediction set. Actual target value and predicted target values are provided.
+SQL>
+SQL> SELECT T.CUST_ID, T.affinity_card, S.prediction,
+  2  round(S.probability, 3) as probability
+  3  FROM (SELECT CUST_ID, affinity_card,
+  4  PREDICTION_SET(DT_RDEMO_CLASSIFICATION USING *) pset
+  5  from mining_data_apply_v where CUST_ID <= 100010) T, TABLE(T.pset) S
+  6  where S.probability > 0 order by T.CUST_ID, S.prediction;
+
+   CUST_ID AFFINITY_CARD PREDICTION PROBABILITY
+---------- ------------- ---------- -----------
+    100001             0          0  .936000000
+    100001             0          1  .064000000
+    100002             0          0  .936000000
+    100002             0          1  .064000000
+    100003             0          0  .936000000
+    100003             0          1  .064000000
+    100004             0          0  .936000000
+    100004             0          1  .064000000
+    100005             1          0  .239000000
+    100005             1          1  .761000000
+    100006             0          0  .936000000
+    100006             0          1  .064000000
+    100007             0          0  .936000000
+    100007             0          1  .064000000
+    100008             0          0  .936000000
+    100008             0          1  .064000000
+    100009             1          0  .239000000
+    100009             1          1  .761000000
+    100010             0          0  .751000000
+    100010             0          1  .249000000
+
+20行が選択されました。
+
+SQL>
+SQL> -- PREDICTION_DETAILS ---------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- The R script DT_RDEMO_WEIGHT_CLASSIFICATION is used to get the prediction
+SQL> -- details. The CUST_ID and the prediction details with the weight of each
+SQL> -- attribute are provided.
+SQL>
+SQL> column pred_det format a65
+SQL> SELECT CUST_ID, PREDICTION_DETAILS(DT_RDEMO_CLASSIFICATION, '1' USING *) pred_det
+  2  FROM mining_data_apply_v where EDUCATION = 'Bach.' and HOUSEHOLD_SIZE = '3'
+  3  and CUST_ID <= 100080 order by CUST_ID;
+
+   CUST_ID PRED_DET
+---------- -----------------------------------------------------------------
+    100009 <Details algorithm="R Extensible" class="1">
+           <Attribute name="Y_BOX_GAMES" actualValue="1" weight="1" rank="1"
+           />
+           <Attribute name="YRS_RESIDENCE" actualValue="3" weight="1" rank="
+           2"/>
+           <Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="1" ran
+           k="3"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="4"/>
+           <Attribute name="OCCUPATION" actualValue="Prof." weight="1" rank=
+           "5"/>
+           </Details>
+
+    100026 <Details algorithm="R Extensible" class="1">
+           <Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="3.06"
+           rank="1"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight="1" rank="2"
+           />
+           <Attribute name="YRS_RESIDENCE" actualValue="3" weight="1" rank="
+           3"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="4"/>
+           <Attribute name="OCCUPATION" actualValue="Sales" weight="1" rank=
+           "5"/>
+           </Details>
+
+    100036 <Details algorithm="R Extensible" class="1">
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight="1" rank="1"
+           />
+           <Attribute name="YRS_RESIDENCE" actualValue="6" weight="1" rank="
+           2"/>
+           <Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="1" ran
+           k="3"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="4"/>
+           <Attribute name="OCCUPATION" actualValue="Exec." weight="1" rank=
+           "5"/>
+           </Details>
+
+    100042 <Details algorithm="R Extensible" class="1">
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight="1" rank="1"
+           />
+           <Attribute name="YRS_RESIDENCE" actualValue="1" weight="1" rank="
+           2"/>
+           <Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="1" ran
+           k="3"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="4"/>
+           <Attribute name="OCCUPATION" actualValue="Prof." weight="1" rank=
+           "5"/>
+           </Details>
+
+    100056 <Details algorithm="R Extensible" class="1">
+           <Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="1.188"
+            rank="1"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight="1" rank="2"
+           />
+           <Attribute name="YRS_RESIDENCE" actualValue="4" weight="1" rank="
+           3"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="4"/>
+           <Attribute name="OCCUPATION" actualValue="TechSup" weight="1" ran
+           k="5"/>
+           </Details>
+
+    100057 <Details algorithm="R Extensible" class="1">
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight="1" rank="1"
+           />
+           <Attribute name="YRS_RESIDENCE" actualValue="4" weight="1" rank="
+           2"/>
+           <Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="1" ran
+           k="3"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="4"/>
+           <Attribute name="OCCUPATION" actualValue="Prof." weight="1" rank=
+           "5"/>
+           </Details>
+
+    100066 <Details algorithm="R Extensible" class="1">
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight="1" rank="1"
+           />
+           <Attribute name="YRS_RESIDENCE" actualValue="6" weight="1" rank="
+           2"/>
+           <Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="1" ran
+           k="3"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="4"/>
+           <Attribute name="OCCUPATION" actualValue="Prof." weight="1" rank=
+           "5"/>
+           </Details>
+
+    100075 <Details algorithm="R Extensible" class="1">
+           <Attribute name="PRINTER_SUPPLIES" actualValue="1" weight="3.06"
+           rank="1"/>
+           <Attribute name="Y_BOX_GAMES" actualValue="0" weight="1" rank="2"
+           />
+           <Attribute name="YRS_RESIDENCE" actualValue="4" weight="1" rank="
+
+   CUST_ID PRED_DET
+---------- -----------------------------------------------------------------
+           3"/>
+           <Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight="1" ran
+           k="4"/>
+           <Attribute name="OCCUPATION" actualValue="Crafts" weight="1" rank
+           ="5"/>
+           </Details>
+
+
+8行が選択されました。
+
+SQL> spool oml4sql-regression-glm

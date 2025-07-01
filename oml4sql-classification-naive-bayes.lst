@@ -1,0 +1,1035 @@
+SQL> @oml4sql-classification-naive-bayes
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Classification - Naïve Bayes Algorithm - dmnbdemo.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET serveroutput ON
+SQL> SET trimspool ON
+SQL> SET pages 10000
+SQL> SET echo ON
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SAMPLE PROBLEM
+SQL> -----------------------------------------------------------------------
+SQL> -- Given demographic data about a set of customers, predict the
+SQL> -- customer response to an affinity card program using a classifier
+SQL> -- based on the Naive Bayes algorithm.
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SET UP AND ANALYZE THE DATA
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- The data for this sample is composed from base tables in SH Schema
+SQL> -- (See Sample Schema Documentation) and presented through these views:
+SQL> -- mining_data_build_parallel_v (build data)
+SQL> -- mining_data_test_parallel_v  (test data)
+SQL> -- mining_data_apply_parallel_v (apply data)
+SQL> -- (See dmsh.sql for view definitions).
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -------------------
+SQL> -- SPECIFY SETTINGS
+SQL> --
+SQL> -- Cleanup old settings table objects for repeat runs
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_sample_priors';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- Algorithm setting:
+SQL> -- NB is the default classifier, thus there is no need to specify
+SQL> -- the algorithm in settings table when the mining_function parameter
+SQL> -- of the CREATE_MODEL operation specifies classification.
+SQL>
+SQL> -- CREATE AND POPULATE A PRIORS TABLE
+SQL> -- The priors represent the overall distribution of the target in
+SQL> -- the population. By default, the priors are computed from the sample
+SQL> -- (in this case, the build data). If the sample is known to be a
+SQL> -- distortion of the population target distribution (because, say,
+SQL> -- stratified sampling has been employed, or due to some other reason),
+SQL> -- then the user can override the default by providing a priors table
+SQL> -- as a setting for model creation. See Oracle Data Mining Concepts Guide
+SQL> -- for more details.
+SQL> --
+SQL> CREATE TABLE nb_sh_sample_priors (
+  2    target_value      NUMBER,
+  3    prior_probability NUMBER);
+
+Table NB_SH_SAMPLE_PRIORSは作成されました。
+
+SQL> INSERT INTO nb_sh_sample_priors VALUES (0,0.65);
+
+1行挿入しました。
+
+SQL> INSERT INTO nb_sh_sample_priors VALUES (1,0.35);
+
+1行挿入しました。
+
+SQL>
+SQL> ---------------------
+SQL> -- CREATE A NEW MODEL
+SQL> --
+SQL> -- Cleanup old model with the same name for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('NB_SH_Clas_sample');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> -- Build a new NB model
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    v_setlst('PREP_AUTO')              := 'ON';
+  5    v_setlst('CLAS_PRIORS_TABLE_NAME') := 'nb_sh_sample_priors';
+  6
+  7    DBMS_DATA_MINING.CREATE_MODEL2(
+  8      model_name          => 'NB_SH_Clas_sample',
+  9      mining_function     => 'CLASSIFICATION',
+ 10      data_query          => 'select * from mining_data_build_parallel_v',
+ 11      set_list            => v_setlst,
+ 12      case_id_column_name => 'cust_id',
+ 13      target_column_name  => 'affinity_card');
+ 14  END;
+ 15  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'NB_SH_CLAS_SAMPLE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_NAIVE_BAYES
+CLAS_PRIORS_TABLE_NAME         nb_sh_sample_priors
+CLAS_WEIGHTS_BALANCED          OFF
+NABS_PAIRWISE_THRESHOLD        0
+NABS_SINGLETON_THRESHOLD       0
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+PREP_AUTO                      ON
+
+9行が選択されました。
+
+SQL>
+SQL> --------------------------
+SQL> -- DISPLAY MODEL SIGNATURE
+SQL> --
+SQL> column attribute_name format a40
+SQL> column attribute_type format a20
+SQL> SELECT attribute_name, attribute_type
+  2    FROM user_mining_model_attributes
+  3   WHERE model_name = 'NB_SH_CLAS_SAMPLE'
+  4  ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                           ATTRIBUTE_TYPE
+---------------------------------------- --------------------
+AFFINITY_CARD                            CATEGORICAL
+AGE                                      NUMERICAL
+BOOKKEEPING_APPLICATION                  NUMERICAL
+CUST_GENDER                              CATEGORICAL
+CUST_MARITAL_STATUS                      CATEGORICAL
+EDUCATION                                CATEGORICAL
+HOME_THEATER_PACKAGE                     NUMERICAL
+HOUSEHOLD_SIZE                           CATEGORICAL
+OCCUPATION                               CATEGORICAL
+YRS_RESIDENCE                            NUMERICAL
+Y_BOX_GAMES                              NUMERICAL
+
+11行が選択されました。
+
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY MODEL DETAILS
+SQL> --
+SQL> -- If the build data is prepared (as in this example), then the training
+SQL> -- data has been encoded. For numeric data, this means that ranges of
+SQL> -- values have been grouped into bins.  For categorical data, the
+SQL> -- categorical values may have been grouped into subsets.
+SQL> --
+SQL>
+SQL> set line 200
+SQL>
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2    WHERE model_name='NB_SH_CLAS_SAMPLE'
+  3    ORDER BY view_name;
+
+VIEW_NAME                      VIEW_TYPE
+------------------------------ --------------------------------------------------
+DM$VBNB_SH_CLAS_SAMPLE         Automatic Data Preparation Binning
+DM$VCNB_SH_CLAS_SAMPLE         Scoring Cost Matrix
+DM$VGNB_SH_CLAS_SAMPLE         Global Name-Value Pairs
+DM$VPNB_SH_CLAS_SAMPLE         Naive Bayes Target Priors
+DM$VSNB_SH_CLAS_SAMPLE         Computed Settings
+DM$VTNB_SH_CLAS_SAMPLE         Classification Targets
+DM$VVNB_SH_CLAS_SAMPLE         Naive Bayes Conditional Probabilities
+DM$VWNB_SH_CLAS_SAMPLE         Model Build Alerts
+
+8行が選択されました。
+
+SQL>
+SQL> -- Naive Bayes Target Priors
+SQL> column partition_name format a14
+SQL> column target_name format a11
+SQL> column target_value format 9999999999.9999999999
+SQL> column prior_probability format 9999999999.9999999999
+SQL> column count format 9999999999
+SQL> SELECT partition_name,
+  2         target_name,
+  3         target_value,
+  4         prior_probability,
+  5         count
+  6    FROM DM$VPNB_SH_Clas_sample
+  7  ORDER BY 1,2,3,4,5;
+
+PARTITION_NAME TARGET_NAME           TARGET_VALUE      PRIOR_PROBABILITY       COUNT
+-------------- ----------- ---------------------- ---------------------- -----------
+               AFFINITY_CA            .0000000000            .6500000000        1120
+               RD
+
+               AFFINITY_CA           1.0000000000            .3500000000         380
+               RD
+
+
+SQL>
+SQL> -- Naive Bayes Conditional Probabilities
+SQL> column partition_name format a14
+SQL> column target_name format a11
+SQL> column target_value format 9999999999.9999999999
+SQL> column attribute_name format a14
+SQL> column attribute_subname format a17
+SQL> column attribute_value format a15
+SQL> column conditional_probability format 9999999999.9999999999
+SQL> column count format 9999999999
+SQL> SELECT partition_name,
+  2         target_name,
+  3         target_value,
+  4         attribute_name,
+  5         attribute_subname,
+  6         attribute_value,
+  7         conditional_probability,
+  8         count
+  9    FROM DM$VVNB_SH_Clas_sample
+ 10  ORDER BY 1,2,3,4,5,6,7,8;
+
+PARTITION_NAME TARGET_NAME           TARGET_VALUE ATTRIBUTE_NAME ATTRIBUTE_SUBNAME ATTRIBUTE_VALUE CONDITIONAL_PROBABILITY       COUNT
+-------------- ----------- ---------------------- -------------- ----------------- --------------- ----------------------- -----------
+               AFFINITY_CA            .0000000000 AGE                              ( ; 14.5]                   .2455357143         275
+               RD
+
+               AFFINITY_CA            .0000000000 AGE                              (14.5; 20.5]                .1705357143         191
+               RD
+
+               AFFINITY_CA            .0000000000 AGE                              (20.5;  )                   .5839285714         654
+               RD
+
+               AFFINITY_CA            .0000000000 BOOKKEEPING_AP                   ( ; .5]                     .1500000000         168
+               RD                                 PLICATION
+
+               AFFINITY_CA            .0000000000 BOOKKEEPING_AP                   (.5;  )                     .8500000000         952
+               RD                                 PLICATION
+
+               AFFINITY_CA            .0000000000 CUST_GENDER                      'F'                         .3857142857         432
+               RD
+
+               AFFINITY_CA            .0000000000 CUST_GENDER                      'M'                         .6142857143         688
+               RD
+
+               AFFINITY_CA            .0000000000 CUST_MARITAL_S                   'divorced', 'ne             .6517775752         715
+               RD                                 TATUS                            ver married', '
+                                                                                   separated', 'wi
+                                                                                   dowed'
+
+               AFFINITY_CA            .0000000000 CUST_MARITAL_S                   'married'                   .3482224248         382
+               RD                                 TATUS
+
+               AFFINITY_CA            .0000000000 EDUCATION                        '10th', '11th',             .8125000000         910
+               RD                                                                   '12th', '1st-4
+                                                                                   th', '5th-6th',
+                                                                                    '7th-8th', '9t
+                                                                                   h', '< Bach.',
+                                                                                   'Assoc-V', 'HS-
+                                                                                   grad', 'Presch.
+                                                                                   '
+
+               AFFINITY_CA            .0000000000 EDUCATION                        'Assoc-A', 'Bac             .1508928571         169
+               RD                                                                  h.'
+
+               AFFINITY_CA            .0000000000 EDUCATION                        'Masters', 'PhD             .0366071429          41
+               RD                                                                  ', 'Profsc'
+
+               AFFINITY_CA            .0000000000 HOME_THEATER_P                   ( ; .5]                     .5062500000         567
+               RD                                 ACKAGE
+
+               AFFINITY_CA            .0000000000 HOME_THEATER_P                   (.5;  )                     .4937500000         553
+               RD                                 ACKAGE
+
+               AFFINITY_CA            .0000000000 HOUSEHOLD_SIZE                   '1', '2', '6-8'             .6633928571         743
+               RD                                                                  , '9+'
+
+               AFFINITY_CA            .0000000000 HOUSEHOLD_SIZE                   '3', '4-5'                  .3366071429         377
+               RD
+
+               AFFINITY_CA            .0000000000 OCCUPATION                       '?', 'Handler',             .2491071429         279
+               RD                                                                   'House-s', 'Ot
+                                                                                   her'
+
+               AFFINITY_CA            .0000000000 OCCUPATION                       'Armed-F', 'Exe             .1839285714         206
+               RD                                                                  c.', 'Prof.', '
+                                                                                   Protec.'
+
+               AFFINITY_CA            .0000000000 OCCUPATION                       'Cleric.', 'Cra             .5669642857         635
+               RD                                                                  fts', 'Farming'
+                                                                                   , 'Machine', 'S
+                                                                                   ales', 'TechSup
+                                                                                   ', 'Transp.'
+
+               AFFINITY_CA            .0000000000 YRS_RESIDENCE                    ( ; 2.5]                    .2535714286         284
+               RD
+
+               AFFINITY_CA            .0000000000 YRS_RESIDENCE                    (2.5; 3.5]                  .2580357143         289
+               RD
+
+               AFFINITY_CA            .0000000000 YRS_RESIDENCE                    (3.5; 4.5]                  .1901785714         213
+               RD
+
+               AFFINITY_CA            .0000000000 YRS_RESIDENCE                    (4.5;  )                    .2982142857         334
+               RD
+
+               AFFINITY_CA            .0000000000 Y_BOX_GAMES                      ( ; .5]                     .6392857143         716
+               RD
+
+               AFFINITY_CA            .0000000000 Y_BOX_GAMES                      (.5;  )                     .3607142857         404
+               RD
+
+               AFFINITY_CA           1.0000000000 AGE                              ( ; 14.5]                   .0052631579           2
+               RD
+
+               AFFINITY_CA           1.0000000000 AGE                              (14.5; 20.5]                .0868421053          33
+               RD
+
+               AFFINITY_CA           1.0000000000 AGE                              (20.5;  )                   .9078947368         345
+               RD
+
+               AFFINITY_CA           1.0000000000 BOOKKEEPING_AP                   ( ; .5]                     .0289473684          11
+               RD                                 PLICATION
+
+               AFFINITY_CA           1.0000000000 BOOKKEEPING_AP                   (.5;  )                     .9710526316         369
+               RD                                 PLICATION
+
+               AFFINITY_CA           1.0000000000 CUST_GENDER                      'F'                         .1421052632          54
+               RD
+
+               AFFINITY_CA           1.0000000000 CUST_GENDER                      'M'                         .8578947368         326
+               RD
+
+               AFFINITY_CA           1.0000000000 CUST_MARITAL_S                   'divorced', 'ne             .1292875989          49
+               RD                                 TATUS                            ver married', '
+                                                                                   separated', 'wi
+                                                                                   dowed'
+
+               AFFINITY_CA           1.0000000000 CUST_MARITAL_S                   'married'                   .8707124011         330
+               RD                                 TATUS
+
+               AFFINITY_CA           1.0000000000 EDUCATION                        '10th', '11th',             .4473684211         170
+               RD                                                                   '12th', '1st-4
+                                                                                   th', '5th-6th',
+                                                                                    '7th-8th', '9t
+                                                                                   h', '< Bach.',
+                                                                                   'Assoc-V', 'HS-
+                                                                                   grad', 'Presch.
+                                                                                   '
+
+               AFFINITY_CA           1.0000000000 EDUCATION                        'Assoc-A', 'Bac             .3210526316         122
+               RD                                                                  h.'
+
+               AFFINITY_CA           1.0000000000 EDUCATION                        'Masters', 'PhD             .2315789474          88
+               RD                                                                  ', 'Profsc'
+
+               AFFINITY_CA           1.0000000000 HOME_THEATER_P                   ( ; .5]                     .1842105263          70
+               RD                                 ACKAGE
+
+               AFFINITY_CA           1.0000000000 HOME_THEATER_P                   (.5;  )                     .8157894737         310
+               RD                                 ACKAGE
+
+               AFFINITY_CA           1.0000000000 HOUSEHOLD_SIZE                   '1', '2', '6-8'             .1342105263          51
+               RD                                                                  , '9+'
+
+               AFFINITY_CA           1.0000000000 HOUSEHOLD_SIZE                   '3', '4-5'                  .8657894737         329
+               RD
+
+               AFFINITY_CA           1.0000000000 OCCUPATION                       '?', 'Handler',             .0473684211          18
+               RD                                                                   'House-s', 'Ot
+                                                                                   her'
+
+               AFFINITY_CA           1.0000000000 OCCUPATION                       'Armed-F', 'Exe             .5026315789         191
+               RD                                                                  c.', 'Prof.', '
+                                                                                   Protec.'
+
+               AFFINITY_CA           1.0000000000 OCCUPATION                       'Cleric.', 'Cra             .4500000000         171
+               RD                                                                  fts', 'Farming'
+                                                                                   , 'Machine', 'S
+                                                                                   ales', 'TechSup
+                                                                                   ', 'Transp.'
+
+               AFFINITY_CA           1.0000000000 YRS_RESIDENCE                    ( ; 2.5]                    .0184210526           7
+               RD
+
+               AFFINITY_CA           1.0000000000 YRS_RESIDENCE                    (2.5; 3.5]                  .1157894737          44
+               RD
+
+               AFFINITY_CA           1.0000000000 YRS_RESIDENCE                    (3.5; 4.5]                  .2210526316          84
+               RD
+
+               AFFINITY_CA           1.0000000000 YRS_RESIDENCE                    (4.5;  )                    .6447368421         245
+               RD
+
+               AFFINITY_CA           1.0000000000 Y_BOX_GAMES                      ( ; .5]                     .9315789474         354
+               RD
+
+               AFFINITY_CA           1.0000000000 Y_BOX_GAMES                      (.5;  )                     .0684210526          26
+               RD
+
+
+50行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               TEST THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL>
+SQL> -- Cleanup old test result objects for repeat runs
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_sample_test_apply';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_sample_confusion_matrix';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_sample_cm_no_cost';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_sample_lift';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_sample_roc';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_alter_cost';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_alter_confusion_matrix';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> ------------------------------------
+SQL> -- COMPUTE METRICS TO TEST THE MODEL
+SQL> --
+SQL> -- The COMPUTE interfaces that provide the test results require two
+SQL> -- data inputs:
+SQL> -- 1. A table or view of targets - i.e. one that provides only the
+SQL> --    case identifier and target columns of your test data.
+SQL> -- 2. The table with the results of an APPLY operation on test data.
+SQL> --
+SQL>
+SQL> -- CREATE TEST TARGETS VIEW
+SQL> --
+SQL> CREATE OR REPLACE VIEW nb_sh_sample_test_targets AS
+  2  SELECT cust_id, affinity_card
+  3    FROM mining_data_apply_parallel_v;
+
+View NB_SH_SAMPLE_TEST_TARGETSは作成されました。
+
+SQL>
+SQL> -- APPLY MODEL ON TEST DATA
+SQL> --
+SQL> BEGIN
+  2    DBMS_DATA_MINING.APPLY(
+  3      model_name          => 'NB_SH_Clas_sample',
+  4      data_table_name     => 'mining_data_apply_parallel_v',
+  5      case_id_column_name => 'cust_id',
+  6      result_table_name   => 'nb_sh_sample_test_apply');
+  7  END;
+  8  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> ----------------------------------
+SQL> -- COMPUTE TEST METRICS, WITH COST
+SQL> --
+SQL> ----------------------
+SQL> -- Specify cost matrix
+SQL> --
+SQL> -- Consider an example where it costs $10 to mail a promotion to a
+SQL> -- prospective customer and if the prospect becomes a customer, the
+SQL> -- typical sale including the promotion, is worth $100. Then the cost
+SQL> -- of missing a customer (i.e. missing a $100 sale) is 10x that of
+SQL> -- incorrectly indicating that a person is good prospect (spending
+SQL> -- $10 for the promo). In this case, all prediction errors made by
+SQL> -- the model are NOT equal. To act on what the model determines to
+SQL> -- be the most likely (probable) outcome may be a poor choice.
+SQL> --
+SQL> -- Suppose that the probability of a BUY reponse is 10% for a given
+SQL> -- prospect. Then the expected revenue from the prospect is:
+SQL> --   .10 * $100 - .90 * $10 = $1.
+SQL> -- The optimal action, given the cost matrix, is to simply mail the
+SQL> -- promotion to the customer, because the action is profitable ($1).
+SQL> --
+SQL> -- In contrast, without the cost matrix, all that can be said is
+SQL> -- that the most likely response is NO BUY, so don't send the
+SQL> -- promotion.
+SQL> --
+SQL> -- This shows that cost matrices can be very important.
+SQL> --
+SQL> -- The caveat in all this is that the model predicted probabilities
+SQL> -- may NOT be accurate. For binary targets, a systematic approach to
+SQL> -- this issue exists. It is ROC, illustrated below.
+SQL> --
+SQL> -- With ROC computed on a test set, the user can see how various model
+SQL> -- predicted probability thresholds affect the action of mailing a promotion.
+SQL> -- Suppose I promote when the probability to BUY exceeds 5, 10, 15%, etc.
+SQL> -- What return can I expect? Note that the answer to this question does
+SQL> -- not rely on the predicted probabilities being accurate, only that
+SQL> -- they are in approximately the correct rank order.
+SQL> --
+SQL> -- Assuming that the predicted probabilities are accurate, provide the
+SQL> -- cost matrix table name as input to the RANK_APPLY procedure to get
+SQL> -- appropriate costed scoring results to determine the most appropriate
+SQL> -- action.
+SQL>
+SQL> -- Cleanup old cost matrix table for repeat runs
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_cost';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- CREATE A COST MATRIX TABLE
+SQL> --
+SQL> CREATE TABLE nb_sh_cost (
+  2    actual_target_value    NUMBER,
+  3    predicted_target_value NUMBER,
+  4    cost                   NUMBER);
+
+Table NB_SH_COSTは作成されました。
+
+SQL>
+SQL> -- POPULATE THE COST MATRIX
+SQL> --
+SQL> INSERT INTO nb_sh_cost VALUES (0,0,0);
+
+1行挿入しました。
+
+SQL> INSERT INTO nb_sh_cost VALUES (0,1,.35);
+
+1行挿入しました。
+
+SQL> INSERT INTO nb_sh_cost VALUES (1,0,.65);
+
+1行挿入しました。
+
+SQL> INSERT INTO nb_sh_cost VALUES (1,1,0);
+
+1行挿入しました。
+
+SQL>
+SQL> -- Compute Test Metrics
+SQL> DECLARE
+  2    v_accuracy         NUMBER;
+  3    v_area_under_curve NUMBER;
+  4  BEGIN
+  5     DBMS_DATA_MINING.COMPUTE_CONFUSION_MATRIX (
+  6       accuracy                    => v_accuracy,
+  7       apply_result_table_name     => 'nb_sh_sample_test_apply',
+  8       target_table_name           => 'nb_sh_sample_test_targets',
+  9       case_id_column_name         => 'cust_id',
+ 10       target_column_name          => 'affinity_card',
+ 11       confusion_matrix_table_name => 'nb_sh_sample_confusion_matrix',
+ 12       score_column_name           => 'PREDICTION',   -- default
+ 13       score_criterion_column_name => 'PROBABILITY',  -- default
+ 14       cost_matrix_table_name      => 'nb_sh_cost');
+ 15     DBMS_OUTPUT.PUT_LINE('**** MODEL ACCURACY ****: ' || ROUND(v_accuracy,4));
+ 16
+ 17     DBMS_DATA_MINING.COMPUTE_LIFT (
+ 18       apply_result_table_name => 'nb_sh_sample_test_apply',
+ 19       target_table_name       => 'nb_sh_sample_test_targets',
+ 20       case_id_column_name     => 'cust_id',
+ 21       target_column_name      => 'affinity_card',
+ 22       lift_table_name         => 'nb_sh_sample_lift',
+ 23       positive_target_value   => '1',
+ 24       num_quantiles           => '10',
+ 25       cost_matrix_table_name  => 'nb_sh_cost');
+ 26
+ 27     DBMS_DATA_MINING.COMPUTE_ROC (
+ 28       roc_area_under_curve        => v_area_under_curve,
+ 29       apply_result_table_name     => 'nb_sh_sample_test_apply',
+ 30       target_table_name           => 'nb_sh_sample_test_targets',
+ 31       case_id_column_name         => 'cust_id',
+ 32       target_column_name          => 'affinity_card',
+ 33       roc_table_name              => 'nb_sh_sample_roc',
+ 34       positive_target_value       => '1',
+ 35       score_column_name           => 'PREDICTION',
+ 36       score_criterion_column_name => 'PROBABILITY');
+ 37     DBMS_OUTPUT.PUT_LINE('**** AREA UNDER ROC CURVE ****: ' ||
+ 38       ROUND(v_area_under_curve,4));
+ 39  END;
+ 40  /
+**** MODEL ACCURACY ****: .772
+**** AREA UNDER ROC CURVE ****: .8684
+
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- TEST RESULT OBJECTS:
+SQL> -- -------------------
+SQL> -- 1. Confusion matrix Table: nb_sh_sample_confusion_matrix
+SQL> -- 2. Lift Table:             nb_sh_sample_lift
+SQL> -- 3. ROC Table:              nb_sh_sample_roc
+SQL> --
+SQL>
+SQL> -- DISPLAY CONFUSION MATRIX
+SQL> --
+SQL> -- NOTES ON COST (contd):
+SQL> -- This section illustrates the effect of the cost matrix on the per-class
+SQL> -- errors in the confusion matrix. First, compute the Confusion Matrix with
+SQL> -- costs. Our cost matrix assumes that ratio of the cost of an error in
+SQL> -- class 1 to class 0 is 65:35 (where 1 => BUY and 0 => NO BUY).
+SQL>
+SQL> column predicted format 9
+SQL> SELECT actual_target_value as actual,
+  2         predicted_target_value as predicted,
+  3         value as count
+  4    FROM nb_sh_sample_confusion_matrix
+  5  ORDER BY actual_target_value, predicted_target_value;
+
+    ACTUAL PREDICTED       COUNT
+---------- --------- -----------
+         0         0         867
+         0         1         287
+         1         0          55
+         1         1         291
+
+SQL>
+SQL> -- Confusion matrix with Cost:
+SQL> --    869  285
+SQL> --     55  291
+SQL>
+SQL> -- Compute the confusion matrix without costs for later analysis
+SQL> DECLARE
+  2    v_accuracy         NUMBER;
+  3    v_area_under_curve NUMBER;
+  4  BEGIN
+  5     DBMS_DATA_MINING.COMPUTE_CONFUSION_MATRIX (
+  6       accuracy                    => v_accuracy,
+  7       apply_result_table_name     => 'nb_sh_sample_test_apply',
+  8       target_table_name           => 'nb_sh_sample_test_targets',
+  9       case_id_column_name         => 'cust_id',
+ 10       target_column_name          => 'affinity_card',
+ 11       confusion_matrix_table_name => 'nb_sh_sample_cm_no_cost',
+ 12       score_column_name           => 'PREDICTION',
+ 13       score_criterion_column_name => 'PROBABILITY');
+ 14     DBMS_OUTPUT.PUT_LINE('** ACCURACY W/ NO COST **: ' || ROUND(v_accuracy,4));
+ 15  END;
+ 16  /
+** ACCURACY W/ NO COST **: .79
+
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- Confusion matrix without Cost:
+SQL> --
+SQL> column predicted format 9
+SQL> SELECT actual_target_value as actual,
+  2         predicted_target_value as predicted,
+  3         value as count
+  4    FROM nb_sh_sample_cm_no_cost
+  5  ORDER BY actual_target_value, predicted_target_value;
+
+    ACTUAL PREDICTED       COUNT
+---------- --------- -----------
+         0         0         899
+         0         1         255
+         1         0          60
+         1         1         286
+
+SQL>
+SQL> -- Confusion matrix without Cost:
+SQL> --    901  253
+SQL> --     60  286
+SQL> --
+SQL> -- Several points are illustrated here:
+SQL> -- 1. The cost matrix causes an increase in class 1 accuracy
+SQL> --    at the expense of class 0 accuracy
+SQL> -- 2. The overall accuracy is down
+SQL>
+SQL> -- DISPLAY ROC - TOP PROBABILITIE THRESHOLDS LEADING TO MINIMIZED COST
+SQL> --
+SQL> column prob format .9999
+SP2-0246: FORMAT文字列".9999"が不正です
+SQL> column tp format 9999
+SQL> column fn format 9999
+SQL> column fp format 9999
+SQL> column tn format 9999
+SQL> column tpf format 9.9999
+SQL> column fpf format 9.9999
+SQL> column nb_cost format 9999.99
+SQL> SELECT *
+  2    FROM (SELECT ROUND(probability,4) prob,
+  3                 true_positives  tp,
+  4                 false_negatives fn,
+  5                 false_positives fp,
+  6                 true_negatives  tn,
+  7                 ROUND(true_positive_fraction,4) tpf,
+  8                 ROUND(false_positive_fraction,4) fpf,
+  9                 .35 * false_positives + .65 * false_negatives nb_cost
+ 10           FROM nb_sh_sample_roc)
+ 11   WHERE nb_cost < 130
+ 12   ORDER BY nb_cost;
+
+      PROB    TP    FN    FP    TN TPF FPF  NB_COST
+---------- ----- ----- ----- ----- --- --- --------
+     .7173   270    76   219   935 .7803 .1898   126.05
+     .7229   268    78   217   937 .7746 .1880   126.65
+     .7268   267    79   216   938 .7717 .1872   126.95
+     .6438   273    73   230   924 .7890 .1993   127.95
+     .7157   271    75   227   927 .7832 .1967   128.20
+     .5018   286    60   255   899 .8266 .2210   128.25
+     .6396   275    71   235   919 .7948 .2036   128.40
+     .5676   280    66   245   909 .8092 .2123   128.65
+     .5526   284    62   253   901 .8208 .2192   128.85
+       .56   283    63   252   902 .8179 .2184   129.15
+     .6187   277    69   242   912 .8006 .2097   129.55
+      .585   278    68   244   910 .8035 .2114   129.60
+     .4718   289    57   265   889 .8353 .2296   129.80
+
+13行が選択されました。
+
+SQL>
+SQL> -- Here we see 13 different probability thresholds resulting in
+SQL> -- confusion matrices with an overall cost below 130.
+SQL> --
+SQL> -- Now, let us create a cost matrix from the optimal threshold, i.e.,
+SQL> -- one whose action is to most closely mimic the user cost matrix.
+SQL> -- Let Poptimal = Probability corresponding to the minimum cost
+SQL> --                computed from the ROC table above
+SQL> --
+SQL> -- Find the ratio of costs that causes breakeven expected cost at
+SQL> -- at the optimal probability threshold:
+SQL> --
+SQL> --    Cost(misclassify 1) = (1 - Poptimal)/Poptimal
+SQL> --    Cost(misclassify 0) = 1.0
+SQL> --
+SQL> -- The following query constructs the alternative cost matrix
+SQL> -- based on the above rationale.
+SQL> --
+SQL> CREATE TABLE nb_alter_cost AS
+  2  WITH
+  3  cost_q AS (
+  4  SELECT probability,
+  5         (.35 * false_positives + .65 * false_negatives) nb_cost
+  6    FROM nb_sh_sample_roc
+  7  ),
+  8  min_cost AS (
+  9  SELECT MIN(nb_cost) mincost
+ 10    FROM cost_q
+ 11  ),
+ 12  prob_q AS (
+ 13  SELECT min(probability) prob
+ 14    FROM cost_q, min_cost
+ 15   WHERE nb_cost = mincost
+ 16  )
+ 17  SELECT 1 actual_target_value,
+ 18         0 predicted_target_value,
+ 19         (1.0 - prob)/prob cost
+ 20    FROM prob_q
+ 21  UNION ALL
+ 22  SELECT 0 actual_target_value,
+ 23         1 predicted_target_value,
+ 24         1 cost
+ 25    FROM dual
+ 26  UNION ALL
+ 27  SELECT 0 actual_target_value,
+ 28         0 predicted_target_value,
+ 29         0 cost
+ 30    FROM dual
+ 31  UNION ALL
+ 32  SELECT 1 actual_target_value,
+ 33         1 predicted_target_value,
+ 34         0 cost
+ 35    FROM dual;
+
+Table NB_ALTER_COSTは作成されました。
+
+SQL>
+SQL>
+SQL> column cost format 9.999999999
+SQL> SELECT ACTUAL_TARGET_VALUE, PREDICTED_TARGET_VALUE, COST
+  2    FROM nb_alter_cost;
+
+ACTUAL_TARGET_VALUE PREDICTED_TARGET_VALUE COST
+------------------- ---------------------- ----
+                  1                      0 .394095021
+                  0                      1 1.000000000
+                  0                      0 .000000000
+                  1                      1 .000000000
+
+SQL>
+SQL> -- Now, use this new cost matrix to compute the confusion matrix
+SQL> --
+SQL> DECLARE
+  2    v_accuracy         NUMBER;
+  3    v_area_under_curve NUMBER;
+  4  BEGIN
+  5     DBMS_DATA_MINING.COMPUTE_CONFUSION_MATRIX (
+  6       accuracy                    => v_accuracy,
+  7       apply_result_table_name     => 'nb_sh_sample_test_apply',
+  8       target_table_name           => 'nb_sh_sample_test_targets',
+  9       case_id_column_name         => 'cust_id',
+ 10       target_column_name          => 'affinity_card',
+ 11       confusion_matrix_table_name => 'nb_sh_alter_confusion_matrix',
+ 12       score_column_name           => 'PREDICTION',   -- default
+ 13       score_criterion_column_name => 'PROBABILITY',  -- default
+ 14       cost_matrix_table_name      => 'nb_alter_cost');
+ 15     DBMS_OUTPUT.PUT_LINE('**** MODEL ACCURACY ****: ' || ROUND(v_accuracy,4));
+ 16  END;
+ 17  /
+**** MODEL ACCURACY ****: .8027
+
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> SELECT actual_target_value as actual,
+  2         predicted_target_value as predicted,
+  3         value as count
+  4    FROM nb_sh_alter_confusion_matrix
+  5    ORDER BY actual_target_value, predicted_target_value;
+
+    ACTUAL PREDICTED       COUNT
+---------- --------- -----------
+         0         0         935
+         0         1         219
+         1         0          77
+         1         1         269
+
+SQL>
+SQL> -- DISPLAY LIFT RESULTS
+SQL> --
+SQL> SELECT quantile_number               qtl,
+  2         lift_cumulative               lcume,
+  3         percentage_records_cumulative prcume,
+  4         targets_cumulative            tcume,
+  5         target_density_cumulative     tdcume
+  6  -- Other info in Lift results
+  7  -- quantile_total_count,
+  8  -- non_targets_cumulative,
+  9  -- lift_quantile,
+ 10  -- target_density
+ 11    FROM nb_sh_sample_lift
+ 12  ORDER BY quantile_number;
+
+       QTL      LCUME     PRCUME      TCUME     TDCUME
+---------- ---------- ---------- ---------- ----------
+         1 3.18478469         .1  110.19355 .734623667
+         2 2.74229744         .2 189.766983  .63255661
+         3 2.39028049         .3 248.111115 .551358032
+         4 2.12668601         .4 294.333344 .490555573
+         5 1.83900672         .5 318.148163  .42419755
+         6 1.59922929         .6        332 .368888889
+         7 1.39966969         .7        339 .322857143
+         8 1.24036613         .8 343.333344  .28611112
+         9 1.10789981         .9        345 .255555556
+        10          1          1        346 .230666667
+
+10行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               APPLY THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Cleanup old scoring result objects for repeat runs
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_sample_apply_result';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_sample_apply_ranked';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> ------------------
+SQL> -- APPLY THE MODEL
+SQL> --
+SQL> BEGIN
+  2    DBMS_DATA_MINING.APPLY(
+  3      model_name          => 'NB_SH_Clas_sample',
+  4      data_table_name     => 'mining_data_apply_parallel_v',
+  5      case_id_column_name => 'cust_id',
+  6      result_table_name   => 'nb_sh_sample_apply_result');
+  7  END;
+  8  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- APPLY RESULT OBJECTS: nb_sh_sample_apply_result
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY APPLY RESULTS
+SQL> --
+SQL> -- 1. The results table contains a prediction set - i.e. ALL the predictions
+SQL> --    for a given case id, with their corresponding probability values.
+SQL> -- 2. Only the first 10 rows of the table are displayed here.
+SQL> --
+SQL> column probability format 9.99999
+SQL> column prediction format 9
+SQL> SELECT cust_id, prediction, ROUND(probability,4) probability
+  2    FROM nb_sh_sample_apply_result
+  3   WHERE cust_id <= 100005
+  4  ORDER BY cust_id, prediction;
+
+   CUST_ID PREDICTION PROBABILITY
+---------- ---------- -----------
+    100001          0      .97750
+    100001          1      .02250
+    100002          0      .81290
+    100002          1      .18710
+    100003          0      .97380
+    100003          1      .02620
+    100004          0      .96880
+    100004          1      .03120
+    100005          0      .01310
+    100005          1      .98690
+
+10行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------
+SQL> -- GENERATE RANKED APPLY RESULTS (OPTIONALLY BASED ON COST)
+SQL> --
+SQL> -- ALTER APPLY RESULTS TABLE (just for demo purposes)
+SQL> --
+SQL> -- The RANK_APPLY and COMPUTE() procedures do not necessarily have
+SQL> -- to work on the result table generated from DBMS_DATA_MINING.APPLY
+SQL> -- alone. They can work on any table with similar schema and content
+SQL> -- that matches the APPLY result table. An example will be a table
+SQL> -- generated from some other tool, scoring engine or a generated result.
+SQL> --
+SQL> -- To demonstrate this, we will make a simply change the column names in
+SQL> -- the APPLY results schema table, and supply the new table as input to
+SQL> -- RANK_APPLY. The only requirement is that the new column names have to be
+SQL> -- reflected in the RANK_APPLY procedure. The table containing the ranked
+SQL> -- results will reflect these new column names.
+SQL> --
+SQL> ALTER TABLE nb_sh_sample_apply_result RENAME COLUMN cust_id TO customer_id;
+
+Table NB_SH_SAMPLE_APPLY_RESULTが変更されました。
+
+SQL> ALTER TABLE nb_sh_sample_apply_result RENAME COLUMN prediction TO score;
+
+Table NB_SH_SAMPLE_APPLY_RESULTが変更されました。
+
+SQL> ALTER TABLE nb_sh_sample_apply_result RENAME COLUMN probability TO chance;
+
+Table NB_SH_SAMPLE_APPLY_RESULTが変更されました。
+
+SQL>
+SQL> -- RANK APPLY RESULTS (WITH COST MATRIX INPUT)
+SQL> --
+SQL> BEGIN
+  2    DBMS_DATA_MINING.RANK_APPLY (
+  3      apply_result_table_name     => 'nb_sh_sample_apply_result',
+  4      case_id_column_name         => 'customer_id',
+  5      score_column_name           => 'score',
+  6      score_criterion_column_name => 'chance',
+  7      ranked_apply_table_name     => 'nb_sh_sample_apply_ranked',
+  8      top_n                       => 2,
+  9      cost_matrix_table_name      => 'nb_alter_cost');
+ 10  END;
+ 11  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- RANK_APPLY RESULT OBJECTS: nb_sh_sample_apply_ranked
+SQL>
+SQL> -------------------------------
+SQL> -- DISPLAY RANKED APPLY RESULTS
+SQL> -- using altered cost matrix
+SQL> column chance format 9.99
+SQL> column cost format 9.99
+SQL> SELECT customer_id, score, ROUND(chance,4) chance, ROUND(cost,4) cost, rank
+  2    FROM nb_sh_sample_apply_ranked
+  3   WHERE customer_id <= 100005
+  4   ORDER BY customer_id, rank;
+
+CUSTOMER_ID      SCORE CHANCE COST       RANK
+----------- ---------- ------ ---- ----------
+     100001          0    .98  .01          1
+     100001          1    .02  .98          2
+     100002          0    .81  .07          1
+     100002          1    .19  .81          2
+     100003          0    .97  .01          1
+     100003          1    .03  .97          2
+     100004          0    .97  .01          1
+     100004          1    .03  .97          2
+     100005          1    .99  .01          1
+     100005          0    .01  .39          2
+
+10行が選択されました。
+
+SQL> spool oml4sql-classification-neural-networks

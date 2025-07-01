@@ -1,0 +1,916 @@
+SQL> @oml4sql-regression-svm
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Regression - SVM Algorithm - dmsvrdem.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET serveroutput ON
+SQL> SET trimspool ON
+SQL> SET pages 10000
+SQL> SET echo ON
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SAMPLE PROBLEM
+SQL> -----------------------------------------------------------------------
+SQL> -- Given demographic, purchase, and affinity card membership data for a
+SQL> -- set of customers, predict customer's age. Since age is a continuous
+SQL> -- variable, this is a regression problem.
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SET UP AND ANALYZE DATA
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- The data for this sample is composed from base tables in the SH Schema
+SQL> -- (See Sample Schema Documentation) and presented through these views:
+SQL> -- mining_data_build_parallel_v (build data)
+SQL> -- mining_data_test_parallel_v  (test data)
+SQL> -- mining_data_apply_parallel_v (apply data)
+SQL> -- (See dmsh.sql for view definitions).
+SQL> --
+SQL> -----------
+SQL> -- ANALYSIS
+SQL> -----------
+SQL> -- For regression using SVM, perform the following on mining data.
+SQL> --
+SQL> -- 1. Use Auto Data Preparation
+SQL> --
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Cleanup old model with same name (if any)
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('SVMR_SH_Regr_sample');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> ---------------------
+SQL> -- CREATE A NEW MODEL
+SQL> --
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- The default algorithm for regression is SVM.
+  5    -- see dmsvcdem.sql on choice of kernel function.
+  6    v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_GAUSSIAN';
+  7     v_setlst('PREP_AUTO') := 'ON';
+  8
+  9    -- Examples of other possible overrides are:
+ 10    -- v_setlst('SVMS_CONV_TOLERANCE')  := '0.01';
+ 11    -- v_setlst('SVMS_EPSILON')         := '0.1';
+ 12    -- v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_LINEAR';
+ 13
+ 14    DBMS_DATA_MINING.CREATE_MODEL2(
+ 15      model_name          => 'SVMR_SH_Regr_sample',
+ 16      mining_function     => 'REGRESSION',
+ 17      data_query          => 'SELECT * FROM mining_data_build_parallel_v',
+ 18      set_list            => v_setlst,
+ 19      case_id_column_name => 'cust_id',
+ 20      target_column_name  => 'age');
+ 21  END;
+ 22  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'SVMR_SH_REGR_SAMPLE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_SUPPORT_VECTOR_MACHINES
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+PREP_AUTO                      ON
+SVMS_CONV_TOLERANCE            .0001
+SVMS_EPSILON                   .1
+SVMS_KERNEL_FUNCTION           SVMS_GAUSSIAN
+SVMS_NUM_PIVOTS                200
+
+9行が選択されました。
+
+SQL>
+SQL> --------------------------
+SQL> -- DISPLAY MODEL SIGNATURE
+SQL> --
+SQL> col attribute_name format a30
+SQL> column attribute_type format a20
+SQL> SELECT attribute_name, attribute_type
+  2    FROM user_mining_model_attributes
+  3   WHERE model_name = 'SVMR_SH_REGR_SAMPLE'
+  4  ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                 ATTRIBUTE_TYPE
+------------------------------ --------------------
+AFFINITY_CARD                  NUMERICAL
+AGE                            NUMERICAL
+BOOKKEEPING_APPLICATION        NUMERICAL
+BULK_PACK_DISKETTES            NUMERICAL
+COUNTRY_NAME                   CATEGORICAL
+CUST_GENDER                    CATEGORICAL
+CUST_INCOME_LEVEL              CATEGORICAL
+CUST_MARITAL_STATUS            CATEGORICAL
+EDUCATION                      CATEGORICAL
+FLAT_PANEL_MONITOR             NUMERICAL
+HOME_THEATER_PACKAGE           NUMERICAL
+HOUSEHOLD_SIZE                 CATEGORICAL
+OCCUPATION                     CATEGORICAL
+OS_DOC_SET_KANJI               NUMERICAL
+PRINTER_SUPPLIES               NUMERICAL
+YRS_RESIDENCE                  NUMERICAL
+Y_BOX_GAMES                    NUMERICAL
+
+17行が選択されました。
+
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY MODEL DETAILS
+SQL> --
+SQL> -- SVM model details are provided only for Linear Kernels.
+SQL> -- The current model is built using a Gaussian Kernel (see dmsvcdem.sql).
+SQL> --
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2  WHERE model_name='SVMR_SH_REGR_SAMPLE'
+  3  ORDER BY view_name;
+
+VIEW_NAME
+------------------------------
+VIEW_TYPE
+--------------------------------------------------
+DM$VGSVMR_SH_REGR_SAMPLE
+Global Name-Value Pairs
+
+DM$VNSVMR_SH_REGR_SAMPLE
+Normalization and Missing Value Handling
+
+DM$VSSVMR_SH_REGR_SAMPLE
+Computed Settings
+
+DM$VWSVMR_SH_REGR_SAMPLE
+Model Build Alerts
+
+
+4行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               TEST THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> ------------------------------------
+SQL> -- COMPUTE METRICS TO TEST THE MODEL
+SQL> --
+SQL>
+SQL> -- 1. Root Mean Square Error - Sqrt(Mean((y - y')^2))
+SQL> --
+SQL> column rmse format 9999.99
+SQL> SELECT SQRT(AVG((prediction - age) * (prediction - age))) rmse
+  2    FROM (select age, PREDICTION(svmr_sh_regr_sample USING *) prediction
+  3          from mining_data_test_parallel_v);
+
+    RMSE
+--------
+    6.73
+
+1行が選択されました。
+
+SQL>
+SQL> -- 2. Mean Absolute Error - Mean(|(y - y')|)
+SQL> --
+SQL> column mae format 9999.99
+SQL> SELECT AVG(ABS(prediction - age)) mae
+  2    FROM (select age, PREDICTION(svmr_sh_regr_sample USING *) prediction
+  3          from mining_data_test_parallel_v);
+
+     MAE
+--------
+    4.37
+
+1行が選択されました。
+
+SQL>
+SQL> -- 3. Residuals
+SQL> --    If the residuals show substantial variance between
+SQL> --    the predicted value and the actual, you can consider
+SQL> --    changing the algorithm parameters.
+SQL> --
+SQL> column prediction format 99.9999
+SQL> SELECT prediction, (prediction - age) residual
+  2    FROM (select age, PREDICTION(svmr_sh_regr_sample USING *) prediction
+  3          from mining_data_test_parallel_v)
+  4   WHERE prediction < 17.5
+  5   ORDER BY prediction;
+
+PREDICTION   RESIDUAL
+---------- ----------
+    4.0106 -1.98938064
+    5.0443 -0.955654952
+    5.2666 -0.7333797
+    5.3276 -0.672360542
+    5.4686 -1.53141104
+    5.4755 -1.52454526
+    5.6966 -0.303424484
+    5.7781 -0.221878987
+    5.8227 -2.17726527
+    5.8286 -0.171409043
+    5.9218 -1.07824766
+    5.9297 -2.07026798
+    5.9453 -0.0546684717
+    5.9920 -1.00802077
+    6.0743 -0.925743302
+    6.2124 .212442183
+    6.9541 -0.0458578598
+    6.9906 -1.0093851
+    7.0248 1.02481925
+    7.2745 .274459113
+    7.3636 1.36363841
+    7.4664 1.46643184
+    7.4698 1.46980797
+    7.4760 .475996848
+    7.5950 -5.40498123
+    7.6499 .649891722
+    7.7608 1.76077009
+    7.7715 -5.22845695
+    7.7897 -1.21030668
+    7.9548 -1.04517218
+    7.9569 -4.04313665
+    7.9624 -1.03762872
+    8.0469 -1.95306012
+    8.2818 .281760792
+    8.3894 -0.610591374
+    8.4373  2.4373486
+    8.6317 -0.36827761
+    8.6685 .668528377
+    8.7034  .70341897
+    8.8311 1.83105831
+    8.8456 .845620741
+    8.8930 1.89296105
+    8.9069 -0.0931044643
+    8.9069 -2.09310446
+    9.0253 1.02527035
+    9.1067 .106671974
+    9.1067 1.10667197
+    9.1175 -3.88251704
+    9.1691 -0.830877753
+    9.2381 -0.761899086
+    9.2424 -2.75759248
+    9.2713    1.27129
+    9.3071 2.30709568
+    9.3131 1.31312313
+    9.3139 -0.686148365
+    9.3275 -3.67252479
+    9.3346 2.33458101
+    9.3636 .363638404
+    9.3671 -2.63294941
+    9.3803 2.38027217
+    9.4120 -0.588013683
+    9.4210 1.42098057
+    9.4420 -1.5580183
+    9.4844 1.48437661
+    9.4877 -6.51226067
+    9.4910 1.49104214
+    9.4968 -2.50324556
+    9.5237 2.52372335
+    9.5344 3.53444926
+    9.5546 .554562589
+    9.5686  1.5686312
+    9.5745 1.57450414
+    9.6277 -1.37227173
+    9.6330 .633034619
+    9.6380 -1.36202743
+    9.6386 1.63858731
+    9.6421  .64209456
+    9.6478 -5.35223771
+    9.6903 .690347596
+    9.8253 .825310148
+    9.8405 -5.15949253
+    9.8844 -0.115639561
+    9.8955 -1.10451846
+    9.9246 2.92459236
+    9.9448 .944811538
+    9.9448 2.94481154
+    9.9484 1.94836348
+    9.9804 -2.01963148
+   10.0599 4.05986557
+   10.0963 -1.90366136
+   10.1476 .147631712
+   10.1673 .167304256
+   10.1845 3.18450458
+   10.1891 2.18912113
+   10.2332 -6.76680136
+   10.2372 -1.76275251
+   10.2531 -1.74694744
+   10.2657 -4.73433595
+   10.2658 .265797895
+   10.3049 -1.69513812
+   10.3137 2.31369338
+   10.3302  1.3301683
+   10.3436 -2.65642862
+   10.3595 -1.64046565
+   10.3729 1.37294968
+   10.3729 -2.62705032
+   10.4310 1.43095112
+   10.4361 -1.56390605
+   10.4485 -1.55150556
+   10.4812 3.48117664
+   10.5005 -3.49951843
+   10.5363 3.53629715
+   10.5447 1.54466805
+   10.5447 -0.455331954
+   10.5867 -2.41325587
+   10.5874 1.58736622
+   10.6280 -5.3719587
+   10.6280  1.6280413
+   10.6351 2.63511107
+   10.6373 -0.362732167
+   10.6565 -6.34347939
+   10.6715 -2.32850333
+   10.6915 1.69149188
+   10.6948 -3.30522319
+   10.6976 .697590416
+   10.7087 .708721052
+   10.7186 2.71860796
+   10.7461 2.74609557
+   10.7559  3.7558573
+   10.7780 -1.22195584
+   10.7840 -0.215983382
+   10.8095 1.80954528
+   10.8148 -0.185224963
+   10.8317 -2.16826214
+   10.8388 -3.16124049
+   10.8754 1.87544214
+   10.8983 2.89825365
+   10.9064 -1.09357256
+   10.9107 2.91074867
+   10.9121 .912080625
+   10.9229 .922939746
+   10.9352 -6.06479298
+   10.9355 -0.0645058942
+   10.9694 -2.03061103
+   10.9802 -1.01976704
+   10.9866 .986608044
+   10.9918 -2.00822304
+   11.0044 .00440480575
+   11.0261 1.02605813
+   11.0369 -1.96307117
+   11.0425 .0425248335
+   11.0546 -0.945394387
+   11.0770  3.0769928
+   11.0770 .0769928025
+   11.0770 .0769928025
+   11.0788 3.07876416
+   11.1150 2.11501804
+   11.1241 -0.875938356
+   11.1678 2.16781778
+   11.2004 1.20035675
+   11.2495 -5.75045189
+   11.2757 -1.72433286
+   11.2757 2.27566714
+   11.2757 1.27566714
+   11.2888 -1.71122918
+   11.3001 -0.699903417
+   11.3064 .306444901
+   11.3064  1.3064449
+   11.3266 -0.673406913
+   11.3488 1.34879484
+   11.4182 -1.58183649
+   11.4188  .41883877
+   11.4264 -1.57357547
+   11.4274 -0.572621713
+   11.4418 1.44179793
+   11.4438 -5.55615307
+   11.4828 3.48281295
+   11.5104 2.51036399
+   11.5158 2.51581675
+   11.5438 .543833164
+   11.5520 -3.44798567
+   11.5610 -0.439045167
+   11.5866 2.58660021
+   11.5884 -1.41161298
+   11.6292 -2.37078217
+   11.6357 -2.36430583
+   11.6586 .658583689
+   11.6753 -3.32473354
+   11.6797 .679661761
+   11.6848 -4.31524814
+   11.6920 1.69195041
+   11.6920 3.69195041
+   11.6958 .695832712
+   11.7134 .713412871
+   11.7138 -1.28617485
+   11.7333 3.73329389
+   11.7536 -0.246364089
+   11.7548 -6.24522856
+   11.7571 1.75705823
+   11.7612 -1.23881742
+   11.7794  .77937034
+   11.7969 .796904713
+   11.8135 4.81347078
+   11.8285 2.82850109
+   11.8386 -2.16138265
+   11.8699 2.86989592
+   11.8708 2.87075325
+   11.8846 -1.11535273
+   11.9352 -0.0648481292
+   11.9413 .941250766
+   11.9528 -1.04723208
+   11.9566 -0.0434458394
+   11.9597 .959749173
+   11.9765 2.97648392
+   11.9867 .986733034
+   12.0265 3.02651412
+   12.0324 1.03238603
+   12.0372 .0372034071
+   12.0719 -0.928101393
+   12.0719 3.07189861
+   12.0732 2.07317885
+   12.0866 2.08662336
+   12.1199 -2.88009654
+   12.1297 -1.87030187
+   12.1708 4.17075131
+   12.1755 3.17554481
+   12.2319 -3.76810815
+   12.2395 .239547369
+   12.2462 -1.75380304
+   12.2705 -5.72945971
+   12.3024 -0.697606852
+   12.3024 -0.697606852
+   12.3158 -0.684219786
+   12.3221 .322123886
+   12.3467 2.34669158
+   12.3967 .396650008
+   12.3998 -0.600177585
+   12.4140 -4.58601988
+   12.4283 -1.57171122
+   12.4298 1.42975266
+   12.4780 .477967955
+   12.4953 1.49526019
+   12.4953 .495260194
+   12.5568 -1.44322638
+   12.5607 -4.43934148
+   12.5683 3.56825658
+   12.5776 1.57760007
+   12.5848 -0.415175057
+   12.6142 2.61416904
+   12.6183 -0.381705201
+   12.6393 3.63925444
+   12.6660 1.66598398
+   12.6863  3.6863048
+   12.6884 -3.31156408
+   12.7057 -2.29430128
+   12.7823 -3.21766221
+   12.7880 -4.21204509
+   12.8062 1.80621502
+   12.8235 -2.17647815
+   12.8304 .830393594
+   12.8382 -5.16175024
+   12.8539 -0.146058325
+   12.8608 -1.13916036
+   12.8728 3.87278603
+   12.8953 .895321975
+   12.9016 1.90156155
+   12.9540 -0.045968213
+   12.9591 .959099456
+   12.9695 3.96947374
+   12.9856 -0.0144356243
+   13.0035 -0.996542834
+   13.0269 3.02693625
+   13.0594 .0593548383
+   13.0600 -0.940049725
+   13.0761 -0.923896286
+   13.0766 2.07661285
+   13.0860 .086034319
+   13.0861 3.08605176
+   13.1053 -0.894700708
+   13.1124 -3.88764902
+   13.1223 -3.87769007
+   13.1618 -1.83823191
+   13.1788 .178826139
+   13.1959 4.19592305
+   13.2364 -3.76361234
+   13.2533 2.25334056
+   13.2926 -3.7073939
+   13.3221 -0.677855442
+   13.3450 -2.65498839
+   13.3664 -1.6335604
+   13.3782 -0.621826586
+   13.3782 -2.62182659
+   13.3794 .379383989
+   13.3979 -2.60210427
+   13.4242 -2.57577177
+   13.4550 5.45500086
+   13.4756 -2.52437426
+   13.5145 .514462992
+   13.5179 .517904728
+   13.5622 .562245206
+   13.5631 3.56312736
+   13.5747 -2.42528214
+   13.5824 -2.41757041
+   13.6312 .631219931
+   13.6732 -0.326826591
+   13.7286 -2.27141635
+   13.7491 1.74912345
+   13.7735 .773543699
+   13.7735 -2.22645539
+   13.7782 3.77823179
+   13.7972 1.79717507
+   13.8305 -3.16948246
+   13.8363 -0.163727975
+   13.8452 -1.15480189
+   13.8670 -0.132967878
+   13.8866 -0.113355744
+   13.9304 2.93035258
+   13.9325 -3.06752193
+   13.9435 3.94350979
+   13.9468 4.94675781
+   13.9500 -3.0500064
+   13.9716 -1.02843834
+   14.0730 .0729733816
+   14.1013 -1.89870108
+   14.1013 .101298923
+   14.1587 2.15868202
+   14.1630 -0.837035936
+   14.1798 -1.82023712
+   14.1798 .179762876
+   14.1850 -2.81497186
+   14.1854 -2.81462857
+   14.2052 -0.794823854
+   14.2398 -0.760185943
+   14.2433 -0.756695399
+   14.3323 -0.667725558
+   14.3437 -2.65631433
+   14.3437 -2.65631433
+   14.3473 2.34729656
+   14.3490 -3.65101861
+   14.3734 -3.62656793
+   14.3756 -3.62438466
+   14.3834 2.38339795
+   14.4249 -3.57514356
+   14.4658 -1.53415376
+   14.4854 -0.514595748
+   14.5077 -0.492309939
+   14.5321 -3.46792178
+   14.5507 1.55071792
+   14.5613 -3.43866486
+   14.5662 -3.43384658
+   14.5990 4.59896419
+   14.6060 1.60596161
+   14.6259 .625921312
+   14.6450 -3.35496645
+   14.6516 -3.34838346
+   14.6560 5.65598276
+   14.6764 -0.323591251
+   14.6836 -0.316411235
+   14.6853 3.68533285
+   14.7144 -1.28564153
+   14.7302 3.73024692
+   14.7497 -2.25030062
+   14.7617 -2.23827519
+   14.8007 -1.19932998
+   14.8213 -3.17869763
+   14.8394 -3.1605869
+   14.8399 -0.160062176
+   14.8600 1.86004324
+   14.9093 1.90930717
+   14.9182 -3.08180538
+   14.9399 2.93987094
+   14.9476 1.94760999
+   14.9624 .962419574
+   14.9647 -0.0353200993
+   14.9747 2.97466902
+   14.9926 -0.00735069619
+   15.0021 .00211249097
+   15.0415  1.0414729
+   15.0743 .0743380867
+   15.0938 4.09383393
+   15.1120 -1.88802253
+   15.1124 1.11236019
+   15.1340 -2.8659986
+   15.1799 -0.820143772
+   15.1922 1.19215295
+   15.2034 -1.79664119
+   15.2341 5.23411278
+   15.2434 -1.75664706
+   15.2589 -2.74112291
+   15.3435 -0.656511117
+   15.4042 -1.59575271
+   15.4153 .415305518
+   15.4236 -1.57636881
+   15.4252 -1.57480072
+   15.4666 -1.53339583
+   15.4864 1.48637376
+   15.4999 1.49989873
+   15.5437 -2.45634639
+   15.6225 -0.377495738
+   15.6258 .625771312
+   15.6364 -1.3636384
+   15.6364 -2.3636384
+   15.6364 .636361595
+   15.6424 .642426665
+   15.6638 1.66378355
+   15.6738 -2.3261814
+   15.6964 .696376427
+   15.6994 -1.30062523
+   15.7380 1.73795439
+   15.7388 -1.26115178
+   15.7487  -1.251295
+   15.7593 -0.24067625
+   15.7625 -2.2374977
+   15.7697 1.76965821
+   15.7734 -0.226610028
+   15.7773 -2.22273269
+   15.7983 -1.20168086
+   15.8394 -1.16059647
+   15.8661 -1.13385894
+   15.9042 1.90421054
+   15.9292 -0.0707518871
+   15.9386 1.93861932
+   15.9846 1.98458042
+   16.0339 1.03391109
+   16.1150 -1.88497319
+   16.1946 2.19463684
+   16.2182  2.2182185
+   16.2268 .226774813
+   16.2446 -0.755360315
+   16.3067 .306662704
+   16.3072 -1.69284963
+   16.3184 .318415087
+   16.3776 2.37756983
+   16.4707 1.47068582
+   16.5075 -1.49250689
+   16.5401 -0.459908807
+   16.5968 2.59680577
+   16.6442 2.64417342
+   16.6563 3.65634331
+   16.6658 1.66582395
+   16.6828 .682807244
+   16.6834 .683394007
+   16.6996 1.69961744
+   16.7414 4.74144941
+   16.7710    1.77095
+   16.7906 -0.209378993
+   16.9044 1.90437622
+   16.9056 -1.09437014
+   16.9189 2.91891981
+   16.9397 .939732198
+   16.9431 -0.0569363789
+   16.9716 -1.0283545
+   17.0080 -2.9919702
+   17.0598 -0.940211081
+   17.1269 -2.87305821
+   17.1295 3.12945707
+   17.2001 2.20014736
+   17.2381 -0.761944657
+   17.3082 .308226447
+   17.3203 .320299362
+   17.3326 -4.66736477
+   17.3812 .381162645
+   17.4159 -0.584075292
+   17.4571 .457081953
+   17.4680 -0.531999732
+   17.4809 .480901484
+
+466行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               APPLY THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL> -------------------------------------------------
+SQL> -- SCORE NEW DATA USING SQL DATA MINING FUNCTIONS
+SQL> --
+SQL> ------------------
+SQL> -- BUSINESS CASE 1
+SQL> -- Predict the average age of customers, broken out by gender.
+SQL> --
+SQL> column cust_gender format a12
+SQL> SELECT A.cust_gender,
+  2         COUNT(*) AS cnt,
+  3         ROUND(
+  4         AVG(PREDICTION(svmr_sh_regr_sample USING A.*)),4)
+  5         AS avg_age
+  6    FROM mining_data_apply_parallel_v A
+  7  GROUP BY cust_gender
+  8  ORDER BY cust_gender;
+
+CUST_GENDER         CNT    AVG_AGE
+------------ ---------- ----------
+F                   512     25.079
+M                   988      27.57
+
+2行が選択されました。
+
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 2
+SQL> -- Create a 10 bucket histogram of customers from Italy based on their age
+SQL> -- and return each customer's age group.
+SQL> --
+SQL> column pred_age format 999.99
+SQL> SELECT cust_id,
+  2         PREDICTION(svmr_sh_regr_sample USING *) pred_age,
+  3         WIDTH_BUCKET(
+  4          PREDICTION(svmr_sh_regr_sample USING *), 10, 100, 10) "Age Group"
+  5    FROM mining_data_apply_parallel_v
+  6   WHERE country_name = 'Italy'
+  7  ORDER BY pred_age;
+
+   CUST_ID PRED_AGE  Age Group
+---------- -------- ----------
+    100194    10.94          1
+    101358    11.81          1
+    101060    12.57          1
+    100547    14.66          1
+    100784    15.43          1
+    100153    15.94          1
+    101487    16.24          1
+    100348    16.90          1
+    100340    17.06          1
+    100918    19.09          2
+    100736    20.83          2
+    101250    21.53          2
+    100206    22.09          2
+    101021    24.03          2
+    101100    24.41          2
+    101306    30.38          3
+    100899    30.51          3
+    100251    30.61          3
+    100667    30.78          3
+    100382    31.01          3
+    100713    31.62          3
+    101209    32.76          3
+    100758    33.55          3
+    100660    33.61          3
+    100994    33.63          3
+    100344    33.68          3
+    101374    35.85          3
+    101345    36.76          3
+    100179    37.10          4
+    100324    37.17          4
+    100653    37.42          4
+    100081    37.61          4
+    100554    37.99          4
+    100662    38.00          4
+    101275    39.02          4
+    100443    39.71          4
+    100733    40.75          4
+    101396    41.25          4
+    101445    44.11          4
+    100185    44.52          4
+    101030    45.75          4
+    100898    46.13          5
+    101251    47.77          5
+
+43行が選択されました。
+
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 3
+SQL> -- Find the reasons (8 attributes with the most impact) for the
+SQL> -- predicted age of customer 100001.
+SQL> --
+SQL> set long 2000
+SQL> set line 200
+SQL> set pagesize 100
+SQL> SELECT PREDICTION_DETAILS(svmr_sh_regr_sample, null, 8 USING *) prediction_details
+  2    FROM mining_data_apply_parallel_v
+  3   WHERE cust_id = 100001;
+
+PREDICTION_DETAILS
+--------------------------------------------------------------------------------
+<Details algorithm="Support Vector Machines">
+<Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".237" rank="1"/>
+<Attribute name="Y_BOX_GAMES" actualValue="0" weight=".149" rank="2"/>
+<Attribute name="CUST_MARITAL_STATUS" actualValue="widowed" weight=".141" rank="
+3"/>
+<Attribute name="BULK_PACK_DISKETTES" actualValue="0" weight=".046" rank="4"/>
+<Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight=".046" rank="5"/>
+<Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".0
+36" rank="6"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".031" rank="7"/>
+<Attribute name="CUST_GENDER" actualValue="F" weight=".03" rank="8"/>
+</Details>
+
+1行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --    BUILD and APPLY a transient model using analytic functions
+SQL> -----------------------------------------------------------------------
+SQL> -- In addition to creating a persistent model that is stored as a schema
+SQL> -- object, models can be built and scored on data on the fly using
+SQL> -- Oracle's analytic function syntax.
+SQL>
+SQL> ----------------------
+SQL> -- BUSINESS USE CASE 4
+SQL> --
+SQL> -- Identify rows for which the provided value of the age column
+SQL> -- does not match the expected value based on patterns in the data.
+SQL> -- This could indicate bad data entry.
+SQL> -- All necessary data preparation steps are automatically performed.
+SQL> -- In addition, provide information as to what attributes most effect the
+SQL> -- predicted value, where positive weights are pushing towards a larger
+SQL> -- age and negative weights towards a smaller age.
+SQL> set long 2000
+SQL> set pagesize 100
+SQL> col age_diff format 99.99
+SQL> select cust_id, age, pred_age, age-pred_age age_diff, pred_det from
+  2  (select cust_id, age, pred_age, pred_det,
+  3          rank() over (order by abs(age-pred_age) desc) rnk from
+  4   (select cust_id, age,
+  5           prediction(for age using *) over () pred_age,
+  6           prediction_details(for age ABS using *) over () pred_det
+  7    from mining_data_apply_parallel_v))
+  8  where rnk <= 5;
+
+   CUST_ID        AGE PRED_AGE AGE_DIFF PRED_DET
+---------- ---------- -------- -------- -----------------------------------------------------------------
+    101285         68    26.46    41.54 <Details algorithm="Support Vector Machines">
+                                        <Attribute name="YRS_RESIDENCE" actualValue="2" weight="-.341" ra
+                                        nk="1"/>
+                                        <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".3
+                                        4" rank="2"/>
+                                        <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".161" rank=
+                                        "3"/>
+                                        <Attribute name="CUST_MARITAL_STATUS" actualValue="NULL" weight="
+                                        .05" rank="4"/>
+                                        <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=
+                                        "-.042" rank="5"/>
+                                        </Details>
+
+    100910         69    30.64    38.36 <Details algorithm="Support Vector Machines">
+                                        <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".3
+                                        82" rank="1"/>
+                                        <Attribute name="YRS_RESIDENCE" actualValue="4" weight=".25" rank
+                                        ="2"/>
+                                        <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".181" rank=
+                                        "3"/>
+                                        <Attribute name="CUST_MARITAL_STATUS" actualValue="married" weigh
+                                        t=".057" rank="4"/>
+                                        <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=
+                                        "-.047" rank="5"/>
+                                        </Details>
+
+    100694         66    27.79    38.21 <Details algorithm="Support Vector Machines">
+                                        <Attribute name="YRS_RESIDENCE" actualValue="2" weight="-.342" ra
+                                        nk="1"/>
+                                        <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".3
+                                        41" rank="2"/>
+                                        <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".162" rank=
+                                        "3"/>
+                                        <Attribute name="CUST_MARITAL_STATUS" actualValue="married" weigh
+                                        t=".05" rank="4"/>
+                                        <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=
+                                        "-.042" rank="5"/>
+                                        </Details>
+
+    100308         70    32.36    37.64 <Details algorithm="Support Vector Machines">
+                                        <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".3
+                                        81" rank="1"/>
+                                        <Attribute name="YRS_RESIDENCE" actualValue="4" weight=".25" rank
+                                        ="2"/>
+                                        <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".181" rank=
+                                        "3"/>
+                                        <Attribute name="CUST_MARITAL_STATUS" actualValue="divorced" weig
+                                        ht=".059" rank="4"/>
+                                        <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=
+                                        "-.047" rank="5"/>
+                                        </Details>
+
+    101256         79    42.51    36.49 <Details algorithm="Support Vector Machines">
+                                        <Attribute name="YRS_RESIDENCE" actualValue="9" weight=".439" ran
+                                        k="1"/>
+                                        <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".2
+                                        86" rank="2"/>
+                                        <Attribute name="Y_BOX_GAMES" actualValue="0" weight=".136" rank=
+                                        "3"/>
+                                        <Attribute name="CUST_MARITAL_STATUS" actualValue="married" weigh
+                                        t=".042" rank="4"/>
+                                        <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=
+                                        "-.035" rank="5"/>
+                                        </Details>
+
+
+5行が選択されました。
+
+SQL> spool oml4sql-singular-value-decomposition

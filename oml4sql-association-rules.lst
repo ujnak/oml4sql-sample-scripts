@@ -1,0 +1,631 @@
+SQL> @oml4sql-association-rules
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Association Rules - Apriori Algorithm - dmardemo.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET serveroutput ON
+SQL> SET trimspool ON
+SQL> SET pages 10000
+SQL> SET linesize 140
+SQL> SET echo ON
+SQL>
+SQL> -- ODM API accepts data both in relational (2D) form, and
+SQL> -- transactional form for Association Rules.
+SQL> -- Transactional data is the more common form of input for
+SQL> -- this type of problem, so the demo shows examples of
+SQL> -- processing transactional input.
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SET UP AND ANALYZE THE DATA
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Cleanup old dataset for repeat runs
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP VIEW sales_trans_cust';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------
+SQL> -- DATA
+SQL> -------
+SQL> -- The data for this sample is composed from a small subset of
+SQL> -- sales transactions in the SH schema - listing the (multiple)
+SQL> -- items bought by a set of customers with ids in the range
+SQL> -- 100001-104500. It also lists the dollar amount sold for
+SQL> -- each item. Note that this data is based on customer id,
+SQL> -- not "basket" id (as in the case of true market basket data).
+SQL> --
+SQL> -- Market basket or sales datasets are transactional in nature,
+SQL> -- and form fact tables in a typical data warehouse.
+SQL> --
+SQL> CREATE VIEW sales_trans_cust AS
+  2   SELECT cust_id, prod_name, prod_category, amount_sold
+  3   FROM (SELECT a.cust_id, b.prod_name, b.prod_category,
+  4               a.amount_sold
+  5          FROM sh.sales a, sh.products b
+  6         WHERE a.prod_id = b.prod_id AND
+  7               a.cust_id between 100001 AND 104500);
+
+View SALES_TRANS_CUSTは作成されました。
+
+SQL>
+SQL> -----------
+SQL> -- ANALYSIS
+SQL> -----------
+SQL> -- Association Rules in ODM works best on sparse data - i.e. data where
+SQL> -- the average number of attributes/items associated with a given case is
+SQL> -- a small percentage of the total number of possible attributes/items.
+SQL> -- This is true of most market basket datasets where an average customer
+SQL> -- purchases only a small subset of items from a fairly large inventory
+SQL> -- in the store.
+SQL> --
+SQL> -- This section provides a rough outline of the analysis to be performed
+SQL> -- on data used for Association Rules model build.
+SQL> --
+SQL> -- 1. Compute the cardinality of customer id and product (940, 14)
+SQL> SELECT COUNT(DISTINCT cust_id) cc, COUNT(DISTINCT prod_name) cp
+  2    FROM sales_trans_cust;
+
+    CC    CP
+______ _____
+   940    14
+
+SQL>
+SQL> -- 2. Compute the density of data (21.31)
+SQL> column density format a18
+SQL> SELECT TO_CHAR((100 * ct)/(cc * cp), 99.99) density
+  2    FROM (SELECT COUNT(DISTINCT cust_id) cc,
+  3                 COUNT(DISTINCT prod_name) cp,
+  4                 COUNT(*) ct
+  5            FROM sales_trans_cust);
+
+DENSITY
+__________
+ 21.31
+
+SQL>
+SQL> -- 3. Common items are candidates for removal during model build, because
+SQL> --    if a majority of customers have bought those items, the resulting
+SQL> --    rules do not have much value. Find out most common items. For example,
+SQL> --    the query shown below determines that Mouse_Pad is most common (303).
+SQL> --
+SQL> --    Since the dataset is small, we will skip common item removal.
+SQL> --
+SQL> column prod_name format a40
+SQL> SELECT prod_name, count(prod_name) cnt
+  2    FROM sales_trans_cust
+  3  GROUP BY prod_name
+  4  ORDER BY cnt DESC, prod_name DESC;
+
+PROD_NAME                                     CNT
+__________________________________________ ______
+Linseed Oil                                   303
+2 Competition Grade NFHS Baseballs            302
+Pro Style Batting Tee                         299
+Tennis Racquet Cushioned OverGrip             293
+Speed Trainer Bats and Training Program       292
+Catchers Mitt                                 287
+Cricket Wickets                               275
+Slugger Youth Series Maple Bat                204
+Bucket of 24 Synthetic Baseballs              184
+Team shirt                                    183
+Indoor Cricket Ball                           177
+Right-Handed Graphite Shaft Iron Set            2
+Lithium Electric Golf Caddy                     2
+Sonic Core Graphite Racquet                     1
+
+14行が選択されました。
+
+SQL>
+SQL> -- 4. Compute the average number of products purchased per customer (2.98)
+SQL> --    3 out of 11 corresponds to the density we computed earlier.
+SQL> --
+SQL> column avg_num_prod format a16
+SQL> SELECT TO_CHAR(AVG(cp), 999.99) avg_num_prod
+  2    FROM (SELECT COUNT(prod_name) cp
+  3            FROM sales_trans_cust
+  4          GROUP BY cust_id);
+
+AVG_NUM_PROD
+_______________
+   2.98
+
+SQL>
+SQL> -- 5. Compute the minimum and maximum dollar amount sold
+SQL> --    for each item (7.99, 1299.99).
+SQL> SELECT MIN(amount_sold), MAX(amount_sold) FROM sales_trans_cust;
+
+   MIN(AMOUNT_SOLD)    MAX(AMOUNT_SOLD)
+___________________ ___________________
+               7.99             1299.99
+
+SQL>
+SQL> --------------------------------------------------------------------------------
+SQL> --
+SQL> -- Create view sales_trans_cust_parallel with a parallel hint
+SQL> --
+SQL> --------------------------------------------------------------------------------
+SQL> CREATE or REPLACE VIEW sales_trans_cust_parallel AS SELECT /*+ parallel (4)*/ * FROM sales_trans_cust;
+
+View SALES_TRANS_CUST_PARALLELは作成されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --         SAMPLE PROBLEM USING TRANSACTIONAL (pair/triple) INPUT
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- ODM API accepts data both in relational (2D) form and
+SQL> -- transactional form for Association Rules.
+SQL> --
+SQL> -- The transactional input is a two column table of the form:
+SQL> -- (transaction_id, item_id)
+SQL> -- or a three column table of the form:
+SQL> -- (transaction_id, item_id, item_value)
+SQL> -- where we use the case_id to represent a transaction_id.
+SQL> --
+SQL> -- Example of a two column transactional table is:
+SQL> -- (transaction_id, item_id)
+SQL> -- (1, 1)
+SQL> -- (1, 4)
+SQL> -- (2, 2)
+SQL> -- or
+SQL> -- (1, 'apple')
+SQL> -- (1, 'pear')
+SQL> -- (2, 'banana')
+SQL> --
+SQL> -- Example of a three column transactional table is:
+SQL> -- (transaction_id, item_id, item_value)
+SQL> -- (1, 'apple', 2)
+SQL> -- (1, 'banana', 4)
+SQL> -- (2, 'apple', 1)
+SQL> -- (2, 'banana', 2)
+SQL> -- or
+SQL> -- (1, 'wine', 'red')
+SQL> -- (1, 'wine', 'white')
+SQL> -- (1, 'cheese', 'swiss')
+SQL> -- (2, 'cheese', 'provolone')
+SQL> -- which allows you to treat different (item_id, item_val) pairings
+SQL> -- for a given transaction essentially as different, unique items.
+SQL> --
+SQL>
+SQL> --------------------------------
+SQL> -- PREPARE BUILD (TRAINING) DATA
+SQL> --
+SQL> -- Data for AR modeling may need binning if it contains numerical data.
+SQL>
+SQL> -------------------
+SQL> -- SPECIFY SETTINGS
+SQL> --
+SQL> -- The default (and only) algorithm for association rules is
+SQL> -- Apriori AR. However, we need a settings table
+SQL> -- to override the default Min Support, Min Confidence,
+SQL> -- and Max items settings.
+SQL> -- Add settings for Transaction Input - the presence
+SQL> -- of an Item Id column specification indicates to the
+SQL> -- API that the input is transactional
+SQL> --
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('AR_SH_SAMPLE');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> ----------------------------------------------
+SQL> -- Build AR model with transactional input
+SQL> --
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    v_setlst('ALGO_NAME')                := 'ALGO_APRIORI_ASSOCIATION_RULES';
+  5    v_setlst('PREP_AUTO')                := 'ON';
+  6    v_setlst('ASSO_MIN_SUPPORT')         := '0.1';
+  7    v_setlst('ASSO_MIN_CONFIDENCE')      := '0.1';
+  8    v_setlst('ASSO_MAX_RULE_LENGTH')     := '3';
+  9    v_setlst('ODMS_ITEM_ID_COLUMN_NAME') := 'PROD_NAME';
+ 10    v_setlst('ASSO_AGGREGATES')          := 'AMOUNT_SOLD';
+ 11
+ 12    DBMS_DATA_MINING.CREATE_MODEL2(
+ 13      model_name          => 'AR_SH_SAMPLE',
+ 14      mining_function     => 'ASSOCIATION',
+ 15      data_query          => 'SELECT * FROM sales_trans_cust_parallel',
+ 16      set_list            => v_setlst,
+ 17      case_id_column_name => 'CUST_ID'
+ 18    );
+ 19  END;
+ 20  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'AR_SH_SAMPLE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                    SETTING_VALUE
+_______________________________ _________________________________
+ALGO_NAME                       ALGO_APRIORI_ASSOCIATION_RULES
+ASSO_AGGREGATES                 AMOUNT_SOLD
+ASSO_MAX_RULE_LENGTH            3
+ASSO_MIN_CONFIDENCE             0.1
+ASSO_MIN_REV_CONFIDENCE         0
+ASSO_MIN_SUPPORT                0.1
+ASSO_MIN_SUPPORT_INT            1
+ODMS_DETAILS                    ODMS_ENABLE
+ODMS_ITEM_ID_COLUMN_NAME        PROD_NAME
+ODMS_MISSING_VALUE_TREATMENT    ODMS_MISSING_VALUE_AUTO
+ODMS_SAMPLING                   ODMS_SAMPLING_DISABLE
+PREP_AUTO                       ON
+
+12行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            TEST THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Association rules do not have a predefined test metric.
+SQL> --
+SQL> -- Two indirect measures of modeling success are:
+SQL> --
+SQL> -- 1. Number of Rules generated: The optimal number of rules is
+SQL> --    application dependent. In general, an overwhelming number of
+SQL> --    rules is undesirable for user interpretation. More rules take
+SQL> --    longer to compute, and also consume storage and CPU cycles.
+SQL> --    You avoid too many rules by increasing the value for support.
+SQL> --
+SQL> -- 2. Relevance of rules
+SQL> --    This can be determined only by user inspection of rules, since
+SQL> --    it is application dependent. Ideally, we want to find rules with
+SQL> --    high confidence and with non-obvious patterns. The value for
+SQL> --    confidence is an indicator of the strength of the rule - so
+SQL> --    you could set the confidence value high in conjunction with
+SQL> --    support and see if you get high quality rules.
+SQL> --
+SQL> -- 3. Frequent itemsets provide an insight into co-occurrence of items.
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            DISPLAY MODEL CONTENT
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -------------------------------------------------------------
+SQL> -- Display Top-10 Frequent Itemsets
+SQL> --
+SQL> break on itemset_id skip 1
+SQL> column item format a40
+SQL> SELECT item, support, number_of_items
+  2    FROM (SELECT I.attribute_subname AS item,
+  3                 F.support,
+  4                 F.number_of_items
+  5            FROM TABLE(DBMS_DATA_MINING.GET_FREQUENT_ITEMSETS(
+  6                         'AR_SH_SAMPLE',
+  7                         10)) F,
+  8                 TABLE(F.items) I
+  9          ORDER BY number_of_items, support, item);
+
+ITEM                                        SUPPORT NUMBER_OF_ITEMS
+---------------------------------------- ---------- ---------------
+Team shirt                               .194680851               1
+Bucket of 24 Synthetic Baseballs         .195744681               1
+Slugger Youth Series Maple Bat           .217021277               1
+Cricket Wickets                          .292553191               1
+Catchers Mitt                            .305319149               1
+Speed Trainer Bats and Training Program  .310638298               1
+Tennis Racquet Cushioned OverGrip        .311702128               1
+Pro Style Batting Tee                    .318085106               1
+2 Competition Grade NFHS Baseballs       .321276596               1
+Linseed Oil                              .322340426               1
+
+10行が選択されました。
+
+SQL>
+SQL> ----------------------------------------------------------
+SQL> -- Display Top-10 Association Rules
+SQL> --
+SQL> SET line 300
+SQL> column antecedent format a30
+SQL> column consequent format a20
+SQL> column supp format 9.999
+SQL> column conf format 9.999
+SQL> SELECT a.attribute_subname antecedent,
+  2         c.attribute_subname consequent,
+  3         rule_support supp,
+  4         rule_confidence conf,
+  5         row_number() over (partition by rule_id order by a.attribute_subname) piece
+  6    FROM TABLE(DBMS_DATA_MINING.GET_ASSOCIATION_RULES('AR_SH_SAMPLE', 10)) T,
+  7         TABLE(T.consequent) C,
+  8         TABLE(T.antecedent) A
+  9   ORDER BY conf DESC, supp DESC, piece;
+
+ANTECEDENT                     CONSEQUENT           SUPP CONF      PIECE
+------------------------------ -------------------- ---- ---- ----------
+Linseed Oil                    2 Competition Grade  .155 .874          1
+                               NFHS Baseballs
+
+Tennis Racquet Cushioned OverG 2 Competition Grade  .155 .874          2
+rip                            NFHS Baseballs
+
+2 Competition Grade NFHS Baseb Linseed Oil          .155 .859          1
+alls
+
+Tennis Racquet Cushioned OverG Linseed Oil          .155 .859          2
+rip
+
+2 Competition Grade NFHS Baseb Tennis Racquet Cushi .155 .844          1
+alls                           oned OverGrip
+
+Linseed Oil                    Tennis Racquet Cushi .155 .844          2
+                               oned OverGrip
+
+Tennis Racquet Cushioned OverG 2 Competition Grade  .181 .580          1
+rip                            NFHS Baseballs
+
+2 Competition Grade NFHS Baseb Linseed Oil          .184 .573          1
+alls
+
+Linseed Oil                    2 Competition Grade  .184 .571          1
+                               NFHS Baseballs
+
+Tennis Racquet Cushioned OverG Linseed Oil          .178 .570          1
+rip
+
+2 Competition Grade NFHS Baseb Tennis Racquet Cushi .181 .563          1
+alls                           oned OverGrip
+
+Linseed Oil                    Tennis Racquet Cushi .178 .551          1
+                               oned OverGrip
+
+Cricket Wickets                Catchers Mitt        .153 .524          1
+
+13行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                        DISPLAY MODEL CONTENT USING VIEWS
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- In 12.2, aggregation functionality is added to Association Rules
+SQL> -- model. The model views, DM$VI<ModelName> and DM$VR<ModelName>, are
+SQL> -- provided as the new output interface.
+SQL>
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2    WHERE model_name='AR_SH_SAMPLE'
+  3    ORDER BY view_name;
+
+VIEW_NAME                      VIEW_TYPE
+------------------------------ --------------------------------------------------
+DM$VGAR_SH_SAMPLE              Global Name-Value Pairs
+DM$VIAR_SH_SAMPLE              Association Rule Itemsets
+DM$VRAR_SH_SAMPLE              Association Rules
+DM$VSAR_SH_SAMPLE              Computed Settings
+DM$VWAR_SH_SAMPLE              Model Build Alerts
+
+SQL>
+SQL> ----------------------------------------------------------
+SQL> -- Using DM$VI<ModelName> to display Top-10 Frequent Itemsets.
+SQL> -- The dollar amount sold of each item is displayed.
+SQL> --
+SQL> column item format a40
+SQL> column amount_sold format 999999.99
+SQL> column support format 9.999
+SQL> column number_of_items format 99
+SQL>
+SQL> set echo off
+
+ITEM                                     AMOUNT_SOLD SUPPORT NUMBER_OF_ITEMS
+---------------------------------------- ----------- ------- ---------------
+Indoor Cricket Ball                          2122.23    .188               1
+Team shirt                                   8233.17    .195               1
+Bucket of 24 Synthetic Baseballs             8278.16    .196               1
+Slugger Youth Series Maple Bat               5709.96    .217               1
+Cricket Wickets                              3297.25    .293               1
+Catchers Mitt                               14347.13    .305               1
+Speed Trainer Bats and Training Program    262797.08    .311               1
+Tennis Racquet Cushioned OverGrip            2341.07    .312               1
+Pro Style Batting Tee                       44847.01    .318               1
+2 Competition Grade NFHS Baseballs           6942.98    .321               1
+
+10行が選択されました。
+
+SQL>
+SQL> ----------------------------------------------------------
+SQL> -- Using DM$VR<ModelName> to display Top-10 Association Rules.
+SQL> -- For each rule, the dollar amount sold of the consequent item
+SQL> -- is displayed.
+SQL> --
+SQL> SET line 300
+SQL> column antecedent format a30
+SQL> column consequent format a20
+SQL> column supp format 9.999
+SQL> column conf format 9.999
+SQL> column con_amount format 99999.99
+SQL> column piece format 99
+SQL>
+SQL> set echo off
+
+ANTECEDENT                     CONSEQUENT           CON_AMOUNT SUPP CONF PIECE
+------------------------------ -------------------- ---------- ---- ---- -----
+Linseed Oil                    2 Competition Grade     3356.54 .155 .874     1
+                               NFHS Baseballs
+
+Tennis Racquet Cushioned OverG 2 Competition Grade     3356.54 .155 .874     2
+                               NFHS Baseballs
+
+2 Competition Grade NFHS Baseb Linseed Oil             1458.54 .155 .859     1
+Tennis Racquet Cushioned OverG Linseed Oil             1458.54 .155 .859     2
+2 Competition Grade NFHS Baseb Tennis Racquet Cushi    1166.54 .155 .844     1
+                               oned OverGrip
+
+Linseed Oil                    Tennis Racquet Cushi    1166.54 .155 .844     2
+                               oned OverGrip
+
+Tennis Racquet Cushioned OverG 2 Competition Grade     3908.30 .181 .580     1
+                               NFHS Baseballs
+
+2 Competition Grade NFHS Baseb Linseed Oil             1728.27 .184 .573     1
+Linseed Oil                    2 Competition Grade     3977.27 .184 .571     1
+                               NFHS Baseballs
+
+Tennis Racquet Cushioned OverG Linseed Oil             1668.33 .178 .570     1
+2 Competition Grade NFHS Baseb Tennis Racquet Cushi    1358.30 .181 .563     1
+                               oned OverGrip
+
+Linseed Oil                    Tennis Racquet Cushi    1334.33 .178 .551     1
+                               oned OverGrip
+
+Cricket Wickets                Catchers Mitt           7198.56 .153 .524     1
+
+13行が選択されました。
+
+SQL>
+SQL> --- ------------------------------------------------------------------
+SQL> --- Now we shall build the model with a 2 column transactional input table
+SQL> --- We choose only cust_id and prod_name from the sales_trans_cust view
+SQL> --- Clear the settings table and specify the settings for this model build.
+SQL> --- Use dbms_data_mining.odms_item_id_column_name to indicate transactional
+SQL> --- input
+SQL>
+SQL> CREATE OR REPLACE VIEW sales_trans_cust_2col AS
+  2  SELECT cust_id, prod_name from sales_trans_cust;
+
+View SALES_TRANS_CUST_2COLは作成されました。
+
+SQL>
+SQL> --------------------------------------------------------------------------------
+SQL> --
+SQL> -- Create view sales_trans_2col_parallel with a parallel hint
+SQL> --
+SQL> --------------------------------------------------------------------------------
+SQL> CREATE or REPLACE VIEW sales_trans_2col_parallel AS SELECT /*+ parallel (4)*/ * FROM sales_trans_cust_2col;
+
+View SALES_TRANS_2COL_PARALLELは作成されました。
+
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('AR_SH_SAMPLE_2COL');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    v_setlst('ALGO_NAME')                := 'ALGO_APRIORI_ASSOCIATION_RULES';
+  5    v_setlst('PREP_AUTO')                := 'ON';
+  6    v_setlst('ASSO_MIN_SUPPORT')         := '0.1';
+  7    v_setlst('ASSO_MIN_CONFIDENCE')      := '0.1';
+  8    v_setlst('ASSO_MAX_RULE_LENGTH')     := '3';
+  9    v_setlst('ODMS_ITEM_ID_COLUMN_NAME') := 'PROD_NAME';
+ 10
+ 11    DBMS_DATA_MINING.CREATE_MODEL2(
+ 12      model_name          => 'AR_SH_SAMPLE_2COL',
+ 13      mining_function     => 'ASSOCIATION',
+ 14      data_query          => 'SELECT * FROM sales_trans_2col_parallel',
+ 15      set_list            => v_setlst,
+ 16      case_id_column_name => 'CUST_ID'
+ 17    );
+ 18  END;
+ 19  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> ---- Lets display the model content using views.
+SQL> ---- There are 2 additional views for transactional data
+SQL> ---- i.e DM$VTAR_SH_SAMPLE_2COL and DM$VAAR_SH_SAMPLE_2COL that give
+SQL> ---- information about the frequent item sets and rules.
+SQL> ---- in addition to DM$VIAR_SH_SAMPLE_2COL and DM$VRAR_SH_SAMPLE_2COL.
+SQL> ---- We shall use DM$VT and DM$VA to display the Top-10 frequent itemsets
+SQL> ---- and Top-10 association rules
+SQL>
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2    WHERE model_name='AR_SH_SAMPLE_2COL'
+  3    ORDER BY view_name;
+
+VIEW_NAME                      VIEW_TYPE
+------------------------------ --------------------------------------------------
+DM$VAAR_SH_SAMPLE_2COL         Association Rules For Transactional Data
+DM$VGAR_SH_SAMPLE_2COL         Global Name-Value Pairs
+DM$VIAR_SH_SAMPLE_2COL         Association Rule Itemsets
+DM$VRAR_SH_SAMPLE_2COL         Association Rules
+DM$VSAR_SH_SAMPLE_2COL         Computed Settings
+DM$VTAR_SH_SAMPLE_2COL         Association Rule Itemsets For Transactional Data
+DM$VWAR_SH_SAMPLE_2COL         Model Build Alerts
+
+7行が選択されました。
+
+SQL>
+SQL> set echo off
+
+ITEM_NAME                                SUPPORT NUMBER_OF_ITEMS
+---------------------------------------- ------- ---------------
+Indoor Cricket Ball                         .188               1
+Team shirt                                  .195               1
+Bucket of 24 Synthetic Baseballs            .196               1
+Slugger Youth Series Maple Bat              .217               1
+Cricket Wickets                             .293               1
+Catchers Mitt                               .305               1
+Speed Trainer Bats and Training Program     .311               1
+Tennis Racquet Cushioned OverGrip           .312               1
+Pro Style Batting Tee                       .318               1
+2 Competition Grade NFHS Baseballs          .321               1
+
+10行が選択されました。
+
+
+ANTECEDENT                     CONSEQUENT           SUPP CONF        NUM
+------------------------------ -------------------- ---- ---- ----------
+2 Competition Grade NFHS Baseb Linseed Oil          .184 .573          2
+alls
+
+2 Competition Grade NFHS Baseb Linseed Oil          .155 .859          3
+alls
+
+2 Competition Grade NFHS Baseb Tennis Racquet Cushi .155 .844          3
+alls                           oned OverGrip
+
+Linseed Oil                    2 Competition Grade  .155 .874          3
+                               NFHS Baseballs
+
+Linseed Oil                    2 Competition Grade  .184 .571          2
+                               NFHS Baseballs
+
+Linseed Oil                    Tennis Racquet Cushi .155 .844          3
+                               oned OverGrip
+
+Tennis Racquet Cushioned OverG 2 Competition Grade  .181 .580          2
+rip                            NFHS Baseballs
+
+Tennis Racquet Cushioned OverG 2 Competition Grade  .155 .874          3
+rip                            NFHS Baseballs
+
+Tennis Racquet Cushioned OverG Linseed Oil          .155 .859          3
+rip
+
+Tennis Racquet Cushioned OverG Linseed Oil          .178 .570          2
+rip
+
+
+10行が選択されました。
+
+SQL>
+SQL> spool oml4sql-attribute-importance

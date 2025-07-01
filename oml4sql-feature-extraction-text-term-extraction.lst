@@ -1,0 +1,256 @@
+SQL> @oml4sql-feature-extraction-text-term-extraction
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Feature Extraction - Text Term Extraction - dmtxtfe.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> --   DESCRIPTION
+SQL> --   This script demonstrates a means to extract terms for
+SQL> --   text mining from Oracle Text documents (i.e. CLOB or
+SQL> --   VARCHAR2 columns containing text documents) using a Text
+SQL> --   Index built on those documents.
+SQL> --
+SQL> --   For more information on term extraction for text mining,
+SQL> --   see Oracle Data Mining Application Developer s Guide.
+SQL> --
+SQL> --   This program uses the following schema object:
+SQL> --   . BUILD_TEXT_IDX - the Oracle Text Index built
+SQL> --     on MINING_BUILD_TEXT. Please see rdbms/demo/dmsh.sql
+SQL> --     to see how MINING_BUILD_TEXT is constructed from
+SQL> --     data from the Sample Schema.
+SQL> --
+SQL> --   Given this Text Index, the program demonstrates how to
+SQL> --   extract terms from the documents using the Text Index.
+SQL> --   The terms are generated in an output table in the multi-record
+SQL> --   case format - i.e. in the form
+SQL> --   (sequence_id, attribute_name, attribute_value)
+SQL> --
+SQL> --   This output table can then be used to generate a nested table
+SQL> --   column (DM_Nested_Numerical) in the final table that represents
+SQL> --   the training data that is to be used for model creation, or the
+SQL> --   scoring table that is to be used for model scoring.
+SQL> --
+SQL> --   Simply put, terms extracted from text documents will become
+SQL> --   generic attributes in training or scoring data. This data can
+SQL> --   then be classified, clustered or feature-extracted using the
+SQL> --   DBMS_DATA_MINING package.
+SQL> --
+SQL> --   Since the number of attributes (i.e. the terms) is typically
+SQL> --   greater than 1000, these attributes are composed into a nested
+SQL> --   column in the input table.
+SQL> --
+SQL> --   The goal of this program is to enable users to build their
+SQL> --   own term extractors, given a document table with a text index
+SQL> --   built on the documents.
+SQL>
+SQL>
+SQL> SET serveroutput ON
+SQL> SET trimspool ON
+SQL> SET pages 10000
+SQL> SET echo ON
+SQL>
+SQL> -- Cleanup for repeat runs
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE txt_sample_pref_terms';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE txt_sample_tf_out';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE txt_sample_term_out';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE txt_sample_terms';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE txt_sample_text_cat';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE txt_sample_data_input';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nontxt_attrib';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> BEGIN CTX_DDL.DROP_PREFERENCE(preference_name => 'txt_sample_pref');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- Step 1. The sample Text document table is MINING_BUILD_TEXT
+SQL> --         This table is constructed when you run rdbms/demo/dmsh.sql.
+SQL>
+SQL> -- Step 2. The sample Text Index is BUILD_TEXT_INDEX
+SQL> --         This index is also constructed when you run rdbms/demo/dmsh.sql
+SQL>
+SQL> -- Given the presence of these two schema objects, you can now
+SQL> -- proceed to extract terms from text documents in MINING_BUILD_TEXT
+SQL> -- using the following steps:
+SQL>
+SQL> -- Step 3. Create preferences for Text term extraction
+SQL> --         (This routine must be used exclusively with ODM;
+SQL> --          it is a public, but undocumented, routine in Oracle10g)
+SQL> --
+SQL> BEGIN CTX_DDL.CREATE_PREFERENCE('txt_sample_pref', 'SVM_CLASSIFIER');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> -- Step 4. Define an ancillary table for categories
+SQL> --         (required to execute preference choices)
+SQL> --
+SQL> CREATE TABLE txt_sample_text_cat (id NUMBER, cat NUMBER)
+  2  /
+
+Table TXT_SAMPLE_TEXT_CATは作成されました。
+
+SQL>
+SQL> -- Step 5. Extract terms set up by preference into intermediate terms tables
+SQL> --         1. txt_sample_term_out   - terms set by preference
+SQL> --         2. txt_sample_pref_terms - term definitions
+SQL> --
+SQL> --         The parameters are:
+SQL> --         'BUILD_TEXT_IDX',        -- index_name - Text index name
+SQL> --         'CUST_ID',               -- doc_id     - the case-id
+SQL> --         'txt_sample_text_cat',   -- cattab     - category table name
+SQL> --         'id',                    -- catdocid   - docid for category tab
+SQL> --         'cat',                   -- catid      - category id
+SQL> --         'txt_sample_pref_terms', -- restab     - term definitions
+SQL> --         'txt_sample_pref'        -- preference - Text preference name
+SQL> --
+SQL> CREATE TABLE txt_sample_term_out AS
+  2  SELECT *
+  3    FROM TABLE(ctxsys.drvodm.feature_prep (
+  4                 'BUILD_TEXT_IDX',
+  5                 'CUST_ID',
+  6                 'txt_sample_text_cat',
+  7                 'id',
+  8                 'cat',
+  9                 'txt_sample_pref_terms',
+ 10                 'txt_sample_pref'));
+
+Table TXT_SAMPLE_TERM_OUTは作成されました。
+
+SQL>
+SQL> -- At the end of this step:
+SQL> -- . txt_sample_term_out has the schema
+SQL> --   (sequence_id, value)
+SQL> --   sequence_id contains the values of CUST_ID, the case identifier
+SQL> --   column in MINING_BUILD_TEXT.
+SQL> --
+SQL>
+SQL> -- Step 6. Explain the terms in the intermediate tables to generate
+SQL> --         the final terms table. This table will contain the text
+SQL> --         elements that can be used as attributes for mining.
+SQL> --         (This drvodm routine must be used exclusively with ODM;
+SQL> --          it is a public, but undocumented, routine in Oracle10g)
+SQL> --
+SQL> CREATE TABLE txt_sample_terms AS
+  2  SELECT A.sequence_id, B.text, A.value
+  3    FROM txt_sample_term_out A,
+  4         TABLE(ctxsys.drvodm.feature_explain(
+  5                 'txt_sample_pref_terms')) B
+  6   WHERE A.attribute_id = B.id;
+
+Table TXT_SAMPLE_TERMSは作成されました。
+
+SQL>
+SQL> -- Step 7. (Optional) Display the extracted terms
+SQL> --
+SQL> column text format a45
+SQL> SELECT *
+  2    FROM (SELECT sequence_id,text,value
+  3            FROM txt_sample_terms
+  4          ORDER BY sequence_id, text)
+  5   WHERE ROWNUM < 10;
+
+SEQUENCE_ID TEXT                                          VALUE
+----------- --------------------------------------------- -----
+     101501 MASTERS                                       1.00000
+     101502 BACH                                          1.00000
+     101503 GRAD                                          .70711
+     101503 HS                                            .70711
+     101504 BACH                                          1.00000
+     101505 MASTERS                                       1.00000
+     101506 GRAD                                          .70711
+     101506 HS                                            .70711
+     101507 BACH                                          1.00000
+
+9行が選択されました。
+
+SQL>
+SQL> -- Step 8. Now, assume that you have a table containing training data
+SQL> --         with non-text attributes, with matching sequence ids
+SQL> --         (i.e. matching values of CUST_ID).
+SQL> --
+SQL> --         See MINING_BUILD_TEXT in rdbms/demo/dmsh.sql as an example
+SQL> --
+SQL> --         Add the text mining attributes to this table as a nested table,
+SQL> --         as shown below.
+SQL> --
+SQL>
+SQL> -- Just for the sake of this demo, create a dummy table with
+SQL> -- NULL non-text attributes, using txt_sample_terms itself as
+SQL> -- the source (to prepare a table with matching case-id's)
+SQL> -- In an actual scenario, the non-text columns may be
+SQL> -- projected from a different table.
+SQL> --
+SQL> CREATE TABLE nontxt_attrib AS
+  2  SELECT A.sequence_id case_id, 1 age, 1 salary, 1 class
+  3    FROM txt_sample_terms A;
+
+Table NONTXT_ATTRIBは作成されました。
+
+SQL>
+SQL> -- You can now create the mining data input table (or a view)
+SQL> -- with text and non-text attributes as follows:
+SQL> --
+SQL> CREATE TABLE txt_sample_data_input
+  2    NESTED TABLE txt_terms STORE AS txt_terms AS
+  3  SELECT N.*,
+  4         CAST(MULTISET(
+  5         SELECT DM_Nested_Numerical (T.text, T.value)
+  6           FROM txt_sample_terms T
+  7          WHERE N.case_id = T.sequence_id)
+  8         AS DM_Nested_Numericals) txt_terms
+  9    FROM nontxt_attrib N;
+
+Table TXT_SAMPLE_DATA_INPUTは作成されました。
+
+SQL>
+SQL> -- Step 9. Read rdbms/demo/dmsh.sql to revise the above steps
+SQL> --         in the context of an end-to-end demo of Text Mining.
+SQL> --         dmsh.sql performs all of the steps discussed above,
+SQL> --         against tables in the Sample Schema. The text data
+SQL> --         prepared in this manner can be classified using
+SQL> --         dmtxtsvm.sql, or feature extracted using dmtxtnmf.sql.
+SQL> spool oml4sql-partitioned-models-svm

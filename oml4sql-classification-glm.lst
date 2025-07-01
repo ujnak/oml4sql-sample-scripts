@@ -1,0 +1,1163 @@
+SQL> @oml4sql-classification-glm
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Classification - Generalized Linear Model Algorithm - dmglcdem.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET serveroutput ON
+SQL> SET trimspool ON
+SQL> SET pages 10000
+SQL> SET echo ON
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SAMPLE PROBLEM
+SQL> -----------------------------------------------------------------------
+SQL> -- Given demographic and purchase data about a set of customers, predict
+SQL> -- customer's response to an affinity card program using a GLM classifier.
+SQL> --
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SET UP AND ANALYZE THE DATA
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -------
+SQL> -- DATA
+SQL> -------
+SQL> -- The data for this sample is composed from base tables in SH Schema
+SQL> -- (See Sample Schema Documentation) and presented through these views:
+SQL> -- mining_data_build_v (build data)
+SQL> -- mining_data_test_v  (test data)
+SQL> -- mining_data_apply_v (apply data)
+SQL> -- (See dmsh.sql for view definitions).
+SQL> --
+SQL>
+SQL> -----------
+SQL> -- ANALYSIS
+SQL> -----------
+SQL> -- Data preparation in GLM is performed internally
+SQL> --
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Cleanup old model with the same name for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('GLMC_SH_Clas_sample');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> ---------------------
+SQL> -- CREATE A NEW MODEL
+SQL> --
+SQL> -- Force the column age to be a feature in the model using
+SQL> -- dbms_data_mining_transform
+SQL> --
+SQL> declare
+  2    v_xlst dbms_data_mining_transform.TRANSFORM_LIST;
+  3    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  4  BEGIN
+  5    -- Force the column age to be a feature in the model
+  6    dbms_data_mining_transform.set_transform(v_xlst,
+  7      'AGE', NULL, 'AGE', 'AGE', 'FORCE_IN');
+  8
+  9    -- The default classification algorithm is Naive Bayes. So override
+ 10    -- this choice to GLM logistic regression.
+ 11    -- Turn on feature selection and generation
+ 12    --
+ 13    v_setlst('ALGO_NAME') := 'ALGO_GENERALIZED_LINEAR_MODEL';
+ 14    -- output row diagnostic statistics
+ 15    v_setlst('GLMS_ROW_DIAGNOSTICS') := 'GLMS_ROW_DIAG_ENABLE';
+ 16    v_setlst('PREP_AUTO')            := 'ON';
+ 17    -- turn on feature selection
+ 18    v_setlst('GLMS_FTR_SELECTION')   := 'GLMS_FTR_SELECTION_ENABLE';
+ 19    -- turn on feature generation
+ 20    v_setlst('GLMS_FTR_GENERATION')  := 'GLMS_FTR_GENERATION_ENABLE';
+ 21
+ 22    /* Examples of possible overrides are shown below. If the user does not
+ 23       override, then relevant settings are determined by the algorithm
+ 24
+ 25    -- specify a row weight column
+ 26    v_setlst('ODMS_ROW_WEIGHT_COLUMN_NAME') := '<row_weight_column_name>';
+ 27    -- specify a missing value treatment method:
+ 28       Default:  replace with mean (numeric features) or
+ 29                 mode (categorical features)
+ 30         or delete the row
+ 31    v_setlst('ODMS_MISSING_VALUE_TREATMENT') := 'ODMS_MISSING_VALUE_DELETE_ROW';
+ 32    -- turn ridge regression on or off
+ 33       By default the system turns it on if there is a multicollinearity
+ 34    v_setlst('GLMS_RIDGE_REGRESSION') := 'GLMS_RIDGE_REG_ENABLE';
+ 35    */
+ 36
+ 37    DBMS_DATA_MINING.CREATE_MODEL2(
+ 38      model_name          => 'GLMC_SH_Clas_sample',
+ 39      mining_function     => 'CLASSIFICATION',
+ 40      data_query          => 'select * from mining_data_build_v',
+ 41      set_list            => v_setlst,
+ 42      case_id_column_name => 'cust_id',
+ 43      target_column_name  => 'affinity_card',
+ 44      xform_list          => v_xlst);
+ 45  END;
+ 46  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'GLMC_SH_CLAS_SAMPLE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_GENERALIZED_LINEAR_MODEL
+CLAS_WEIGHTS_BALANCED          OFF
+GLMS_CONF_LEVEL                .95
+GLMS_FTR_GENERATION            GLMS_FTR_GENERATION_ENABLE
+GLMS_FTR_SELECTION             GLMS_FTR_SELECTION_ENABLE
+GLMS_FTR_SEL_CRIT              GLMS_FTR_SEL_ALPHA_INV
+GLMS_LINK_FUNCTION             GLMS_LOGIT_LINK
+GLMS_MAX_FEATURES              1000
+GLMS_PRUNE_MODEL               GLMS_PRUNE_MODEL_ENABLE
+GLMS_ROW_DIAGNOSTICS           GLMS_ROW_DIAG_ENABLE
+GLMS_SELECT_BLOCK              GLMS_SELECT_BLOCK_DISABLE
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+PREP_AUTO                      ON
+
+15行が選択されました。
+
+SQL>
+SQL> --------------------------
+SQL> -- DISPLAY MODEL SIGNATURE
+SQL> --
+SQL> column attribute_name format a40
+SQL> column attribute_type format a20
+SQL> SELECT attribute_name, attribute_type
+  2    FROM user_mining_model_attributes
+  3   WHERE model_name = 'GLMC_SH_CLAS_SAMPLE'
+  4  ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                           ATTRIBUTE_TYPE
+---------------------------------------- --------------------
+AFFINITY_CARD                            CATEGORICAL
+AGE                                      NUMERICAL
+BOOKKEEPING_APPLICATION                  NUMERICAL
+EDUCATION                                CATEGORICAL
+HOUSEHOLD_SIZE                           CATEGORICAL
+OCCUPATION                               CATEGORICAL
+YRS_RESIDENCE                            NUMERICAL
+
+7行が選択されました。
+
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY MODEL DETAILS
+SQL> -- IF the covariance matrix had been invalid, THEN the global details
+SQL> -- would have had a row like:
+SQL> --
+SQL> --   VALID_COVARIANCE_MATRIX  0
+SQL> --
+SQL> -- And, as a result we would only have gotten a limited set of diagnostics.
+SQL> -- This never happens with feature selecion enabled. IF the forced in feature
+SQL> -- had caused a multi-collinearity then the model build would have failed.
+SQL> -- Note that the forced_in feature, age, was not statistically significant.
+SQL> -- However, it did not cause a multi-collinearity, hence the build succeeded.
+SQL> --
+SQL> -- With feature selection disabled, then an invalid covariance matrix is
+SQL> -- possible. Then, multi-collinearity, if it exists will cause
+SQL> -- RIDGE REGRESSION to kick in, unless it has been specifically disabled by
+SQL> -- you. The build will succeed with ridge enabled. However, the covariance
+SQL> -- matrix will be invalid since it is not computed by the ridge algorithm.
+SQL> --
+SQL> -- An important consequence of an invalid covariance matrix is that
+SQL> -- the model cannot predict confidence bounds - i.e. the result of
+SQL> -- PREDICTION_BOUNDS function in a SQL query is NULL.
+SQL> --
+SQL> -- If accuracy is the primary goal and interpretability not important, then we
+SQL> -- note that RIDGE REGRESSION may be preferrable to feature selection for
+SQL> -- some datasets. You can test this by specifically enabling ridge regression.
+SQL> --
+SQL> -- In this demo, we compute two models. The first (above) has feature
+SQL> -- selection enabled and produces confidence bounds and a full set of
+SQL> -- diagnostics. The second enables ridge regression. It does not produce
+SQL> -- confidence bounds. It only produces a limited set of diagnostics.
+SQL>
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2    WHERE model_name='GLMC_SH_CLAS_SAMPLE'
+  3    ORDER BY view_name;
+
+VIEW_NAME                      VIEW_TYPE
+------------------------------ --------------------------------------------------
+DM$VAGLMC_SH_CLAS_SAMPLE       GLM Classification Row Diagnostics
+DM$VCGLMC_SH_CLAS_SAMPLE       Scoring Cost Matrix
+DM$VDGLMC_SH_CLAS_SAMPLE       GLM Classification Attribute Diagnostics
+DM$VGGLMC_SH_CLAS_SAMPLE       Global Name-Value Pairs
+DM$VNGLMC_SH_CLAS_SAMPLE       Normalization and Missing Value Handling
+DM$VSGLMC_SH_CLAS_SAMPLE       Computed Settings
+DM$VTGLMC_SH_CLAS_SAMPLE       Classification Targets
+DM$VWGLMC_SH_CLAS_SAMPLE       Model Build Alerts
+
+8行が選択されました。
+
+SQL>
+SQL> -- Global statistics
+SQL> column name format a30
+SQL> column numeric_value format 9999990.999
+SQL> column string_value format a20
+SQL> select name, numeric_value, string_value from DM$VGGLMC_SH_CLAS_SAMPLE
+  2    ORDER BY name;
+
+NAME                           NUMERIC_VALUE STRING_VALUE
+------------------------------ ------------- --------------------
+AIC_INTERCEPT                       1699.903
+AIC_MODEL                           1136.392
+CONVERGED                                    YES
+DEPENDENT_MEAN                         0.253
+ITERATIONS                             7.000
+LR_CHI_SQ                            591.511
+LR_CHI_SQ_P_VALUE                      0.000
+LR_DF                                 14.000
+NEG2_LL_INTERCEPT                   1697.903
+NEG2_LL_MODEL                       1106.392
+NUM_PARAMS                            15.000
+NUM_ROWS                            1500.000
+PCT_CORRECT                            0.823
+PCT_INCORRECT                          0.177
+PCT_TIED                               0.000
+PSEUDO_R_SQ_CS                         0.326
+PSEUDO_R_SQ_N                          0.481
+SC_INTERCEPT                        1705.216
+SC_MODEL                            1216.090
+VALID_COVARIANCE_MATRIX                      YES
+
+20行が選択されました。
+
+SQL>
+SQL> -- Coefficient statistics
+SQL> SET line 200
+SQL> column feature_expression format a53
+SQL> column attr_name format a20
+SQL> col attr_val format a10
+SQL> column coefficient format 9999990.999
+SQL> column std_error format 9999990.999
+SQL> column test_statistic format 9999990.999
+SQL> column p_value format 9999990.999
+SQL> column std_coefficient format 9999990.999
+SQL> column lower_coeff_limit format 9999990.999
+SQL> column upper_coeff_limit format 9999990.999
+SQL> column exp_coefficient format 9999990.999
+SQL> column exp_lower_coeff_limit format 9999990.999
+SQL> column exp_upper_coeff_limit format 9999990.999
+SQL>
+SQL> SELECT attribute_name attr_name, attribute_value attr_val,
+  2    coefficient, std_error, test_statistic,
+  3    p_value, std_coefficient, lower_coeff_limit, upper_coeff_limit,
+  4    exp_coefficient, exp_lower_coeff_limit, exp_upper_coeff_limit
+  5    FROM DM$VDGLMC_SH_CLAS_SAMPLE
+  6    ORDER BY 1,2;
+
+ATTR_NAME            ATTR_VAL    COEFFICIENT    STD_ERROR TEST_STATISTIC      P_VALUE STD_COEFFICIENT LOWER_COEFF_LIMIT UPPER_COEFF_LIMIT EXP_COEFFICIENT EXP_LOWER_COEFF_LIMIT EXP_UPPER_COEFF_LIMIT
+-------------------- ---------- ------------ ------------ -------------- ------------ --------------- ----------------- ----------------- --------------- --------------------- ---------------------
+                                      -0.056        0.014         16.772        0.000          -0.010            -0.083            -0.029           0.945                 0.920                 0.971
+                                      -1.848        0.550         11.285        0.001          -0.309            -2.926            -0.770           0.158                 0.054                 0.463
+                                       0.004        0.008          0.307        0.579           0.032            -0.011             0.020           1.004                 0.989                 1.020
+                                       0.348        0.094         13.581        0.000           0.368             0.163             0.533           1.416                 1.177                 1.704
+                                       1.331        0.191         48.804        0.000           0.271             0.958             1.705           3.785                 2.606                 5.499
+                                      -2.038        0.216         89.463        0.000          -0.485            -2.461            -1.616           0.130                 0.085                 0.199
+                                       0.874        0.300          8.489        0.004           0.102             0.286             1.461           2.395                 1.331                 4.311
+                                       2.195        0.317         47.926        0.000           0.255             1.574             2.816           8.980                 4.824                16.717
+                                      -2.263        0.377         35.960        0.000          -0.388            -3.003            -1.523           0.104                 0.050                 0.218
+                                       1.054        0.381          7.658        0.006           0.100             0.307             1.800           2.868                 1.360                 6.049
+                                      -3.753        0.438         73.507        0.000           0.000            -4.611            -2.895           0.023                 0.010                 0.055
+                                       2.109        0.476         19.617        0.000           0.173             1.176             3.042           8.238                 3.240                20.947
+                                       1.361        0.490          7.722        0.005           0.096             0.401             2.320           3.899                 1.493                10.179
+                                      -2.365        0.492         23.083        0.000          -0.454            -3.329            -1.400           0.094                 0.036                 0.247
+                                       0.573        0.111         26.643        0.000           0.606             0.355             0.790           1.773                 1.426                 2.203
+
+15行が選択されました。
+
+SQL>
+SQL> -- Show the features and their p_values
+SQL> SET lin 80
+SQL> SET pages 20
+SQL> SELECT attribute_name attr_name, attribute_value attr_val, coefficient, p_value
+  2    FROM DM$VDGLMC_SH_CLAS_SAMPLE
+  3    ORDER BY p_value;
+
+ATTR_NAME            ATTR_VAL    COEFFICIENT      P_VALUE
+-------------------- ---------- ------------ ------------
+                                      -2.038        0.000
+                                      -3.753        0.000
+                                       1.331        0.000
+                                       2.195        0.000
+                                      -2.263        0.000
+                                       0.573        0.000
+                                      -2.365        0.000
+                                       2.109        0.000
+                                      -0.056        0.000
+                                       0.348        0.000
+                                      -1.848        0.001
+                                       0.874        0.004
+                                       1.361        0.005
+                                       1.054        0.006
+                                       0.004        0.579
+
+15行が選択されました。
+
+SQL>
+SQL> -- Row diagnostics
+SQL> SELECT CASE_id, TARGET_value, TARGET_value_prob, hat,
+  2    working_residual, pearson_residual, deviance_residual,
+  3    c, cbar, difdev, difchisq
+  4    FROM dm$vaGLMC_SH_Clas_sample
+  5   WHERE case_id <= 101510
+  6   ORDER BY case_id;
+
+   CASE_ID TARGET_VALUE TARGET_VALUE_PROB        HAT WORKING_RESIDUAL
+---------- ------------ ----------------- ---------- ----------------
+PEARSON_RESIDUAL DEVIANCE_RESIDUAL          C       CBAR     DIFDEV   DIFCHISQ
+---------------- ----------------- ---------- ---------- ---------- ----------
+    101501            0        6.644E-001 2.262E-002       -1.51E+000
+      -7.11E-001        -9.04E-001 1.196E-002 1.169E-002 8.293E-001 5.167E-001
+
+    101502            0        8.943E-001 5.924E-003       -1.12E+000
+      -3.44E-001        -4.73E-001 7.087E-004 7.045E-004 2.242E-001 1.189E-001
+
+    101503            0        9.843E-001 1.308E-003       -1.02E+000
+      -1.26E-001        -1.78E-001 2.095E-005 2.092E-005 3.172E-002   1.6E-002
+
+    101504            1         7.16E-001 6.445E-003       1.397E+000
+      6.299E-001        8.175E-001  2.59E-003 2.574E-003 6.709E-001 3.993E-001
+
+    101505            1        3.723E-001 5.045E-002       2.686E+000
+      1.298E+000        1.406E+000 9.433E-002 8.957E-002 2.066E+000 1.775E+000
+
+
+   CASE_ID TARGET_VALUE TARGET_VALUE_PROB        HAT WORKING_RESIDUAL
+---------- ------------ ----------------- ---------- ----------------
+PEARSON_RESIDUAL DEVIANCE_RESIDUAL          C       CBAR     DIFDEV   DIFCHISQ
+---------------- ----------------- ---------- ---------- ---------- ----------
+    101506            0        9.371E-001 1.814E-002       -1.07E+000
+      -2.59E-001        -3.61E-001 1.264E-003 1.241E-003 1.313E-001 6.841E-002
+
+    101507            0        8.059E-001 3.685E-003       -1.24E+000
+      -4.91E-001        -6.57E-001 8.941E-004 8.908E-004 4.325E-001 2.417E-001
+
+    101508            0        9.843E-001 1.323E-003       -1.02E+000
+      -1.26E-001        -1.78E-001  2.11E-005 2.107E-005 3.159E-002 1.593E-002
+
+    101509            0        7.096E-001 6.719E-002       -1.41E+000
+       -6.4E-001        -8.28E-001 3.161E-002 2.948E-002 7.157E-001 4.388E-001
+
+    101510            1        1.057E-001 5.924E-003       9.459E+000
+      2.908E+000         2.12E+000 5.072E-002 5.041E-002 4.544E+000  8.51E+000
+
+
+10行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               TEST THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL> ------------------------------------
+SQL> -- COMPUTE METRICS TO TEST THE MODEL
+SQL> --
+SQL> -- The queries shown below demonstrate the use of new SQL data mining functions
+SQL> -- along with analytic functions to compute the various test metrics.
+SQL> --
+SQL> -- Modelname:             glmc_sh_clas_sample
+SQL> -- Target attribute:      affinity_card
+SQL> -- Positive target value: 1
+SQL> -- (Change as appropriate for a different example)
+SQL>
+SQL> -- Compute CONFUSION MATRIX
+SQL> --
+SQL> -- This query demonstates how to generate a confusion matrix using the new
+SQL> -- SQL prediction functions for scoring. The returned columns match the
+SQL> -- schema of the table generated by COMPUTE_CONFUSION_MATRIX procedure.
+SQL> --
+SQL> SELECT affinity_card AS actual_target_value,
+  2         PREDICTION(glmc_sh_clas_sample USING *) AS predicted_target_value,
+  3         COUNT(*) AS value
+  4    FROM mining_data_test_v
+  5   GROUP BY affinity_card, PREDICTION(glmc_sh_clas_sample USING *)
+  6   ORDER BY 1, 2;
+
+ACTUAL_TARGET_VALUE PREDICTED_TARGET_VALUE      VALUE
+------------------- ---------------------- ----------
+                  0                      0       1047
+                  0                      1        107
+                  1                      0        170
+                  1                      1        176
+
+SQL>
+SQL> -- Compute ACCURACY
+SQL> --
+SQL> column accuracy format 9.99
+SQL>
+SQL> SELECT SUM(correct)/COUNT(*) AS accuracy
+  2    FROM (SELECT DECODE(affinity_card,
+  3                   PREDICTION(glmc_sh_clas_sample USING *), 1, 0) AS correct
+  4            FROM mining_data_test_v);
+
+ACCURACY
+--------
+     .82
+
+SQL>
+SQL> -- Compute AUC (Area Under the roc Curve)
+SQL> -- (See notes on ROC Curve and AUC computation in dmsvcdem.sql)
+SQL> --
+SQL> column auc format 9.99
+SQL> WITH
+  2  pos_prob_and_counts AS (
+  3  SELECT PREDICTION_PROBABILITY(glmc_sh_clas_sample, 1 USING *) pos_prob,
+  4         DECODE(affinity_card, 1, 1, 0) pos_cnt
+  5    FROM mining_data_test_v
+  6  ),
+  7  tpf_fpf AS (
+  8  SELECT  pos_cnt,
+  9         SUM(pos_cnt) OVER (ORDER BY pos_prob DESC) /
+ 10           SUM(pos_cnt) OVER () tpf,
+ 11         SUM(1 - pos_cnt) OVER (ORDER BY pos_prob DESC) /
+ 12           SUM(1 - pos_cnt) OVER () fpf
+ 13    FROM pos_prob_and_counts
+ 14  ),
+ 15  trapezoid_areas AS (
+ 16  SELECT 0.5 * (fpf - LAG(fpf, 1, 0) OVER (ORDER BY fpf, tpf)) *
+ 17          (tpf + LAG(tpf, 1, 0) OVER (ORDER BY fpf, tpf)) area
+ 18    FROM tpf_fpf
+ 19   WHERE pos_cnt = 1
+ 20      OR (tpf = 1 AND fpf = 1)
+ 21  )
+ 22  SELECT SUM(area) auc
+ 23    FROM trapezoid_areas;
+
+AUC
+---
+.86
+
+SQL>
+SQL> --------------------------------------------------------------------------
+SQL> --                               SCORE DATA
+SQL> --------------------------------------------------------------------------
+SQL>
+SQL> -- Since the model has a valid covariance matrix, it is possible
+SQL> -- to obtain confidence bounds.  In addition, provide the ranked set
+SQL> -- of attributes which have the most influence on each prediction.
+SQL> set long 10000
+SQL> SELECT PREDICTION(GLMC_SH_Clas_sample USING *) pr,
+  2         PREDICTION_PROBABILITY(GLMC_SH_Clas_sample USING *) pb,
+  3         PREDICTION_BOUNDS(GLMC_SH_Clas_sample USING *).lower pl,
+  4         PREDICTION_BOUNDS(GLMC_SH_Clas_sample USING *).upper pu,
+  5         PREDICTION_DETAILS(GLMC_SH_Clas_sample USING *) pd
+  6    FROM mining_data_apply_v
+  7   WHERE CUST_ID <= 100010
+  8   ORDER BY CUST_ID;
+
+        PR         PB         PL         PU
+---------- ---------- ---------- ----------
+PD
+--------------------------------------------------------------------------------
+         0  9.65E-001 9.367E-001 9.808E-001
+<Details algorithm="Generalized Linear Model" class="0">
+<Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".328" rank="1"/>
+<Attribute name="YRS_RESIDENCE" actualValue="3" weight=".293" rank="2"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".26" rank="3"/
+>
+<Attribute name="AGE" actualValue="51" weight=".245" rank="4"/>
+</Details>
+
+         0 8.245E-001 7.485E-001 8.811E-001
+<Details algorithm="Generalized Linear Model" class="0">
+<Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".384" rank="1"/>
+<Attribute name="YRS_RESIDENCE" actualValue="4" weight=".257" rank="2"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".228" rank="3"
+/>
+
+        PR         PB         PL         PU
+---------- ---------- ---------- ----------
+PD
+--------------------------------------------------------------------------------
+<Attribute name="AGE" actualValue="30" weight=".16" rank="4"/>
+<Attribute name="EDUCATION" actualValue="Bach." weight=".115" rank="5"/>
+</Details>
+
+         0 8.992E-001 8.463E-001 9.353E-001
+<Details algorithm="Generalized Linear Model" class="0">
+<Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".38" rank="1"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".249" rank="2"
+/>
+<Attribute name="AGE" actualValue="23" weight=".215" rank="3"/>
+<Attribute name="YRS_RESIDENCE" actualValue="6" weight=".17" rank="4"/>
+</Details>
+
+         0 9.186E-001 8.789E-001 9.461E-001
+<Details algorithm="Generalized Linear Model" class="0">
+
+        PR         PB         PL         PU
+---------- ---------- ---------- ----------
+PD
+--------------------------------------------------------------------------------
+<Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".371" rank="1"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".254" rank="2"
+/>
+<Attribute name="AGE" actualValue="39" weight=".216" rank="3"/>
+<Attribute name="YRS_RESIDENCE" actualValue="5" weight=".189" rank="4"/>
+</Details>
+
+         1 6.573E-001 4.794E-001 7.998E-001
+<Details algorithm="Generalized Linear Model" class="1">
+<Attribute name="YRS_RESIDENCE" actualValue="5" weight=".35" rank="1"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".303" rank="2"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".213" rank="3"
+/>
+<Attribute name="EDUCATION" actualValue="Assoc-A" weight=".207" rank="4"/>
+<Attribute name="AGE" actualValue="35" weight=".096" rank="5"/>
+
+        PR         PB         PL         PU
+---------- ---------- ---------- ----------
+PD
+--------------------------------------------------------------------------------
+</Details>
+
+         0 9.874E-001 9.718E-001 9.944E-001
+<Details algorithm="Generalized Linear Model" class="0">
+<Attribute name="HOUSEHOLD_SIZE" actualValue="9+" weight=".301" rank="1"/>
+<Attribute name="YRS_RESIDENCE" actualValue="2" weight=".297" rank="2"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".264" rank="3"
+/>
+<Attribute name="AGE" actualValue="9" weight=".262" rank="4"/>
+</Details>
+
+         0 9.868E-001 9.597E-001 9.958E-001
+<Details algorithm="Generalized Linear Model" class="0">
+<Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".294" rank="1"/>
+<Attribute name="OCCUPATION" actualValue="Other" weight=".288" rank="2"/>
+
+        PR         PB         PL         PU
+---------- ---------- ---------- ----------
+PD
+--------------------------------------------------------------------------------
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".267" rank="3"
+/>
+<Attribute name="AGE" actualValue="29" weight=".26" rank="4"/>
+<Attribute name="YRS_RESIDENCE" actualValue="5" weight=".256" rank="5"/>
+</Details>
+
+         0 9.215E-001  8.84E-001 9.475E-001
+<Details algorithm="Generalized Linear Model" class="0">
+<Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".369" rank="1"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".255" rank="2"
+/>
+<Attribute name="AGE" actualValue="30" weight=".219" rank="3"/>
+<Attribute name="YRS_RESIDENCE" actualValue="5" weight=".192" rank="4"/>
+</Details>
+
+
+        PR         PB         PL         PU
+---------- ---------- ---------- ----------
+PD
+--------------------------------------------------------------------------------
+         0  5.22E-001 4.272E-001 6.153E-001
+<Details algorithm="Generalized Linear Model" class="0">
+<Attribute name="AGE" actualValue="18" weight=".031" rank="1"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight="-.092" rank="2
+"/>
+<Attribute name="EDUCATION" actualValue="Bach." weight="-.126" rank="3"/>
+<Attribute name="YRS_RESIDENCE" actualValue="3" weight="-.162" rank="4"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight="-.165" rank="5"/>
+</Details>
+
+         0 8.059E-001 7.545E-001 8.487E-001
+<Details algorithm="Generalized Linear Model" class="0">
+<Attribute name="YRS_RESIDENCE" actualValue="3" weight=".317" rank="1"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".212" rank="2"
+/>
+
+        PR         PB         PL         PU
+---------- ---------- ---------- ----------
+PD
+--------------------------------------------------------------------------------
+<Attribute name="AGE" actualValue="17" weight=".17" rank="3"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".087" rank="4"/>
+</Details>
+
+
+10行が選択されました。
+
+SQL>
+SQL>
+SQL> -- Next we compare to a model built with ridge regression enabled
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD A NEW MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> ---------------------
+SQL> -- CREATE A NEW MODEL
+SQL> --
+SQL> -- Cleanup old model with same name (if any)
+SQL> BEGIN
+  2    DBMS_DATA_MINING.DROP_MODEL('GLMC_SH_Clas_sample');
+  3  EXCEPTION WHEN OTHERS THEN
+  4    NULL;
+  5  END;
+  6  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- Turn on ridge regression
+  5    v_setlst('ALGO_NAME')             := 'ALGO_GENERALIZED_LINEAR_MODEL';
+  6    -- output row diagnostic statistics into a table named GLMC_SH_SAMPLE_DIAG
+  7    v_setlst('GLMS_ROW_DIAGNOSTICS')  := 'GLMS_ROW_DIAG_ENABLE';
+  8    v_setlst('PREP_AUTO')             := 'ON';
+  9    -- turn on ridge regression
+ 10    v_setlst('GLMS_RIDGE_REGRESSION') := 'GLMS_RIDGE_REG_ENABLE';
+ 11    v_setlst('GLMS_SOLVER')           := 'GLMS_SOLVER_QR';
+ 12
+ 13    DBMS_DATA_MINING.CREATE_MODEL2(
+ 14      model_name          => 'GLMC_SH_Clas_sample',
+ 15      mining_function     => 'CLASSIFICATION',
+ 16      data_query          => 'select * from mining_data_build_v',
+ 17      set_list            => v_setlst,
+ 18      case_id_column_name => 'cust_id',
+ 19      target_column_name  => 'affinity_card');
+ 20  END;
+ 21  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'GLMC_SH_CLAS_SAMPLE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_GENERALIZED_LINEAR_MODEL
+CLAS_WEIGHTS_BALANCED          OFF
+GLMS_CONF_LEVEL                .95
+GLMS_FTR_GENERATION            GLMS_FTR_GENERATION_DISABLE
+GLMS_FTR_SELECTION             GLMS_FTR_SELECTION_DISABLE
+GLMS_LINK_FUNCTION             GLMS_LOGIT_LINK
+GLMS_RIDGE_REGRESSION          GLMS_RIDGE_REG_ENABLE
+GLMS_RIDGE_VALUE               .01
+GLMS_ROW_DIAGNOSTICS           GLMS_ROW_DIAG_ENABLE
+GLMS_SOLVER                    GLMS_SOLVER_QR
+GLMS_VIF_FOR_RIDGE             GLMS_VIF_RIDGE_DISABLE
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+PREP_AUTO                      ON
+
+15行が選択されました。
+
+SQL>
+SQL> --------------------------
+SQL> -- DISPLAY MODEL SIGNATURE
+SQL> --
+SQL> column attribute_name format a40
+SQL> column attribute_type format a20
+SQL> SELECT attribute_name, attribute_type
+  2    FROM user_mining_model_attributes
+  3   WHERE model_name = 'GLMC_SH_CLAS_SAMPLE'
+  4  ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                           ATTRIBUTE_TYPE
+---------------------------------------- --------------------
+AFFINITY_CARD                            CATEGORICAL
+AGE                                      NUMERICAL
+BOOKKEEPING_APPLICATION                  NUMERICAL
+BULK_PACK_DISKETTES                      NUMERICAL
+COUNTRY_NAME                             CATEGORICAL
+CUST_GENDER                              CATEGORICAL
+CUST_INCOME_LEVEL                        CATEGORICAL
+CUST_MARITAL_STATUS                      CATEGORICAL
+EDUCATION                                CATEGORICAL
+FLAT_PANEL_MONITOR                       NUMERICAL
+HOME_THEATER_PACKAGE                     NUMERICAL
+HOUSEHOLD_SIZE                           CATEGORICAL
+OCCUPATION                               CATEGORICAL
+OS_DOC_SET_KANJI                         NUMERICAL
+PRINTER_SUPPLIES                         NUMERICAL
+YRS_RESIDENCE                            NUMERICAL
+Y_BOX_GAMES                              NUMERICAL
+
+17行が選択されました。
+
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY MODEL DETAILS
+SQL> --
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2    WHERE model_name='GLMC_SH_CLAS_SAMPLE'
+  3    ORDER BY view_name;
+
+VIEW_NAME
+------------------------------
+VIEW_TYPE
+--------------------------------------------------
+DM$VAGLMC_SH_CLAS_SAMPLE
+GLM Classification Row Diagnostics
+
+DM$VCGLMC_SH_CLAS_SAMPLE
+Scoring Cost Matrix
+
+DM$VDGLMC_SH_CLAS_SAMPLE
+GLM Classification Attribute Diagnostics
+
+DM$VGGLMC_SH_CLAS_SAMPLE
+Global Name-Value Pairs
+
+DM$VNGLMC_SH_CLAS_SAMPLE
+Normalization and Missing Value Handling
+
+
+VIEW_NAME
+------------------------------
+VIEW_TYPE
+--------------------------------------------------
+DM$VSGLMC_SH_CLAS_SAMPLE
+Computed Settings
+
+DM$VTGLMC_SH_CLAS_SAMPLE
+Classification Targets
+
+DM$VWGLMC_SH_CLAS_SAMPLE
+Model Build Alerts
+
+
+8行が選択されました。
+
+SQL>
+SQL> -- Global statistics
+SQL> column numeric_value format 9999990.999
+SQL> column string_value format a20
+SQL> select name, numeric_value, string_value from DM$VGGLMC_SH_CLAS_SAMPLE
+  2    ORDER BY name;
+
+NAME                           NUMERIC_VALUE STRING_VALUE
+------------------------------ ------------- --------------------
+AIC_INTERCEPT                       1699.903
+AIC_MODEL                           1162.768
+CONVERGED                                    YES
+DEPENDENT_MEAN                         0.253
+ITERATIONS                            10.000
+LR_CHI_SQ                            691.135
+LR_CHI_SQ_P_VALUE                      0.000
+LR_DF                                 77.000
+NEG2_LL_INTERCEPT                   1697.903
+NEG2_LL_MODEL                       1006.768
+NUM_PARAMS                            78.000
+NUM_ROWS                            1500.000
+PCT_CORRECT                            0.843
+PCT_INCORRECT                          0.157
+PCT_TIED                               0.000
+PSEUDO_R_SQ_CS                         0.369
+PSEUDO_R_SQ_N                          0.545
+
+NAME                           NUMERIC_VALUE STRING_VALUE
+------------------------------ ------------- --------------------
+RANK_DEFICIENCY                        0.000
+SC_INTERCEPT                        1705.216
+SC_MODEL                            1577.199
+VALID_COVARIANCE_MATRIX                      YES
+
+21行が選択されました。
+
+SQL>
+SQL> -- Coefficient statistics
+SQL> SET line 120
+SQL> column class format a20
+SQL> column attribute_name format a20
+SQL> column attribute_subname format a20
+SQL> column attribute_value format a20
+SQL> column partition_name format a20
+SQL>
+SQL> SELECT *
+  2    FROM DM$VDGLMC_SH_CLAS_SAMPLE
+  3   WHERE attribute_name = 'OCCUPATION'
+  4   ORDER BY target_value, attribute_name, attribute_value;
+
+PARTITION_NAME       TARGET_VALUE ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME    ATTRIBUTE_VALUE
+-------------------- ------------ -------------------- -------------------- --------------------
+FEATURE_EXPRESSION                                     COEFFICIENT    STD_ERROR TEST_STATISTIC      P_VALUE
+----------------------------------------------------- ------------ ------------ -------------- ------------
+STD_COEFFICIENT LOWER_COEFF_LIMIT UPPER_COEFF_LIMIT EXP_COEFFICIENT EXP_LOWER_COEFF_LIMIT EXP_UPPER_COEFF_LIMIT
+--------------- ----------------- ----------------- --------------- --------------------- ---------------------
+                                1 OCCUPATION                                ?
+                                                            -1.430        0.482          8.799        0.003
+         -0.177            -2.375            -0.485           0.239                 0.093                 0.616
+
+                                1 OCCUPATION                                Armed-F
+                                                             1.239        5.655          0.048        0.827
+          0.025            -9.844            12.322           3.454                 0.000            224671.382
+
+                                1 OCCUPATION                                Cleric.
+                                                            -0.570        0.335          2.894        0.089
+         -0.102            -1.227             0.087           0.566                 0.293                 1.091
+
+                                1 OCCUPATION                                Crafts
+
+PARTITION_NAME       TARGET_VALUE ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME    ATTRIBUTE_VALUE
+-------------------- ------------ -------------------- -------------------- --------------------
+FEATURE_EXPRESSION                                     COEFFICIENT    STD_ERROR TEST_STATISTIC      P_VALUE
+----------------------------------------------------- ------------ ------------ -------------- ------------
+STD_COEFFICIENT LOWER_COEFF_LIMIT UPPER_COEFF_LIMIT EXP_COEFFICIENT EXP_LOWER_COEFF_LIMIT EXP_UPPER_COEFF_LIMIT
+--------------- ----------------- ----------------- --------------- --------------------- ---------------------
+                                                            -0.733        0.293          6.250        0.012
+         -0.136            -1.308            -0.158           0.480                 0.270                 0.853
+
+                                1 OCCUPATION                                Farming
+                                                            -1.260        0.520          5.877        0.015
+         -0.115            -2.279            -0.241           0.284                 0.102                 0.786
+
+                                1 OCCUPATION                                Handler
+                                                            -1.201        0.643          3.489        0.062
+         -0.126            -2.462             0.059           0.301                 0.085                 1.061
+
+                                1 OCCUPATION                                House-s
+                                                            -3.605        4.713          0.585        0.444
+
+PARTITION_NAME       TARGET_VALUE ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME    ATTRIBUTE_VALUE
+-------------------- ------------ -------------------- -------------------- --------------------
+FEATURE_EXPRESSION                                     COEFFICIENT    STD_ERROR TEST_STATISTIC      P_VALUE
+----------------------------------------------------- ------------ ------------ -------------- ------------
+STD_COEFFICIENT LOWER_COEFF_LIMIT UPPER_COEFF_LIMIT EXP_COEFFICIENT EXP_LOWER_COEFF_LIMIT EXP_UPPER_COEFF_LIMIT
+--------------- ----------------- ----------------- --------------- --------------------- ---------------------
+         -0.136           -12.842             5.632           0.027                 0.000               279.172
+
+                                1 OCCUPATION                                Machine
+                                                            -0.903        0.365          6.131        0.013
+         -0.129            -1.619            -0.188           0.405                 0.198                 0.828
+
+                                1 OCCUPATION                                Other
+                                                            -2.322        0.595         15.212        0.000
+         -0.389            -3.489            -1.155           0.098                 0.031                 0.315
+
+                                1 OCCUPATION                                Prof.
+                                                            -0.605        0.319          3.594        0.058
+         -0.105            -1.230             0.020           0.546                 0.292                 1.021
+
+PARTITION_NAME       TARGET_VALUE ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME    ATTRIBUTE_VALUE
+-------------------- ------------ -------------------- -------------------- --------------------
+FEATURE_EXPRESSION                                     COEFFICIENT    STD_ERROR TEST_STATISTIC      P_VALUE
+----------------------------------------------------- ------------ ------------ -------------- ------------
+STD_COEFFICIENT LOWER_COEFF_LIMIT UPPER_COEFF_LIMIT EXP_COEFFICIENT EXP_LOWER_COEFF_LIMIT EXP_UPPER_COEFF_LIMIT
+--------------- ----------------- ----------------- --------------- --------------------- ---------------------
+
+                                1 OCCUPATION                                Protec.
+                                                            -0.533        0.523          1.036        0.309
+         -0.040            -1.559             0.493           0.587                 0.210                 1.638
+
+                                1 OCCUPATION                                Sales
+                                                            -0.657        0.287          5.253        0.022
+         -0.117            -1.220            -0.095           0.518                 0.295                 0.909
+
+                                1 OCCUPATION                                TechSup
+                                                            -0.579        0.520          1.238        0.266
+         -0.054            -1.599             0.441           0.560                 0.202                 1.554
+
+
+PARTITION_NAME       TARGET_VALUE ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME    ATTRIBUTE_VALUE
+-------------------- ------------ -------------------- -------------------- --------------------
+FEATURE_EXPRESSION                                     COEFFICIENT    STD_ERROR TEST_STATISTIC      P_VALUE
+----------------------------------------------------- ------------ ------------ -------------- ------------
+STD_COEFFICIENT LOWER_COEFF_LIMIT UPPER_COEFF_LIMIT EXP_COEFFICIENT EXP_LOWER_COEFF_LIMIT EXP_UPPER_COEFF_LIMIT
+--------------- ----------------- ----------------- --------------- --------------------- ---------------------
+                                1 OCCUPATION                                Transp.
+                                                            -0.683        0.436          2.457        0.117
+         -0.073            -1.536             0.171           0.505                 0.215                 1.187
+
+
+14行が選択されました。
+
+SQL>
+SQL> -- Limited row diagnostics - working_residuals only, others are NULL
+SQL> SELECT CASE_id, TARGET_value, TARGET_value_prob, working_residual
+  2    FROM dm$vaGLMC_SH_Clas_sample
+  3   WHERE case_id <= 101510
+  4   ORDER BY case_id;
+
+   CASE_ID TARGET_VALUE TARGET_VALUE_PROB WORKING_RESIDUAL
+---------- ------------ ----------------- ----------------
+    101501            0        7.577E-001       -1.32E+000
+    101502            0         8.95E-001       -1.12E+000
+    101503            0        9.825E-001       -1.02E+000
+    101504            1        8.861E-001       1.128E+000
+    101505            1        1.679E-001       5.956E+000
+    101506            0        9.373E-001       -1.07E+000
+    101507            0        7.992E-001       -1.25E+000
+    101508            0        9.882E-001       -1.01E+000
+    101509            0        9.277E-001       -1.08E+000
+    101510            1        1.114E-001       8.977E+000
+
+10行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               TEST THE NEW MODEL
+SQL> -----------------------------------------------------------------------
+SQL> ------------------------------------
+SQL> -- COMPUTE METRICS TO TEST THE MODEL
+SQL> --
+SQL> -- The queries shown below demonstrate the use of new SQL data mining functions
+SQL> -- along with analytic functions to compute various test metrics.
+SQL> --
+SQL> -- Modelname:             glmc_sh_clas_sample
+SQL> -- Target attribute:      affinity_card
+SQL> -- Positive target value: 1
+SQL> -- (Change these as appropriate for a different example)
+SQL>
+SQL> -- Compute CONFUSION MATRIX
+SQL> --
+SQL> -- This query demonstates how to generate a confusion matrix using the new
+SQL> -- SQL prediction functions for scoring. The returned columns match the
+SQL> -- schema of the table generated by COMPUTE_CONFUSION_MATRIX procedure.
+SQL> --
+SQL> SELECT affinity_card AS actual_target_value,
+  2         PREDICTION(glmc_sh_clas_sample USING *) AS predicted_target_value,
+  3         COUNT(*) AS value
+  4    FROM mining_data_test_v
+  5   GROUP BY affinity_card, PREDICTION(glmc_sh_clas_sample USING *)
+  6   ORDER BY 1, 2;
+
+ACTUAL_TARGET_VALUE PREDICTED_TARGET_VALUE      VALUE
+------------------- ---------------------- ----------
+                  0                      0       1045
+                  0                      1        109
+                  1                      0        154
+                  1                      1        192
+
+SQL>
+SQL> -- Compute ACCURACY
+SQL> --
+SQL> column accuracy format 9.99
+SQL>
+SQL> SELECT SUM(correct)/COUNT(*) AS accuracy
+  2    FROM (SELECT DECODE(affinity_card,
+  3                   PREDICTION(glmc_sh_clas_sample USING *), 1, 0) AS correct
+  4            FROM mining_data_test_v);
+
+ACCURACY
+--------
+     .82
+
+SQL>
+SQL> -- Compute AUC (Area Under the roc Curve)
+SQL> --
+SQL> -- See notes on ROC Curve and AUC computation above
+SQL> --
+SQL> column auc format 9.99
+SQL> WITH
+  2  pos_prob_and_counts AS (
+  3  SELECT PREDICTION_PROBABILITY(glmc_sh_clas_sample, 1 USING *) pos_prob,
+  4         DECODE(affinity_card, 1, 1, 0) pos_cnt
+  5    FROM mining_data_test_v
+  6  ),
+  7  tpf_fpf AS (
+  8  SELECT  pos_cnt,
+  9         SUM(pos_cnt) OVER (ORDER BY pos_prob DESC) /
+ 10           SUM(pos_cnt) OVER () tpf,
+ 11         SUM(1 - pos_cnt) OVER (ORDER BY pos_prob DESC) /
+ 12           SUM(1 - pos_cnt) OVER () fpf
+ 13    FROM pos_prob_and_counts
+ 14  ),
+ 15  trapezoid_areas AS (
+ 16  SELECT 0.5 * (fpf - LAG(fpf, 1, 0) OVER (ORDER BY fpf, tpf)) *
+ 17          (tpf + LAG(tpf, 1, 0) OVER (ORDER BY fpf, tpf)) area
+ 18    FROM tpf_fpf
+ 19   WHERE pos_cnt = 1
+ 20      OR (tpf = 1 AND fpf = 1)
+ 21  )
+ 22  SELECT SUM(area) auc
+ 23    FROM trapezoid_areas;
+
+AUC
+---
+.87
+
+SQL>
+SQL> -- Judging from the accuracy and AUC, the ridge regression model
+SQL> -- and feature selection/generation model are of approximately equal
+SQL> -- quality
+SQL>
+SQL> --------------------------------------------------------------------------
+SQL> --                               SCORE DATA
+SQL> --------------------------------------------------------------------------
+SQL>
+SQL> -- Now that the model has an invalid covariance matrix, it is
+SQL> -- no longer possible to obtain confidence bounds.
+SQL> -- So the lower (PL) and upper (PU) confidence bounds are NULL
+SQL> set long 10000
+SQL> SELECT PREDICTION(GLMC_SH_Clas_sample USING *) pr,
+  2         PREDICTION_PROBABILITY(GLMC_SH_Clas_sample USING *) pb,
+  3         PREDICTION_BOUNDS(GLMC_SH_Clas_sample USING *).lower pl,
+  4         PREDICTION_BOUNDS(GLMC_SH_Clas_sample USING *).upper pu,
+  5         PREDICTION_DETAILS(GLMC_SH_Clas_sample USING *) pd
+  6    FROM mining_data_apply_v
+  7   WHERE CUST_ID <= 100010
+  8   ORDER BY CUST_ID;
+
+        PR         PB         PL         PU
+---------- ---------- ---------- ----------
+PD
+------------------------------------------------------------------------------------------
+         0 9.157E-001 3.086E-008   1.0E+000
+<Details algorithm="Generalized Linear Model" class="0">
+<Attribute name="BULK_PACK_DISKETTES" actualValue="0" weight=".361" rank="1"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".294" rank="2"/>
+<Attribute name="YRS_RESIDENCE" actualValue="3" weight=".107" rank="3"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".086" rank="4"/>
+<Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight=".066" rank="5"/>
+</Details>
+
+         0 8.222E-001  1.39E-008   1.0E+000
+<Details algorithm="Generalized Linear Model" class="0">
+<Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".41" rank="1"/>
+<Attribute name="FLAT_PANEL_MONITOR" actualValue="1" weight=".387" rank="2"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".148" rank="3"/>
+<Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".145" rank="4"/>
+
+        PR         PB         PL         PU
+---------- ---------- ---------- ----------
+PD
+------------------------------------------------------------------------------------------
+<Attribute name="YRS_RESIDENCE" actualValue="4" weight=".136" rank="5"/>
+</Details>
+
+         0 9.524E-001  5.99E-008   1.0E+000
+<Details algorithm="Generalized Linear Model" class="0">
+<Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".2" rank="1"/>
+<Attribute name="FLAT_PANEL_MONITOR" actualValue="1" weight=".183" rank="2"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".053" rank="3"/>
+<Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".052" rank="4"/>
+<Attribute name="HOME_THEATER_PACKAGE" actualValue="0" weight=".049" rank="5"/>
+</Details>
+
+         0 9.456E-001 5.194E-008   1.0E+000
+<Details algorithm="Generalized Linear Model" class="0">
+<Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".221" rank="1"/>
+
+        PR         PB         PL         PU
+---------- ---------- ---------- ----------
+PD
+------------------------------------------------------------------------------------------
+<Attribute name="FLAT_PANEL_MONITOR" actualValue="1" weight=".202" rank="2"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".06" rank="3"/>
+<Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".058" rank="4"/>
+<Attribute name="CUST_INCOME_LEVEL" actualValue="K: 250,000 - 299,999" weight=".052" rank=
+"5"/>
+</Details>
+
+         1 7.687E-001 9.918E-009   1.0E+000
+<Details algorithm="Generalized Linear Model" class="1">
+<Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight=".459" rank="1"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".434" rank="2"/>
+<Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".431" rank="
+3"/>
+<Attribute name="EDUCATION" actualValue="Assoc-A" weight=".303" rank="4"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".263" rank="5"/>
+
+        PR         PB         PL         PU
+---------- ---------- ---------- ----------
+PD
+------------------------------------------------------------------------------------------
+</Details>
+
+         0 9.902E-001 2.967E-007   1.0E+000
+<Details algorithm="Generalized Linear Model" class="0">
+<Attribute name="HOUSEHOLD_SIZE" actualValue="9+" weight=".074" rank="1"/>
+<Attribute name="BULK_PACK_DISKETTES" actualValue="0" weight=".07" rank="2"/>
+<Attribute name="YRS_RESIDENCE" actualValue="2" weight=".02" rank="3"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".012" rank="4"/>
+<Attribute name="HOME_THEATER_PACKAGE" actualValue="0" weight=".011" rank="5"/>
+</Details>
+
+         0 9.841E-001 1.804E-007   1.0E+000
+<Details algorithm="Generalized Linear Model" class="0">
+<Attribute name="OCCUPATION" actualValue="Other" weight=".126" rank="1"/>
+<Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".081" rank="2"/>
+
+        PR         PB         PL         PU
+---------- ---------- ---------- ----------
+PD
+------------------------------------------------------------------------------------------
+<Attribute name="FLAT_PANEL_MONITOR" actualValue="1" weight=".073" rank="3"/>
+<Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".019" rank="4"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".019" rank="5"/>
+</Details>
+
+         0 9.256E-001 3.752E-008   1.0E+000
+<Details algorithm="Generalized Linear Model" class="0">
+<Attribute name="HOUSEHOLD_SIZE" actualValue="2" weight=".272" rank="1"/>
+<Attribute name="FLAT_PANEL_MONITOR" actualValue="1" weight=".251" rank="2"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".078" rank="3"/>
+<Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".076" rank="4"/>
+<Attribute name="OCCUPATION" actualValue="Crafts" weight=".069" rank="5"/>
+</Details>
+
+         0 5.776E-001 4.115E-009   1.0E+000
+
+        PR         PB         PL         PU
+---------- ---------- ---------- ----------
+PD
+------------------------------------------------------------------------------------------
+<Details algorithm="Generalized Linear Model" class="0">
+<Attribute name="BULK_PACK_DISKETTES" actualValue="0" weight=".442" rank="1"/>
+<Attribute name="YRS_RESIDENCE" actualValue="3" weight=".23" rank="2"/>
+<Attribute name="HOME_THEATER_PACKAGE" actualValue="0" weight=".187" rank="3"/>
+<Attribute name="OS_DOC_SET_KANJI" actualValue="0" weight=".161" rank="4"/>
+<Attribute name="OCCUPATION" actualValue="Prof." weight=".15" rank="5"/>
+</Details>
+
+         0 7.982E-001 1.197E-008   1.0E+000
+<Details algorithm="Generalized Linear Model" class="0">
+<Attribute name="FLAT_PANEL_MONITOR" actualValue="1" weight=".401" rank="1"/>
+<Attribute name="YRS_RESIDENCE" actualValue="3" weight=".192" rank="2"/>
+<Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".159" rank="3"/>
+<Attribute name="HOME_THEATER_PACKAGE" actualValue="0" weight=".149" rank="4"/>
+<Attribute name="OCCUPATION" actualValue="Crafts" weight=".143" rank="5"/>
+
+        PR         PB         PL         PU
+---------- ---------- ---------- ----------
+PD
+------------------------------------------------------------------------------------------
+</Details>
+
+
+10行が選択されました。
+
+SQL> spool oml4sql-classification-naive-bayes

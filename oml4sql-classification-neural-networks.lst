@@ -1,0 +1,787 @@
+SQL> @oml4sql-classification-neural-networks
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Classification - Neural Networks Algorithm - dmnncdem.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET serveroutput ON
+SQL> SET trimspool ON
+SQL> SET pages 10000
+SQL> SET echo ON
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SAMPLE PROBLEM
+SQL> -----------------------------------------------------------------------
+SQL> -- Given demographic and purchase data about a set of customers, predict
+SQL> -- customer's response to an affinity card program using a NN classifier.
+SQL> --
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SET UP AND ANALYZE THE DATA
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -------
+SQL> -- DATA
+SQL> -------
+SQL> -- The data for this sample is composed from base tables in SH Schema
+SQL> -- (See Sample Schema Documentation) and presented through these views:
+SQL> -- mining_data_build_v (build data)
+SQL> -- mining_data_test_v  (test data)
+SQL> -- mining_data_apply_v (apply data)
+SQL> -- (See dmsh.sql for view definitions).
+SQL> --
+SQL>
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Cleanup old model with the same name for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('NNC_SH_Clas_sample');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL>
+SQL> ------------------
+SQL> -- SPECIFY SETTINGS
+SQL> --
+SQL> -- Cleanup old settings table for repeat runs
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nnc_sh_sample_class_wt';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- CREATE AND POPULATE A CLASS WEIGHTS TABLE
+SQL> --
+SQL> -- A class weights table is used to influence the weighting of target classes
+SQL> -- during model creation. For example, weights of (0.9, 0.1) for a binary
+SQL> -- problem specify that an error in the first class has significantly
+SQL> -- higher penalty that an error in the second class. Weights of (0.5, 0.5)
+SQL> -- do not introduce a differential weight and would produce the same
+SQL> -- model as when no weights are provided.
+SQL> --
+SQL> CREATE TABLE nnc_sh_sample_class_wt (
+  2    target_value NUMBER,
+  3    class_weight NUMBER);
+
+Table NNC_SH_SAMPLE_CLASS_WTは作成されました。
+
+SQL> INSERT INTO nnc_sh_sample_class_wt VALUES (0,0.35);
+
+1行挿入しました。
+
+SQL> INSERT INTO nnc_sh_sample_class_wt VALUES (1,0.65);
+
+1行挿入しました。
+
+SQL> COMMIT;
+
+コミットが完了しました。
+
+SQL>
+SQL> ---------------------
+SQL> -- CREATE A NEW MODEL
+SQL> --
+SQL> -- Build a new SVM Model
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    v_setlst('ALGO_NAME')               := 'ALGO_NEURAL_NETWORK';
+  5    v_setlst('CLAS_WEIGHTS_TABLE_NAME') := 'nnc_sh_sample_class_wt';
+  6    v_setlst('PREP_AUTO')               := 'ON';
+  7
+  8    -- Examples of other possible settings are:
+  9    -- v_setlst('ODMS_RANDOM_SEED')        := '12';
+ 10    -- v_setlst('NNET_HIDDEN_LAYERS')      := '2';
+ 11    -- v_setlst('NNET_NODES_PER_LAYER')    := '10, 30';
+ 12    -- v_setlst('NNET_ITERATIONS')         := '100';
+ 13    -- v_setlst('NNET_TOLERANCE')          := '0.0001';
+ 14    -- v_setlst('NNET_ACTIVATIONS')        := 'NNET_ACTIVATIONS_LOG_SIG';
+ 15    -- v_setlst('NNET_REGULARIZER')        := 'NNET_REGULARIZER_HELDASIDE';
+ 16    -- v_setlst('NNET_HELDASIDE_RATIO')    := '0.3';
+ 17    -- v_setlst('NNET_HELDASIDE_MAX_FAIL') := '5';
+ 18    -- v_setlst('NNET_REGULARIZER')        := 'NNET_REGULARIZER_L2';
+ 19    -- v_setlst('NNET_REG_LAMBDA')         := '0.5';
+ 20    -- v_setlst('NNET_WEIGHT_UPPER_BOUND') := '0.7';
+ 21    -- v_setlst('NNET_WEIGHT_LOWER_BOUND') := '-0.6';
+ 22    -- v_setlst('LBFGS_HISTORY_DEPTH')     := '20';
+ 23    -- v_setlst('LBFGS_SCALE_HESSIAN')     := 'LBFGS_SCALE_HESSIAN_DISABLE';
+ 24    -- v_setlst('LBFGS_GRADIENT_TOLERANCE'):= '0.0001';
+ 25
+ 26    DBMS_DATA_MINING.CREATE_MODEL2(
+ 27      model_name          => 'NNC_SH_Clas_sample',
+ 28      mining_function     => 'CLASSIFICATION',
+ 29      data_query          => 'SELECT * FROM mining_data_build_v',
+ 30      set_list            => v_setlst,
+ 31      case_id_column_name => 'cust_id',
+ 32      target_column_name  => 'affinity_card');
+ 33  END;
+ 34  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'NNC_SH_CLAS_SAMPLE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_NEURAL_NETWORK
+CLAS_WEIGHTS_BALANCED          OFF
+CLAS_WEIGHTS_TABLE_NAME        nnc_sh_sample_class_wt
+NNET_ACTIVATIONS               'NNET_ACTIVATIONS_LOG_SIG'
+NNET_HIDDEN_LAYERS             1
+NNET_TOLERANCE                 .000001
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_RANDOM_SEED               0
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+PREP_AUTO                      ON
+
+11行が選択されました。
+
+SQL>
+SQL> --------------------------
+SQL> -- DISPLAY MODEL SIGNATURE
+SQL> --
+SQL> column attribute_name format a40
+SQL> column attribute_type format a20
+SQL> SELECT attribute_name, attribute_type
+  2    FROM user_mining_model_attributes
+  3   WHERE model_name = 'NNC_SH_CLAS_SAMPLE'
+  4  ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                           ATTRIBUTE_TYPE
+---------------------------------------- --------------------
+AFFINITY_CARD                            CATEGORICAL
+AGE                                      NUMERICAL
+BOOKKEEPING_APPLICATION                  NUMERICAL
+BULK_PACK_DISKETTES                      NUMERICAL
+COUNTRY_NAME                             CATEGORICAL
+CUST_GENDER                              CATEGORICAL
+CUST_INCOME_LEVEL                        CATEGORICAL
+CUST_MARITAL_STATUS                      CATEGORICAL
+EDUCATION                                CATEGORICAL
+FLAT_PANEL_MONITOR                       NUMERICAL
+HOME_THEATER_PACKAGE                     NUMERICAL
+HOUSEHOLD_SIZE                           CATEGORICAL
+OCCUPATION                               CATEGORICAL
+OS_DOC_SET_KANJI                         NUMERICAL
+PRINTER_SUPPLIES                         NUMERICAL
+YRS_RESIDENCE                            NUMERICAL
+Y_BOX_GAMES                              NUMERICAL
+
+17行が選択されました。
+
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY MODEL DETAILS
+SQL> --
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2    WHERE model_name='NNC_SH_CLAS_SAMPLE'
+  3    ORDER BY view_name;
+
+VIEW_NAME                      VIEW_TYPE
+------------------------------ --------------------------------------------------
+DM$VANNC_SH_CLAS_SAMPLE        Neural Network Weights
+DM$VCNNC_SH_CLAS_SAMPLE        Scoring Cost Matrix
+DM$VGNNC_SH_CLAS_SAMPLE        Global Name-Value Pairs
+DM$VNNNC_SH_CLAS_SAMPLE        Normalization and Missing Value Handling
+DM$VSNNC_SH_CLAS_SAMPLE        Computed Settings
+DM$VTNNC_SH_CLAS_SAMPLE        Classification Targets
+DM$VWNNC_SH_CLAS_SAMPLE        Model Build Alerts
+
+7行が選択されました。
+
+SQL>
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               TEST THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL>
+SQL> ------------------------------------
+SQL> -- COMPUTE METRICS TO TEST THE MODEL
+SQL> --
+SQL> -- The queries shown below demonstrate the use of SQL data mining functions
+SQL> -- along with analytic functions to compute various test metrics. In these
+SQL> -- queries:
+SQL> --
+SQL> -- Modelname:             nnc_sh_clas_sample
+SQL> -- # of Lift Quantiles:   10
+SQL> -- Target attribute:      affinity_card
+SQL> -- Positive target value: 1
+SQL> -- (Change these as appropriate for a different example)
+SQL>
+SQL> -- Compute CONFUSION MATRIX
+SQL> --
+SQL> -- This query demonstates how to generate a confusion matrix using the
+SQL> -- SQL prediction functions for scoring. The returned columns match the
+SQL> -- schema of the table generated by COMPUTE_CONFUSION_MATRIX procedure.
+SQL> --
+SQL> SELECT affinity_card AS actual_target_value,
+  2         PREDICTION(nnc_sh_clas_sample USING *) AS predicted_target_value,
+  3         COUNT(*) AS value
+  4    FROM mining_data_test_v
+  5   GROUP BY affinity_card, PREDICTION(nnc_sh_clas_sample USING *)
+  6   ORDER BY 1, 2;
+
+ACTUAL_TARGET_VALUE PREDICTED_TARGET_VALUE      VALUE
+------------------- ---------------------- ----------
+                  0                      0        976
+                  0                      1        178
+                  1                      0         97
+                  1                      1        249
+
+SQL>
+SQL> -- Compute ACCURACY
+SQL> --
+SQL> column accuracy format 9.99
+SQL>
+SQL> SELECT SUM(correct)/COUNT(*) AS accuracy
+  2    FROM (SELECT DECODE(affinity_card,
+  3                   PREDICTION(nnc_sh_clas_sample USING *), 1, 0) AS correct
+  4            FROM mining_data_test_v);
+
+ACCURACY
+--------
+     .82
+
+SQL>
+SQL> -- Compute CUMULATIVE LIFT, GAIN Charts.
+SQL> --
+SQL> -- The cumulative gain chart is a popular version of the lift chart, and
+SQL> -- it maps cumulative gain (Y axis) against the cumulative records (X axis).
+SQL> --
+SQL> -- The cumulative lift chart is another popular representation of lift, and
+SQL> -- it maps cumulative lift (Y axis) against the cumulative records (X axis).
+SQL> --
+SQL> -- The query also returns the probability associated with each quantile, so
+SQL> -- that when the cut-off point for Lift is selected, you can correlate it
+SQL> -- with a probability value (say P_cutoff). You can then use this value of
+SQL> -- P_cutoff in a prediction query as follows:
+SQL> --
+SQL> -- SELECT *
+SQL> --   FROM records_to_be_scored
+SQL> --  WHERE PREDICTION_PROBABILITY(svmc_sh_clas_sample, 1 USING *) > P_cutoff;
+SQL> --
+SQL> -- In the query below
+SQL> --
+SQL> -- q_num     - Quantile Number
+SQL> -- pos_cnt   - # of records that predict the positive target
+SQL> -- pos_prob  - the probability associated with predicting a positive target
+SQL> --             value for a given new record
+SQL> -- cume_recs - % Cumulative Records upto quantile
+SQL> -- cume_gain - % Cumulative Gain
+SQL> -- cume_lift - Cumulative Lift
+SQL> --
+SQL> -- Note that the LIFT can also be computed using
+SQL> -- DBMS_DATA_MINING.COMPUTE_LIFT function, see examples in dmnbdemo.sql.
+SQL> --
+SQL> WITH
+  2  pos_prob_and_counts AS (
+  3  SELECT PREDICTION_PROBABILITY(nnc_sh_clas_sample, 1 USING *) pos_prob,
+  4         -- hit count for positive target value
+  5         DECODE(affinity_card, 1, 1, 0) pos_cnt
+  6    FROM mining_data_test_v
+  7  ),
+  8  qtile_and_smear AS (
+  9  SELECT NTILE(10) OVER (ORDER BY pos_prob DESC) q_num,
+ 10         pos_prob,
+ 11         -- smear the counts across records with the same probability to
+ 12         -- eliminate potential biased distribution across qtl boundaries
+ 13         AVG(pos_cnt) OVER (PARTITION BY pos_prob) pos_cnt
+ 14    FROM pos_prob_and_counts
+ 15  ),
+ 16  cume_and_total_counts AS (
+ 17  SELECT q_num,
+ 18         -- inner sum for counts within q_num groups,
+ 19         -- outer sum for cume counts
+ 20         MIN(pos_prob) pos_prob,
+ 21         SUM(COUNT(*)) OVER (ORDER BY q_num) cume_recs,
+ 22         SUM(SUM(pos_cnt)) OVER (ORDER BY q_num) cume_pos_cnt,
+ 23         SUM(COUNT(*)) OVER () total_recs,
+ 24         SUM(SUM(pos_cnt)) OVER () total_pos_cnt
+ 25    FROM qtile_and_smear
+ 26   GROUP BY q_num
+ 27  )
+ 28  SELECT pos_prob,
+ 29         100*(cume_recs/total_recs) cume_recs,
+ 30         100*(cume_pos_cnt/total_pos_cnt) cume_gain,
+ 31         (cume_pos_cnt/total_pos_cnt)/(cume_recs/total_recs) cume_lift
+ 32    FROM cume_and_total_counts
+ 33   ORDER BY pos_prob DESC;
+
+  POS_PROB  CUME_RECS  CUME_GAIN  CUME_LIFT
+---------- ---------- ---------- ----------
+7.613E-001         10 30.3468208 3.03468208
+6.404E-001         20 54.9132948 2.74566474
+4.702E-001         30  74.566474 2.48554913
+2.929E-001         40 85.2601156 2.13150289
+1.662E-001         50 92.4855491 1.84971098
+8.698E-002         60 96.5317919  1.6088632
+4.997E-002         70 97.6878613 1.39554088
+2.699E-002         80  99.132948 1.23916185
+1.487E-002         90 99.7109827 1.10789981
+2.689E-003        100        100          1
+
+10行が選択されました。
+
+SQL>
+SQL> -- Compute ROC CURVE
+SQL> --
+SQL> -- This can be used to find the operating point for classification.
+SQL> --
+SQL> -- The ROC curve plots true positive fraction - TPF (Y axis) against
+SQL> -- false positive fraction - FPF (X axis). Note that the query picks
+SQL> -- only the corner points (top tpf switch points for a given fpf) and
+SQL> -- the last point. It should be noted that the query does not generate
+SQL> -- the first point, i.e (tpf, fpf) = (0, 0). All of the remaining points
+SQL> -- are computed, but are then filtered based on the criterion above. For
+SQL> -- example, the query picks points a,b,c,d and not points o,e,f,g,h,i,j.
+SQL> --
+SQL> -- The Area Under the Curve (next query) is computed using the trapezoid
+SQL> -- rule applied to all tpf change points (i.e. summing up the areas of
+SQL> -- the trapezoids formed by the points for each segment along the X axis;
+SQL> -- (recall that trapezoid Area = 0.5h (A+B); h=> hieght, A, B are sides).
+SQL> -- In the example, this means the curve covering the area would trace
+SQL> -- points o,e,a,g,b,c,d.
+SQL> --
+SQL> -- |
+SQL> -- |        .c .j .d
+SQL> -- |  .b .h .i
+SQL> -- |  .g
+SQL> -- .a .f
+SQL> -- .e
+SQL> -- .__.__.__.__.__.__
+SQL> -- o
+SQL> --
+SQL> -- Note that the ROC curve can also be computed using
+SQL> -- DBMS_DATA_MINING.COMPUTE_ROC function, see examples in dmnbdemo.sql.
+SQL> --
+SQL> column prob format 9.9999
+SQL> column fpf  format 9.9999
+SQL> column tpf  format 9.9999
+SQL>
+SQL> WITH
+  2  pos_prob_and_counts AS (
+  3  SELECT PREDICTION_PROBABILITY(nnc_sh_clas_sample, 1 USING *) pos_prob,
+  4         -- hit count for positive target value
+  5         DECODE(affinity_card, 1, 1, 0) pos_cnt
+  6    FROM mining_data_test_v
+  7  ),
+  8  cume_and_total_counts AS (
+  9  SELECT pos_prob,
+ 10         pos_cnt,
+ 11         SUM(pos_cnt) OVER (ORDER BY pos_prob DESC) cume_pos_cnt,
+ 12         SUM(pos_cnt) OVER () tot_pos_cnt,
+ 13         SUM(1 - pos_cnt) OVER (ORDER BY pos_prob DESC) cume_neg_cnt,
+ 14         SUM(1 - pos_cnt) OVER () tot_neg_cnt
+ 15    FROM pos_prob_and_counts
+ 16  ),
+ 17  roc_corners AS (
+ 18  SELECT MIN(pos_prob) pos_prob,
+ 19         MAX(cume_pos_cnt) cume_pos_cnt, cume_neg_cnt,
+ 20         MAX(tot_pos_cnt) tot_pos_cnt, MAX(tot_neg_cnt) tot_neg_cnt
+ 21    FROM cume_and_total_counts
+ 22   WHERE pos_cnt = 1                      -- tpf switch points
+ 23      OR (cume_pos_cnt = tot_pos_cnt AND  -- top-right point
+ 24          cume_neg_cnt = tot_neg_cnt)
+ 25   GROUP BY cume_neg_cnt
+ 26  )
+ 27  SELECT pos_prob prob,
+ 28         cume_pos_cnt/tot_pos_cnt tpf,
+ 29         cume_neg_cnt/tot_neg_cnt fpf,
+ 30         cume_pos_cnt tp,
+ 31         tot_pos_cnt - cume_pos_cnt fn,
+ 32         cume_neg_cnt fp,
+ 33         tot_neg_cnt - cume_neg_cnt tn
+ 34    FROM roc_corners
+ 35   ORDER BY fpf;
+
+PROB TPF FPF    TP    FN    FP    TN
+---- --- --- ----- ----- ----- -----
+.8943 .0116 .0009     4   342     1  1153
+.8847 .0202 .0017     7   339     2  1152
+.8785 .0289 .0026    10   336     3  1151
+.8748 .0347 .0035    12   334     4  1150
+.8713 .0376 .0043    13   333     5  1149
+.8639 .0520 .0052    18   328     6  1148
+.8629 .0578 .0061    20   326     7  1147
+.8571 .0665 .0069    23   323     8  1146
+.8523 .0751 .0078    26   320     9  1145
+.8419 .0925 .0087    32   314    10  1144
+.8396 .0954 .0104    33   313    12  1142
+.8367 .1098 .0113    38   308    13  1141
+.8347 .1185 .0121    41   305    14  1140
+.8319 .1243 .0165    43   303    19  1135
+.8177 .1590 .0173    55   291    20  1134
+.8155 .1792 .0182    62   284    21  1133
+.8086 .1879 .0199    65   281    23  1131
+.8057 .1908 .0217    66   280    25  1129
+.7959 .2197 .0225    76   270    26  1128
+.7929 .2254 .0243    78   268    28  1126
+.7891 .2312 .0251    80   266    29  1125
+.7882 .2370 .0260    82   264    30  1124
+.7866 .2457 .0277    85   261    32  1122
+.7752 .2832 .0286    98   248    33  1121
+.7734 .2861 .0295    99   247    34  1120
+.7699 .2890 .0347   100   246    40  1114
+.7670 .2919 .0373   101   245    43  1111
+.7621 .3006 .0381   104   242    44  1110
+.7588 .3121 .0390   108   238    45  1109
+.7577 .3179 .0399   110   236    46  1108
+.7482 .3468 .0416   120   226    48  1106
+.7478 .3497 .0425   121   225    49  1105
+.7437 .3642 .0433   126   220    50  1104
+.7391 .3671 .0451   127   219    52  1102
+.7372 .3699 .0468   128   218    54  1100
+.7326 .3757 .0503   130   216    58  1096
+.7312 .3786 .0520   131   215    60  1094
+.7295 .3815 .0529   132   214    61  1093
+.7277 .3844 .0537   133   213    62  1092
+.7262 .3873 .0546   134   212    63  1091
+.7179 .4046 .0581   140   206    67  1087
+.7159 .4104 .0589   142   204    68  1086
+.7078 .4162 .0598   144   202    69  1085
+.7054 .4191 .0607   145   201    70  1084
+.7023 .4249 .0615   147   199    71  1083
+.6997 .4277 .0624   148   198    72  1082
+.6997 .4306 .0633   149   197    73  1081
+.6985 .4335 .0641   150   196    74  1080
+.6947 .4364 .0693   151   195    80  1074
+.6922 .4422 .0711   153   193    82  1072
+.6906 .4451 .0728   154   192    84  1070
+.6871 .4624 .0737   160   186    85  1069
+.6865 .4653 .0745   161   185    86  1068
+.6841 .4740 .0780   164   182    90  1064
+.6827 .4798 .0789   166   180    91  1063
+.6736 .4855 .0823   168   178    95  1059
+.6697 .4913 .0858   170   176    99  1055
+.6683 .4971 .0867   172   174   100  1054
+.6653 .5000 .0875   173   173   101  1053
+.6595 .5116 .0884   177   169   102  1052
+.6547 .5145 .0910   178   168   105  1049
+.6451 .5376 .0936   186   160   108  1046
+.6417 .5462 .0945   189   157   109  1045
+.6404 .5491 .0953   190   156   110  1044
+.6376 .5520 .0962   191   155   111  1043
+.6371 .5549 .0971   192   154   112  1042
+.6364 .5578 .0979   193   153   113  1041
+.6236 .5665 .1023   196   150   118  1036
+.6217 .5694 .1031   197   149   119  1035
+.6173 .5751 .1049   199   147   121  1033
+.6108 .5809 .1066   201   145   123  1031
+.6080 .5838 .1092   202   144   126  1028
+.6077 .5867 .1101   203   143   127  1027
+.6045 .5925 .1109   205   141   128  1026
+.6000 .6012 .1118   208   138   129  1025
+.5923 .6127 .1127   212   134   130  1024
+.5763 .6214 .1179   215   131   136  1018
+.5749 .6243 .1187   216   130   137  1017
+.5706 .6272 .1196   217   129   138  1016
+.5628 .6445 .1205   223   123   139  1015
+.5626 .6474 .1213   224   122   140  1014
+.5591 .6503 .1239   225   121   143  1011
+.5573 .6532 .1256   226   120   145  1009
+.5500 .6590 .1265   228   118   146  1008
+.5489 .6618 .1282   229   117   148  1006
+.5463 .6647 .1300   230   116   150  1004
+.5405 .6763 .1308   234   112   151  1003
+.5334 .6879 .1352   238   108   156   998
+.5306 .6908 .1369   239   107   158   996
+.5240 .7052 .1386   244   102   160   994
+.5197 .7081 .1395   245   101   161   993
+.5187 .7139 .1404   247    99   162   992
+.5088 .7168 .1447   248    98   167   987
+.4996 .7225 .1542   250    96   178   976
+.4956 .7254 .1577   251    95   182   972
+.4905 .7312 .1586   253    93   183   971
+.4875 .7341 .1594   254    92   184   970
+.4733 .7428 .1638   257    89   189   965
+.4709 .7457 .1655   258    88   191   963
+.4695 .7486 .1672   259    87   193   961
+.4687 .7514 .1681   260    86   194   960
+.4659 .7543 .1716   261    85   198   956
+.4644 .7572 .1724   262    84   199   955
+.4591 .7601 .1768   263    83   204   950
+.4555 .7717 .1785   267    79   206   948
+.4524 .7746 .1794   268    78   207   947
+.4513 .7775 .1811   269    77   209   945
+.4494 .7803 .1828   270    76   211   943
+.4399 .7832 .1863   271    75   215   939
+.4393 .7861 .1872   272    74   216   938
+.4390 .7890 .1889   273    73   218   936
+.4231 .7919 .1950   274    72   225   929
+.4126 .7948 .2002   275    71   231   923
+.4122 .7977 .2010   276    70   232   922
+.3828 .8006 .2140   277    69   247   907
+.3782 .8035 .2166   278    68   250   904
+.3699 .8064 .2210   279    67   255   899
+.3609 .8092 .2262   280    66   261   893
+.3579 .8121 .2305   281    65   266   888
+.3467 .8179 .2331   283    63   269   885
+.3434 .8208 .2340   284    62   270   884
+.3376 .8266 .2400   286    60   277   877
+.3356 .8295 .2409   287    59   278   876
+.3334 .8324 .2418   288    58   279   875
+.3222 .8353 .2470   289    57   285   869
+.3197 .8410 .2487   291    55   287   867
+.3171 .8439 .2496   292    54   288   866
+.3129 .8468 .2504   293    53   289   865
+.3069 .8497 .2556   294    52   295   859
+.3048 .8526 .2582   295    51   298   856
+.2922 .8584 .2643   297    49   305   849
+.2799 .8613 .2712   298    48   313   841
+.2761 .8671 .2721   300    46   314   840
+.2710 .8699 .2764   301    45   319   835
+.2684 .8728 .2782   302    44   321   833
+.2649 .8757 .2808   303    43   324   830
+.2615 .8786 .2834   304    42   327   827
+.2509 .8815 .2894   305    41   334   820
+.2494 .8844 .2903   306    40   335   819
+.2473 .8873 .2938   307    39   339   815
+.2181 .8902 .3146   308    38   363   791
+.2150 .8931 .3154   309    37   364   790
+.2135 .8960 .3163   310    36   365   789
+.2131 .8988 .3180   311    35   367   787
+.1991 .9017 .3293   312    34   380   774
+.1939 .9075 .3336   314    32   385   769
+.1915 .9104 .3406   315    31   393   761
+.1870 .9133 .3458   316    30   399   755
+.1792 .9162 .3553   317    29   410   744
+.1774 .9220 .3579   319    27   413   741
+.1734 .9249 .3596   320    26   415   739
+.1619 .9277 .3761   321    25   434   720
+.1550 .9306 .3899   322    24   450   704
+.1492 .9335 .3969   323    23   458   696
+.1438 .9364 .4055   324    22   468   686
+.1426 .9393 .4081   325    21   471   683
+.1347 .9422 .4185   326    20   483   671
+.1297 .9451 .4255   327    19   491   663
+.1169 .9480 .4428   328    18   511   643
+.1142 .9509 .4471   329    17   516   638
+.1030 .9538 .4610   330    16   532   622
+.1016 .9566 .4636   331    15   535   619
+.0993 .9595 .4645   332    14   536   618
+.0940 .9624 .4757   333    13   549   605
+.0892 .9653 .4861   334    12   561   593
+.0843 .9682 .5000   335    11   577   577
+.0787 .9711 .5104   336    10   589   565
+.0686 .9740 .5390   337     9   622   532
+.0566 .9769 .5858   338     8   676   478
+.0499 .9798 .6170   339     7   712   442
+.0429 .9827 .6534   340     6   754   400
+.0416 .9855 .6620   341     5   764   390
+.0414 .9884 .6629   342     4   765   389
+.0405 .9913 .6672   343     3   770   384
+.0267 .9942 .7435   344     2   858   296
+.0200 .9971 .8137   345     1   939   215
+.0125 1.0000 .9029   346     0  1042   112
+.0027 1.0000 1.0000   346     0  1154     0
+
+178行が選択されました。
+
+SQL>
+SQL>
+SQL> -- Compute AUC (Area Under the roc Curve)
+SQL> --
+SQL> -- See notes on ROC Curve and AUC computation above
+SQL> --
+SQL> column auc format 9.99
+SQL>
+SQL> WITH
+  2  pos_prob_and_counts AS (
+  3  SELECT PREDICTION_PROBABILITY(nnc_sh_clas_sample, 1 USING *) pos_prob,
+  4         DECODE(affinity_card, 1, 1, 0) pos_cnt
+  5    FROM mining_data_test_v
+  6  ),
+  7  tpf_fpf AS (
+  8  SELECT  pos_cnt,
+  9         SUM(pos_cnt) OVER (ORDER BY pos_prob DESC) /
+ 10           SUM(pos_cnt) OVER () tpf,
+ 11         SUM(1 - pos_cnt) OVER (ORDER BY pos_prob DESC) /
+ 12           SUM(1 - pos_cnt) OVER () fpf
+ 13    FROM pos_prob_and_counts
+ 14  ),
+ 15  trapezoid_areas AS (
+ 16  SELECT 0.5 * (fpf - LAG(fpf, 1, 0) OVER (ORDER BY fpf, tpf)) *
+ 17          (tpf + LAG(tpf, 1, 0) OVER (ORDER BY fpf, tpf)) area
+ 18    FROM tpf_fpf
+ 19   WHERE pos_cnt = 1
+ 20      OR (tpf = 1 AND fpf = 1)
+ 21  )
+ 22  SELECT SUM(area) auc
+ 23    FROM trapezoid_areas;
+
+AUC
+---
+.87
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               APPLY THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL>
+SQL> -------------------------------------------------
+SQL> -- SCORE NEW DATA USING SQL DATA MINING FUNCTIONS
+SQL> --
+SQL> ------------------
+SQL> -- BUSINESS CASE 1
+SQL> -- Find the 10 customers who live in Italy that are most likely
+SQL> -- to use an affinity card.
+SQL> --
+SQL> SELECT cust_id FROM
+  2  (SELECT cust_id,
+  3          rank() over (order by PREDICTION_PROBABILITY(nnc_sh_clas_sample, 1
+  4                       USING *) DESC, cust_id) rnk
+  5     FROM mining_data_apply_v
+  6    WHERE country_name = 'Italy')
+  7  where rnk <= 10
+  8  order by rnk;
+
+   CUST_ID
+----------
+    101445
+    100081
+    100185
+    100554
+    100179
+    100344
+    101345
+    100662
+    100733
+    100898
+
+10行が選択されました。
+
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 2
+SQL> -- Find the average age of customers who are likely to use an
+SQL> -- affinity card. Break out the results by gender.
+SQL> --
+SQL> column cust_gender format a12
+SQL> SELECT cust_gender,
+  2         COUNT(*) AS cnt,
+  3         ROUND(AVG(age)) AS avg_age
+  4    FROM mining_data_apply_v
+  5   WHERE PREDICTION(nnc_sh_clas_sample USING *) = 1
+  6  GROUP BY cust_gender
+  7  ORDER BY cust_gender;
+
+CUST_GENDER         CNT    AVG_AGE
+------------ ---------- ----------
+F                    33         31
+M                   394         34
+
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 3
+SQL> -- List ten customers (ordered by their id) along with their likelihood to
+SQL> -- use or reject the affinity card (Note: while this example has a
+SQL> -- binary target, such a query is useful in multi-class classification -
+SQL> -- Low, Med, High for example).
+SQL> --
+SQL> column prediction format 9
+SQL> column probability format 9.999999999
+SQL> column cost format 9.999999999
+SQL> SELECT T.cust_id, S.prediction, S.probability
+  2    FROM (SELECT cust_id,
+  3                 PREDICTION_SET(nnc_sh_clas_sample USING *) pset
+  4            FROM mining_data_apply_v
+  5           WHERE cust_id < 100011) T,
+  6         TABLE(T.pset) S
+  7  ORDER BY cust_id, S.prediction;
+
+   CUST_ID PREDICTION PROBABILITY
+---------- ---------- -----------
+    100001          0  .874052301
+    100001          1  .125947699
+    100002          0  .824791122
+    100002          1  .175208878
+    100003          0  .809775452
+    100003          1  .190224548
+    100004          0  .869769462
+    100004          1  .130230538
+    100005          0  .280725555
+    100005          1  .719274445
+    100006          0  .965071989
+    100006          1  .034928011
+    100007          0  .945374943
+    100007          1  .054625057
+    100008          0  .879662077
+    100008          1  .120337923
+    100009          0  .399997476
+    100009          1  .600002524
+    100010          0  .815929541
+    100010          1  .184070459
+
+20行が選択されました。
+
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 4
+SQL> -- Find customers whose profession is Tech Support
+SQL> -- with > 75% likelihood of using the affinity card,
+SQL> -- and explain the attributes which make them likely
+SQL> -- to use an affinity card.
+SQL> --
+SQL> set long 20000
+SQL> SELECT cust_id, PREDICTION_DETAILS(nnc_sh_clas_sample, 1 USING *) PD
+  2    FROM mining_data_apply_v
+  3   WHERE PREDICTION_PROBABILITY(nnc_sh_clas_sample, 1 USING *) > 0.75
+  4         AND occupation = 'TechSup'
+  5  ORDER BY cust_id;
+
+   CUST_ID PD
+---------- ------------------------------------------------------------------------------------------
+    100508 <Details algorithm="Neural Network" class="1">
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".344" rank="1"/>
+           <Attribute name="YRS_RESIDENCE" actualValue="5" weight=".341" rank="2"/>
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="married" weight=".331" rank="3"/>
+           <Attribute name="EDUCATION" actualValue="Bach." weight=".277" rank="4"/>
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".204" rank="5"/>
+           </Details>
+
+    100975 <Details algorithm="Neural Network" class="1">
+           <Attribute name="YRS_RESIDENCE" actualValue="8" weight=".452" rank="1"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".251" rank="2"/>
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="married" weight=".228" rank="3"/>
+           <Attribute name="EDUCATION" actualValue="Bach." weight=".187" rank="4"/>
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".134" rank="5"/>
+           </Details>
+
+    101082 <Details algorithm="Neural Network" class="1">
+           <Attribute name="YRS_RESIDENCE" actualValue="6" weight=".391" rank="1"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".321" rank="2"/>
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="married" weight=".3" rank="3"/>
+           <Attribute name="EDUCATION" actualValue="Bach." weight=".25" rank="4"/>
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".181" rank="5"/>
+           </Details>
+
+
+SQL>
+SQL> spool oml4sql-classification-random-forest

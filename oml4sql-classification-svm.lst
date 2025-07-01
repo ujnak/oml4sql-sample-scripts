@@ -1,0 +1,1456 @@
+SQL> @oml4sql-classification-svm
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Classification - SVM Algorithm - dmsvcdem.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET serveroutput ON
+SQL> SET trimspool ON
+SQL> SET pages 10000
+SQL> SET echo ON
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SAMPLE PROBLEM
+SQL> -----------------------------------------------------------------------
+SQL> -- Given demographic and purchase data about a set of customers, predict
+SQL> -- customer's response to an affinity card program using an SVM classifier.
+SQL> --
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SET UP AND ANALYZE THE DATA
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -------
+SQL> -- DATA
+SQL> -------
+SQL> -- The data for this sample is composed from base tables in SH Schema
+SQL> -- (See Sample Schema Documentation) and presented through these views:
+SQL> -- mining_data_build_v (build data)
+SQL> -- mining_data_test_v  (test data)
+SQL> -- mining_data_apply_v (apply data)
+SQL> -- (See dmsh.sql for view definitions).
+SQL> --
+SQL>
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL> -- Cleanup old model with the same name for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('SVMC_SH_Clas_sample');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL>
+SQL> ------------------
+SQL> -- SPECIFY SETTINGS
+SQL> --
+SQL> -- Cleanup old settings table for repeat runs
+SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE svmc_sh_sample_class_wt';
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- CREATE AND POPULATE A CLASS WEIGHTS TABLE
+SQL> --
+SQL> -- A class weights table is used to influence the weighting of target classes
+SQL> -- during model creation. For example, weights of (0.9, 0.1) for a binary
+SQL> -- problem specify that an error in the first class has significantly
+SQL> -- higher penalty that an error in the second class. Weights of (0.5, 0.5)
+SQL> -- do not introduce a differential weight and would produce the same
+SQL> -- model as when no weights are provided.
+SQL> --
+SQL> CREATE TABLE svmc_sh_sample_class_wt (
+  2    target_value NUMBER,
+  3    class_weight NUMBER);
+
+Table SVMC_SH_SAMPLE_CLASS_WTは作成されました。
+
+SQL> INSERT INTO svmc_sh_sample_class_wt VALUES (0,0.35);
+
+1行挿入しました。
+
+SQL> INSERT INTO svmc_sh_sample_class_wt VALUES (1,0.65);
+
+1行挿入しました。
+
+SQL> COMMIT;
+
+コミットが完了しました。
+
+SQL>
+SQL> -- The default classification algorithm is Naive Bayes. So override
+SQL> -- this choice to SVM using a settings table.
+SQL> -- SVM chooses a kernel type automatically. This choice can be overriden
+SQL> -- by the user. Linear kernel is preferred for high dimensional data, and
+SQL> -- Gaussian kernel for low dimensional data. Here we use linear kernel
+SQL> -- to demonstrate the coefficient model view, which applies only for
+SQL> -- linear kernel models.
+SQL> --
+SQL> ---------------------
+SQL> -- CREATE A NEW MODEL
+SQL> --
+SQL> -- Build a new SVM Model
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    v_setlst('ALGO_NAME')               := 'ALGO_SUPPORT_VECTOR_MACHINES';
+  5    v_setlst('SVMS_KERNEL_FUNCTION')    := 'SVMS_LINEAR';
+  6    v_setlst('CLAS_WEIGHTS_TABLE_NAME') := 'svmc_sh_sample_class_wt';
+  7    v_setlst('PREP_AUTO')               := 'ON';
+  8    -- Examples of other possible overrides are:
+  9    --v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_GAUSSIAN';
+ 10    --v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_COMPLEXITY_FACTOR';
+ 11
+ 12    DBMS_DATA_MINING.CREATE_MODEL2(
+ 13      model_name          => 'SVMC_SH_Clas_sample',
+ 14      mining_function     => 'CLASSIFICATION',
+ 15      data_query          => 'SELECT * FROM mining_data_build_v',
+ 16      set_list            => v_setlst,
+ 17      case_id_column_name => 'cust_id',
+ 18      target_column_name  => 'affinity_card');
+ 19  END;
+ 20  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'SVMC_SH_CLAS_SAMPLE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_SUPPORT_VECTOR_MACHINES
+CLAS_WEIGHTS_BALANCED          OFF
+CLAS_WEIGHTS_TABLE_NAME        svmc_sh_sample_class_wt
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+PREP_AUTO                      ON
+SVMS_CONV_TOLERANCE            .0001
+SVMS_KERNEL_FUNCTION           SVMS_LINEAR
+
+9行が選択されました。
+
+SQL>
+SQL> --------------------------
+SQL> -- DISPLAY MODEL SIGNATURE
+SQL> --
+SQL> column attribute_name format a40
+SQL> column attribute_type format a20
+SQL> SELECT attribute_name, attribute_type
+  2    FROM user_mining_model_attributes
+  3   WHERE model_name = 'SVMC_SH_CLAS_SAMPLE'
+  4  ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                           ATTRIBUTE_TYPE
+---------------------------------------- --------------------
+AFFINITY_CARD                            CATEGORICAL
+AGE                                      NUMERICAL
+BOOKKEEPING_APPLICATION                  NUMERICAL
+BULK_PACK_DISKETTES                      NUMERICAL
+COUNTRY_NAME                             CATEGORICAL
+CUST_GENDER                              CATEGORICAL
+CUST_INCOME_LEVEL                        CATEGORICAL
+CUST_MARITAL_STATUS                      CATEGORICAL
+EDUCATION                                CATEGORICAL
+FLAT_PANEL_MONITOR                       NUMERICAL
+HOME_THEATER_PACKAGE                     NUMERICAL
+HOUSEHOLD_SIZE                           CATEGORICAL
+OCCUPATION                               CATEGORICAL
+OS_DOC_SET_KANJI                         NUMERICAL
+PRINTER_SUPPLIES                         NUMERICAL
+YRS_RESIDENCE                            NUMERICAL
+Y_BOX_GAMES                              NUMERICAL
+
+17行が選択されました。
+
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY MODEL DETAILS
+SQL> --
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2    WHERE model_name='SVMC_SH_CLAS_SAMPLE'
+  3    ORDER BY view_name;
+
+VIEW_NAME
+------------------------------
+VIEW_TYPE
+--------------------------------------------------
+DM$VCSVMC_SH_CLAS_SAMPLE
+Scoring Cost Matrix
+
+DM$VGSVMC_SH_CLAS_SAMPLE
+Global Name-Value Pairs
+
+DM$VLSVMC_SH_CLAS_SAMPLE
+SVM Linear Coefficients
+
+DM$VNSVMC_SH_CLAS_SAMPLE
+Normalization and Missing Value Handling
+
+DM$VSSVMC_SH_CLAS_SAMPLE
+Computed Settings
+
+DM$VTSVMC_SH_CLAS_SAMPLE
+Classification Targets
+
+DM$VWSVMC_SH_CLAS_SAMPLE
+Model Build Alerts
+
+
+7行が選択されました。
+
+SQL>
+SQL> -- The coefficient indicates the relative influence of a given
+SQL> -- (attribute, value) pair on the target value. A negative
+SQL> -- coefficient value indicates a negative influence.
+SQL> --
+SQL> -- NOTE: The row in the SVM model details output with a NULL attribute_name
+SQL> -- shows the value for SVM bias under the COEFFICIENT column.
+SQL> --
+SQL> SET line 120
+SQL> column aname format a30
+SQL> column aval  format a30
+SQL> column coeff format 9.99
+SQL> SELECT target_value, attribute_name aname, attribute_value aval,
+  2      coefficient coeff
+  3    FROM DM$VLSVMC_SH_CLAS_SAMPLE
+  4  WHERE ABS(coefficient) > 0.01
+  5  ORDER BY target_value, ABS(coefficient) DESC;
+
+          TARGET_VALUE ANAME                          AVAL                           COEFF
+---------------------- ------------------------------ ------------------------------ -----
+          1.0000000000 COUNTRY_NAME                   Spain                          -2.48
+          1.0000000000 HOUSEHOLD_SIZE                 4-5                             2.01
+          1.0000000000 HOUSEHOLD_SIZE                 6-8                            -1.60
+          1.0000000000                                                               -1.47
+          1.0000000000 OCCUPATION                     Other                          -1.32
+          1.0000000000 COUNTRY_NAME                   South Africa                   -1.13
+          1.0000000000 HOUSEHOLD_SIZE                 3                               1.06
+          1.0000000000 EDUCATION                      11th                           -1.00
+          1.0000000000 COUNTRY_NAME                   Canada                           .99
+          1.0000000000 HOUSEHOLD_SIZE                 9+                              -.88
+          1.0000000000 COUNTRY_NAME                   Brazil                          -.85
+          1.0000000000 OCCUPATION                     Exec.                            .85
+          1.0000000000 COUNTRY_NAME                   Saudi Arabia                     .82
+          1.0000000000 EDUCATION                      HS-grad                         -.82
+          1.0000000000 COUNTRY_NAME                   Argentina                       -.81
+          1.0000000000 EDUCATION                      Masters                          .75
+          1.0000000000 EDUCATION                      12th                             .75
+          1.0000000000 COUNTRY_NAME                   United Kingdom                   .74
+          1.0000000000 OCCUPATION                     House-s                         -.73
+          1.0000000000 COUNTRY_NAME                   New Zealand                      .64
+          1.0000000000 COUNTRY_NAME                   Germany                          .61
+          1.0000000000 EDUCATION                      7th-8th                         -.56
+          1.0000000000 CUST_INCOME_LEVEL              B: 30,000 - 49,999               .56
+          1.0000000000 EDUCATION                      10th                             .55
+          1.0000000000 EDUCATION                      Profsc                           .52
+          1.0000000000 COUNTRY_NAME                   Denmark                          .52
+          1.0000000000 BOOKKEEPING_APPLICATION                                         .51
+          1.0000000000 HOUSEHOLD_SIZE                 2                               -.51
+          1.0000000000 COUNTRY_NAME                   Singapore                        .50
+          1.0000000000 OCCUPATION                     Cleric.                          .48
+          1.0000000000 COUNTRY_NAME                   United States of America         .44
+          1.0000000000 EDUCATION                      < Bach.                         -.42
+          1.0000000000 OCCUPATION                     ?                               -.41
+          1.0000000000 BULK_PACK_DISKETTES                                             .39
+          1.0000000000 CUST_INCOME_LEVEL              C: 50,000 - 69,999              -.39
+          1.0000000000 CUST_INCOME_LEVEL              L: 300,000 and above             .39
+          1.0000000000 CUST_INCOME_LEVEL              I: 170,000 - 189,999             .38
+          1.0000000000 FLAT_PANEL_MONITOR                                             -.36
+          1.0000000000 EDUCATION                      Assoc-V                         -.34
+          1.0000000000 CUST_INCOME_LEVEL              A: Below 30,000                 -.33
+          1.0000000000 CUST_MARITAL_STATUS            separated                        .32
+          1.0000000000 OCCUPATION                     TechSup                          .31
+          1.0000000000 CUST_INCOME_LEVEL              H: 150,000 - 169,999            -.29
+          1.0000000000 CUST_INCOME_LEVEL              K: 250,000 - 299,999            -.28
+          1.0000000000 OCCUPATION                     Sales                            .28
+          1.0000000000 HOME_THEATER_PACKAGE                                            .26
+          1.0000000000 OCCUPATION                     Prof.                            .26
+          1.0000000000 OCCUPATION                     Transp.                          .23
+          1.0000000000 YRS_RESIDENCE                                                   .23
+          1.0000000000 EDUCATION                      Assoc-A                          .22
+          1.0000000000 CUST_INCOME_LEVEL              D: 70,000 - 89,999              -.22
+          1.0000000000 CUST_INCOME_LEVEL              F: 110,000 - 129,999             .21
+          1.0000000000 OCCUPATION                     Farming                         -.21
+          1.0000000000 CUST_GENDER                    F                               -.20
+          1.0000000000 CUST_GENDER                    M                                .20
+          1.0000000000 CUST_MARITAL_STATUS            never married                   -.18
+          1.0000000000 OCCUPATION                     Protec.                          .18
+          1.0000000000 CUST_INCOME_LEVEL              E: 90,000 - 109,999             -.17
+          1.0000000000 COUNTRY_NAME                   France                          -.15
+          1.0000000000 EDUCATION                      Bach.                            .15
+          1.0000000000 CUST_MARITAL_STATUS            married                         -.15
+          1.0000000000 CUST_INCOME_LEVEL              G: 130,000 - 149,999             .14
+          1.0000000000 OCCUPATION                     Crafts                           .13
+          1.0000000000 COUNTRY_NAME                   Italy                            .12
+          1.0000000000 EDUCATION                      PhD                              .10
+          1.0000000000 EDUCATION                      9th                              .10
+          1.0000000000 Y_BOX_GAMES                                                    -.09
+          1.0000000000 HOUSEHOLD_SIZE                 1                               -.07
+          1.0000000000 OCCUPATION                     Handler                         -.05
+          1.0000000000 COUNTRY_NAME                   China                            .04
+          1.0000000000 CUST_MARITAL_STATUS            widowed                          .03
+          1.0000000000 OS_DOC_SET_KANJI                                               -.02
+          1.0000000000 CUST_MARITAL_STATUS            divorced                        -.01
+
+73行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               TEST THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL>
+SQL> ------------------------------------
+SQL> -- COMPUTE METRICS TO TEST THE MODEL
+SQL> --
+SQL> -- The queries shown below demonstrate the use of SQL data mining functions
+SQL> -- along with analytic functions to compute various test metrics. In these
+SQL> -- queries:
+SQL> --
+SQL> -- Modelname:             svmc_sh_clas_sample
+SQL> -- # of Lift Quantiles:   10
+SQL> -- Target attribute:      affinity_card
+SQL> -- Positive target value: 1
+SQL> -- (Change these as appropriate for a different example)
+SQL>
+SQL> -- Compute CONFUSION MATRIX
+SQL> --
+SQL> -- This query demonstates how to generate a confusion matrix using the
+SQL> -- SQL prediction functions for scoring. The returned columns match the
+SQL> -- schema of the table generated by COMPUTE_CONFUSION_MATRIX procedure.
+SQL> --
+SQL> SELECT affinity_card AS actual_target_value,
+  2         PREDICTION(svmc_sh_clas_sample USING *) AS predicted_target_value,
+  3         COUNT(*) AS value
+  4    FROM mining_data_test_v
+  5   GROUP BY affinity_card, PREDICTION(svmc_sh_clas_sample USING *)
+  6   ORDER BY 1, 2;
+
+ACTUAL_TARGET_VALUE PREDICTED_TARGET_VALUE      VALUE
+------------------- ---------------------- ----------
+                  0                      0        955
+                  0                      1        199
+                  1                      0         87
+                  1                      1        259
+
+4行が選択されました。
+
+SQL>
+SQL> -- Compute ACCURACY
+SQL> --
+SQL> column accuracy format 9.99
+SQL>
+SQL> SELECT SUM(correct)/COUNT(*) AS accuracy
+  2    FROM (SELECT DECODE(affinity_card,
+  3                   PREDICTION(svmc_sh_clas_sample USING *), 1, 0) AS correct
+  4            FROM mining_data_test_v);
+
+ACCURACY
+--------
+     .81
+
+1行が選択されました。
+
+SQL>
+SQL> -- Compute CUMULATIVE LIFT, GAIN Charts.
+SQL> --
+SQL> -- The cumulative gain chart is a popular version of the lift chart, and
+SQL> -- it maps cumulative gain (Y axis) against the cumulative records (X axis).
+SQL> --
+SQL> -- The cumulative lift chart is another popular representation of lift, and
+SQL> -- it maps cumulative lift (Y axis) against the cumulative records (X axis).
+SQL> --
+SQL> -- The query also returns the probability associated with each quantile, so
+SQL> -- that when the cut-off point for Lift is selected, you can correlate it
+SQL> -- with a probability value (say P_cutoff). You can then use this value of
+SQL> -- P_cutoff in a prediction query as follows:
+SQL> --
+SQL> -- SELECT *
+SQL> --   FROM records_to_be_scored
+SQL> --  WHERE PREDICTION_PROBABILITY(svmc_sh_clas_sample, 1 USING *) > P_cutoff;
+SQL> --
+SQL> -- In the query below
+SQL> --
+SQL> -- q_num     - Quantile Number
+SQL> -- pos_cnt   - # of records that predict the positive target
+SQL> -- pos_prob  - the probability associated with predicting a positive target
+SQL> --             value for a given new record
+SQL> -- cume_recs - % Cumulative Records upto quantile
+SQL> -- cume_gain - % Cumulative Gain
+SQL> -- cume_lift - Cumulative Lift
+SQL> --
+SQL> -- Note that the LIFT can also be computed using
+SQL> -- DBMS_DATA_MINING.COMPUTE_LIFT function, see examples in dmnbdemo.sql.
+SQL> --
+SQL> WITH
+  2  pos_prob_and_counts AS (
+  3  SELECT PREDICTION_PROBABILITY(svmc_sh_clas_sample, 1 USING *) pos_prob,
+  4         -- hit count for positive target value
+  5         DECODE(affinity_card, 1, 1, 0) pos_cnt
+  6    FROM mining_data_test_v
+  7  ),
+  8  qtile_and_smear AS (
+  9  SELECT NTILE(10) OVER (ORDER BY pos_prob DESC) q_num,
+ 10         pos_prob,
+ 11         -- smear the counts across records with the same probability to
+ 12         -- eliminate potential biased distribution across qtl boundaries
+ 13         AVG(pos_cnt) OVER (PARTITION BY pos_prob) pos_cnt
+ 14    FROM pos_prob_and_counts
+ 15  ),
+ 16  cume_and_total_counts AS (
+ 17  SELECT q_num,
+ 18         -- inner sum for counts within q_num groups,
+ 19         -- outer sum for cume counts
+ 20         MIN(pos_prob) pos_prob,
+ 21         SUM(COUNT(*)) OVER (ORDER BY q_num) cume_recs,
+ 22         SUM(SUM(pos_cnt)) OVER (ORDER BY q_num) cume_pos_cnt,
+ 23         SUM(COUNT(*)) OVER () total_recs,
+ 24         SUM(SUM(pos_cnt)) OVER () total_pos_cnt
+ 25    FROM qtile_and_smear
+ 26   GROUP BY q_num
+ 27  )
+ 28  SELECT pos_prob,
+ 29         100*(cume_recs/total_recs) cume_recs,
+ 30         100*(cume_pos_cnt/total_pos_cnt) cume_gain,
+ 31         (cume_pos_cnt/total_pos_cnt)/(cume_recs/total_recs) cume_lift
+ 32    FROM cume_and_total_counts
+ 33   ORDER BY pos_prob DESC;
+
+  POS_PROB  CUME_RECS  CUME_GAIN  CUME_LIFT
+---------- ---------- ---------- ----------
+9.847E-001         10 31.7919075 3.17919075
+8.547E-001         20 54.6242775 2.73121387
+5.358E-001         30 73.4104046 2.44701349
+1.318E-001         40 85.2601156 2.13150289
+1.806E-002         50 92.1965318 1.84393064
+4.385E-003         60 94.7976879 1.57996146
+8.024E-004         70 96.2427746 1.37489678
+1.159E-004         80 97.9768786 1.22471098
+5.416E-006         90  99.132948  1.1014772
+ 1.23E-012        100        100          1
+
+10行が選択されました。
+
+SQL>
+SQL> -- Compute ROC CURVE
+SQL> --
+SQL> -- This can be used to find the operating point for classification.
+SQL> --
+SQL> -- The ROC curve plots true positive fraction - TPF (Y axis) against
+SQL> -- false positive fraction - FPF (X axis). Note that the query picks
+SQL> -- only the corner points (top tpf switch points for a given fpf) and
+SQL> -- the last point. It should be noted that the query does not generate
+SQL> -- the first point, i.e (tpf, fpf) = (0, 0). All of the remaining points
+SQL> -- are computed, but are then filtered based on the criterion above. For
+SQL> -- example, the query picks points a,b,c,d and not points o,e,f,g,h,i,j.
+SQL> --
+SQL> -- The Area Under the Curve (next query) is computed using the trapezoid
+SQL> -- rule applied to all tpf change points (i.e. summing up the areas of
+SQL> -- the trapezoids formed by the points for each segment along the X axis;
+SQL> -- (recall that trapezoid Area = 0.5h (A+B); h=> hieght, A, B are sides).
+SQL> -- In the example, this means the curve covering the area would trace
+SQL> -- points o,e,a,g,b,c,d.
+SQL> --
+SQL> -- |
+SQL> -- |        .c .j .d
+SQL> -- |  .b .h .i
+SQL> -- |  .g
+SQL> -- .a .f
+SQL> -- .e
+SQL> -- .__.__.__.__.__.__
+SQL> -- o
+SQL> --
+SQL> -- Note that the ROC curve can also be computed using
+SQL> -- DBMS_DATA_MINING.COMPUTE_ROC function, see examples in dmnbdemo.sql.
+SQL> --
+SQL> column prob format 9.9999
+SQL> column fpf  format 9.9999
+SQL> column tpf  format 9.9999
+SQL>
+SQL> WITH
+  2  pos_prob_and_counts AS (
+  3  SELECT PREDICTION_PROBABILITY(svmc_sh_clas_sample, 1 USING *) pos_prob,
+  4         -- hit count for positive target value
+  5         DECODE(affinity_card, 1, 1, 0) pos_cnt
+  6    FROM mining_data_test_v
+  7  ),
+  8  cume_and_total_counts AS (
+  9  SELECT pos_prob,
+ 10         pos_cnt,
+ 11         SUM(pos_cnt) OVER (ORDER BY pos_prob DESC) cume_pos_cnt,
+ 12         SUM(pos_cnt) OVER () tot_pos_cnt,
+ 13         SUM(1 - pos_cnt) OVER (ORDER BY pos_prob DESC) cume_neg_cnt,
+ 14         SUM(1 - pos_cnt) OVER () tot_neg_cnt
+ 15    FROM pos_prob_and_counts
+ 16  ),
+ 17  roc_corners AS (
+ 18  SELECT MIN(pos_prob) pos_prob,
+ 19         MAX(cume_pos_cnt) cume_pos_cnt, cume_neg_cnt,
+ 20         MAX(tot_pos_cnt) tot_pos_cnt, MAX(tot_neg_cnt) tot_neg_cnt
+ 21    FROM cume_and_total_counts
+ 22   WHERE pos_cnt = 1                      -- tpf switch points
+ 23      OR (cume_pos_cnt = tot_pos_cnt AND  -- top-right point
+ 24          cume_neg_cnt = tot_neg_cnt)
+ 25   GROUP BY cume_neg_cnt
+ 26  )
+ 27  SELECT pos_prob prob,
+ 28         cume_pos_cnt/tot_pos_cnt tpf,
+ 29         cume_neg_cnt/tot_neg_cnt fpf,
+ 30         cume_pos_cnt tp,
+ 31         tot_pos_cnt - cume_pos_cnt fn,
+ 32         cume_neg_cnt fp,
+ 33         tot_neg_cnt - cume_neg_cnt tn
+ 34    FROM roc_corners
+ 35   ORDER BY fpf;
+
+PROB TPF FPF    TP    FN    FP    TN
+---- --- --- ----- ----- ----- -----
+.9999 .0260 .0009     9   337     1  1153
+.9997 .0434 .0017    15   331     2  1152
+.9995 .0607 .0026    21   325     3  1151
+.9994 .0665 .0043    23   323     5  1149
+.9991 .0867 .0052    30   316     6  1148
+.9988 .1098 .0061    38   308     7  1147
+.9988 .1185 .0069    41   305     8  1146
+.9984 .1243 .0078    43   303     9  1145
+.9975 .1618 .0087    56   290    10  1144
+.9971 .1647 .0104    57   289    12  1142
+.9969 .1705 .0121    59   287    14  1140
+.9968 .1763 .0130    61   285    15  1139
+.9965 .1821 .0156    63   283    18  1136
+.9955 .2052 .0165    71   275    19  1135
+.9952 .2081 .0191    72   274    22  1132
+.9939 .2197 .0217    76   270    25  1129
+.9936 .2225 .0225    77   269    26  1128
+.9929 .2399 .0234    83   263    27  1127
+.9925 .2543 .0243    88   258    28  1126
+.9915 .2688 .0251    93   253    29  1125
+.9903 .2890 .0260   100   246    30  1124
+.9890 .2948 .0277   102   244    32  1122
+.9887 .2977 .0286   103   243    33  1121
+.9872 .3035 .0295   105   241    34  1120
+.9860 .3064 .0303   106   240    35  1119
+.9855 .3092 .0321   107   239    37  1117
+.9851 .3121 .0329   108   238    38  1116
+.9849 .3179 .0338   110   236    39  1115
+.9844 .3237 .0347   112   234    40  1114
+.9841 .3266 .0355   113   233    41  1113
+.9826 .3324 .0390   115   231    45  1109
+.9811 .3353 .0407   116   230    47  1107
+.9808 .3382 .0416   117   229    48  1106
+.9777 .3497 .0451   121   225    52  1102
+.9754 .3584 .0459   124   222    53  1101
+.9729 .3642 .0468   126   220    54  1100
+.9705 .3699 .0494   128   218    57  1097
+.9686 .3728 .0511   129   217    59  1095
+.9656 .3786 .0546   131   215    63  1091
+.9651 .3815 .0555   132   214    64  1090
+.9632 .3844 .0563   133   213    65  1089
+.9612 .3931 .0572   136   210    66  1088
+.9591 .3960 .0581   137   209    67  1087
+.9570 .3988 .0589   138   208    68  1086
+.9549 .4017 .0607   139   207    70  1084
+.9525 .4046 .0615   140   206    71  1083
+.9488 .4075 .0633   141   205    73  1081
+.9428 .4220 .0650   146   200    75  1079
+.9413 .4277 .0659   148   198    76  1078
+.9399 .4306 .0667   149   197    77  1077
+.9379 .4364 .0685   151   195    79  1075
+.9345 .4422 .0702   153   193    81  1073
+.9312 .4566 .0711   158   188    82  1072
+.9294 .4624 .0728   160   186    84  1070
+.9240 .4855 .0737   168   178    85  1069
+.9135 .4942 .0754   171   175    87  1067
+.9088 .4971 .0771   172   174    89  1065
+.9074 .5029 .0780   174   172    90  1064
+.9016 .5058 .0797   175   171    92  1062
+.8925 .5173 .0806   179   167    93  1061
+.8895 .5202 .0815   180   166    94  1060
+.8883 .5231 .0823   181   165    95  1059
+.8863 .5289 .0841   183   163    97  1057
+.8788 .5318 .0901   184   162   104  1050
+.8778 .5376 .0919   186   160   106  1048
+.8621 .5405 .0945   187   159   109  1045
+.8566 .5462 .0953   189   157   110  1044
+.8542 .5491 .0971   190   156   112  1042
+.8475 .5607 .0979   194   152   113  1041
+.8461 .5636 .0988   195   151   114  1040
+.8424 .5694 .1005   197   149   116  1038
+.8353 .5751 .1023   199   147   118  1036
+.8291 .5809 .1066   201   145   123  1031
+.8127 .5838 .1109   202   144   128  1026
+.8022 .5867 .1127   203   143   130  1024
+.7888 .5983 .1153   207   139   133  1021
+.7880 .6012 .1161   208   138   134  1020
+.7817 .6069 .1179   210   136   136  1018
+.7660 .6127 .1205   212   134   139  1015
+.7513 .6156 .1213   213   133   140  1014
+.7341 .6185 .1256   214   132   145  1009
+.7264 .6301 .1274   218   128   147  1007
+.7195 .6329 .1291   219   127   149  1005
+.7152 .6358 .1308   220   126   151  1003
+.7122 .6387 .1326   221   125   153  1001
+.7039 .6445 .1334   223   123   154  1000
+.6966 .6532 .1352   226   120   156   998
+.6872 .6618 .1378   229   117   159   995
+.6862 .6647 .1395   230   116   161   993
+.6794 .6676 .1412   231   115   163   991
+.6646 .6763 .1456   234   112   168   986
+.6604 .6821 .1464   236   110   169   985
+.6383 .6879 .1516   238   108   175   979
+.6150 .6994 .1534   242   104   177   977
+.6099 .7081 .1542   245   101   178   976
+.5933 .7139 .1568   247    99   181   973
+.5719 .7197 .1646   249    97   190   964
+.5554 .7283 .1672   252    94   193   961
+.5358 .7341 .1698   254    92   196   958
+.5237 .7399 .1707   256    90   197   957
+.5046 .7486 .1724   259    87   199   955
+.4886 .7514 .1733   260    86   200   954
+.4669 .7572 .1768   262    84   204   950
+.4207 .7630 .1854   264    82   214   940
+.4041 .7688 .1880   266    80   217   937
+.3958 .7746 .1915   268    78   221   933
+.3581 .7775 .2010   269    77   232   922
+.3483 .7803 .2028   270    76   234   920
+.3248 .7832 .2097   271    75   242   912
+.3193 .7861 .2114   272    74   244   910
+.3153 .7890 .2123   273    73   245   909
+.3027 .7919 .2132   274    72   246   908
+.2916 .7948 .2158   275    71   249   905
+.2768 .8006 .2184   277    69   252   902
+.2675 .8035 .2218   278    68   256   898
+.2638 .8064 .2227   279    67   257   897
+.2353 .8092 .2357   280    66   272   882
+.2293 .8121 .2374   281    65   274   880
+.2204 .8150 .2418   282    64   279   875
+.2124 .8179 .2426   283    63   280   874
+.2060 .8208 .2444   284    62   282   872
+.1953 .8266 .2452   286    60   283   871
+.1888 .8295 .2461   287    59   284   870
+.1712 .8353 .2504   289    57   289   865
+.1675 .8382 .2522   290    56   291   863
+.1527 .8439 .2591   292    54   299   855
+.1416 .8468 .2617   293    53   302   852
+.1336 .8526 .2626   295    51   303   851
+.1236 .8555 .2686   296    50   310   844
+.1163 .8613 .2704   298    48   312   842
+.0969 .8642 .2816   299    47   325   829
+.0921 .8699 .2825   301    45   326   828
+.0888 .8728 .2834   302    44   327   827
+.0777 .8757 .2877   303    43   332   822
+.0729 .8786 .2920   304    42   337   817
+.0703 .8815 .2938   305    41   339   815
+.0620 .8844 .3007   306    40   347   807
+.0612 .8873 .3016   307    39   348   806
+.0551 .8931 .3059   309    37   353   801
+.0527 .8960 .3076   310    36   355   799
+.0479 .8988 .3146   311    35   363   791
+.0385 .9017 .3258   312    34   376   778
+.0301 .9046 .3414   313    33   394   760
+.0269 .9104 .3458   315    31   399   755
+.0228 .9133 .3570   316    30   412   742
+.0221 .9162 .3605   317    29   416   738
+.0184 .9220 .3709   319    27   428   726
+.0162 .9249 .3821   320    26   441   713
+.0157 .9277 .3856   321    25   445   709
+.0139 .9306 .3943   322    24   455   699
+.0083 .9335 .4419   323    23   510   644
+.0067 .9364 .4584   324    22   529   625
+.0061 .9393 .4645   325    21   536   618
+.0061 .9422 .4653   326    20   537   617
+.0060 .9451 .4662   327    19   538   616
+.0047 .9480 .4896   328    18   565   589
+.0030 .9509 .5173   329    17   597   557
+.0023 .9538 .5494   330    16   634   520
+.0016 .9566 .5737   331    15   662   492
+.0016 .9595 .5754   332    14   664   490
+.0011 .9624 .6005   333    13   693   461
+.0007 .9653 .6334   334    12   731   423
+.0006 .9682 .6421   335    11   741   413
+.0004 .9711 .6837   336    10   789   365
+.0004 .9740 .6880   337     9   794   360
+.0003 .9769 .6906   338     8   797   357
+.0002 .9798 .7088   339     7   818   336
+.0001 .9827 .7678   340     6   886   268
+.0001 .9855 .7704   341     5   889   265
+.0000 .9884 .8085   342     4   933   221
+.0000 .9913 .8579   343     3   990   164
+.0000 .9942 .8917   344     2  1029   125
+.0000 .9971 .8951   345     1  1033   121
+.0000 1.0000 .9783   346     0  1129    25
+.0000 1.0000 1.0000   346     0  1154     0
+
+175行が選択されました。
+
+SQL>
+SQL> -- Compute AUC (Area Under the roc Curve)
+SQL> --
+SQL> -- See notes on ROC Curve and AUC computation above
+SQL> --
+SQL> column auc format 9.99
+SQL>
+SQL> WITH
+  2  pos_prob_and_counts AS (
+  3  SELECT PREDICTION_PROBABILITY(svmc_sh_clas_sample, 1 USING *) pos_prob,
+  4         DECODE(affinity_card, 1, 1, 0) pos_cnt
+  5    FROM mining_data_test_v
+  6  ),
+  7  tpf_fpf AS (
+  8  SELECT  pos_cnt,
+  9         SUM(pos_cnt) OVER (ORDER BY pos_prob DESC) /
+ 10           SUM(pos_cnt) OVER () tpf,
+ 11         SUM(1 - pos_cnt) OVER (ORDER BY pos_prob DESC) /
+ 12           SUM(1 - pos_cnt) OVER () fpf
+ 13    FROM pos_prob_and_counts
+ 14  ),
+ 15  trapezoid_areas AS (
+ 16  SELECT 0.5 * (fpf - LAG(fpf, 1, 0) OVER (ORDER BY fpf, tpf)) *
+ 17          (tpf + LAG(tpf, 1, 0) OVER (ORDER BY fpf, tpf)) area
+ 18    FROM tpf_fpf
+ 19   WHERE pos_cnt = 1
+ 20      OR (tpf = 1 AND fpf = 1)
+ 21  )
+ 22  SELECT SUM(area) auc
+ 23    FROM trapezoid_areas;
+
+AUC
+---
+.86
+
+1行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               APPLY THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL>
+SQL>
+SQL> -------------------------------------------------
+SQL> -- SCORE NEW DATA USING SQL DATA MINING FUNCTIONS
+SQL> --
+SQL> ------------------
+SQL> -- BUSINESS CASE 1
+SQL> -- Find the 10 customers who live in Italy that are most likely
+SQL> -- to use an affinity card.
+SQL> --
+SQL> SELECT cust_id FROM
+  2  (SELECT cust_id,
+  3          rank() over (order by PREDICTION_PROBABILITY(svmc_sh_clas_sample, 1
+  4                       USING *) DESC, cust_id) rnk
+  5     FROM mining_data_apply_v
+  6    WHERE country_name = 'Italy')
+  7  where rnk <= 10
+  8  order by rnk;
+
+   CUST_ID
+----------
+    101445
+    100179
+    100733
+    100324
+    100662
+    100554
+    100081
+    100344
+    100185
+    101345
+
+10行が選択されました。
+
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 2
+SQL> -- Find the average age of customers who are likely to use an
+SQL> -- affinity card. Break out the results by gender.
+SQL> --
+SQL> column cust_gender format a12
+SQL> SELECT cust_gender,
+  2         COUNT(*) AS cnt,
+  3         ROUND(AVG(age)) AS avg_age
+  4    FROM mining_data_apply_v
+  5   WHERE PREDICTION(svmc_sh_clas_sample USING *) = 1
+  6  GROUP BY cust_gender
+  7  ORDER BY cust_gender;
+
+CUST_GENDER         CNT    AVG_AGE
+------------ ---------- ----------
+F                    66         30
+M                   392         34
+
+2行が選択されました。
+
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 3
+SQL> -- List ten customers (ordered by their id) along with their likelihood to
+SQL> -- use or reject the affinity card (Note: while this example has a
+SQL> -- binary target, such a query is useful in multi-class classification -
+SQL> -- Low, Med, High for example).
+SQL> --
+SQL> column prediction format 9
+SQL> column probability format 9.999999999
+SQL> column cost format 9.999999999
+SQL> SELECT T.cust_id, S.prediction, S.probability
+  2    FROM (SELECT cust_id,
+  3                 PREDICTION_SET(svmc_sh_clas_sample USING *) pset
+  4            FROM mining_data_apply_v
+  5           WHERE cust_id < 100011) T,
+  6         TABLE(T.pset) S
+  7  ORDER BY cust_id, S.prediction;
+
+   CUST_ID PREDICTION PROBABILITY
+---------- ---------- -----------
+    100001          0  .959838396
+    100001          1  .040161604
+    100002          0  .913807319
+    100002          1  .086192681
+    100003          0  .998032417
+    100003          1  .001967583
+    100004          0  .996543330
+    100004          1  .003456670
+    100005          0  .005816763
+    100005          1  .994183237
+    100006          0  .999960313
+    100006          1  .000039687
+    100007          0  .999965816
+    100007          1  .000034184
+    100008          0  .987160236
+    100008          1  .012839764
+    100009          0  .361432308
+    100009          1  .638567692
+    100010          0  .891614990
+    100010          1  .108385010
+
+20行が選択されました。
+
+SQL>
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 4
+SQL> -- Find customers whose profession is Tech Support
+SQL> -- with > 75% likelihood of using the affinity card,
+SQL> -- and explain the attributes which make them likely
+SQL> -- to use an affinity card.
+SQL> --
+SQL> set long 20000
+SQL> SELECT cust_id, PREDICTION_DETAILS(svmc_sh_clas_sample, 1 USING *) PD
+  2    FROM mining_data_apply_v
+  3   WHERE PREDICTION_PROBABILITY(svmc_sh_clas_sample, 1 USING *) > 0.75
+  4         AND occupation = 'TechSup'
+  5  ORDER BY cust_id;
+
+   CUST_ID PD
+---------- ------------------------------------------------------------------------------------------
+    100029 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".502" rank="1"/>
+           <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".252" rank="
+           2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".212" rank="3"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".152" rank="4"/>
+           <Attribute name="EDUCATION" actualValue="Assoc-A" weight=".134" rank="5"/>
+           </Details>
+
+    100056 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".805" rank="1"/>
+           <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".592" rank="
+           2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".539" rank="3"/>
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight=".49" rank="4"/>
+           <Attribute name="EDUCATION" actualValue="Bach." weight=".349" rank="5"/>
+           </Details>
+
+    100095 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".854" rank="1"/>
+           <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".689" rank="
+           2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".643" rank="3"/>
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight=".598" rank="4"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".26" rank="5"/>
+           </Details>
+
+    100279 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".855" rank="1"/>
+           <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".692" rank="
+           2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".646" rank="3"/>
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight=".601" rank="4"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".553" rank="5"/>
+           </Details>
+
+    100378 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".524" rank="1"/>
+           <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".269" rank="
+           2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".228" rank="3"/>
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight=".194" rank="4"/>
+           <Attribute name="EDUCATION" actualValue="Assoc-A" weight=".144" rank="5"/>
+           </Details>
+
+    100508 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".553" rank="1"/>
+           <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".293" rank="
+           2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".249" rank="3"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".181" rank="4"/>
+           <Attribute name="EDUCATION" actualValue="Bach." weight=".131" rank="5"/>
+           </Details>
+
+    100528 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".839" rank="1"/>
+           <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".658" rank="
+           2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".608" rank="3"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".512" rank="4"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".23" rank="5"/>
+           </Details>
+
+    100792 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="4-5" weight=".971" rank="1"/>
+           <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".624" rank="
+           2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".573" rank="3"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".474" rank="4"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".203" rank="5"/>
+           </Details>
+
+    100878 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".868" rank="1"/>
+           <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".799" rank="
+           2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".776" rank="3"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".723" rank="4"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".474" rank="5"/>
+           </Details>
+
+    100884 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".868" rank="1"/>
+           <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".799" rank="
+           2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".776" rank="3"/>
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight=".751" rank="4"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".473" rank="5"/>
+           </Details>
+
+    100975 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".779" rank="1"/>
+           <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".549" rank="
+           2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".495" rank="3"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".396" rank="4"/>
+           <Attribute name="EDUCATION" actualValue="Bach." weight=".309" rank="5"/>
+           </Details>
+
+    100980 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".456" rank="1"/>
+           <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".218" rank="
+           2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".183" rank="3"/>
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight=".155" rank="4"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".13" rank="5"/>
+           </Details>
+
+    101012 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".878" rank="1"/>
+           <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".773" rank="
+           2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".74" rank="3"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".668" rank="4"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".38" rank="5"/>
+           </Details>
+
+    101036 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".784" rank="1"/>
+           <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".753" rank="
+           2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".742" rank="3"/>
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight=".73" rank="4"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".562" rank="5"/>
+           </Details>
+
+    101082 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".862" rank="1"/>
+           <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".709" rank="
+           2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".665" rank="3"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".576" rank="4"/>
+           <Attribute name="EDUCATION" actualValue="Bach." weight=".484" rank="5"/>
+           </Details>
+
+    101163 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".805" rank="1"/>
+           <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".592" rank="
+           2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".539" rank="3"/>
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight=".49" rank="4"/>
+           <Attribute name="EDUCATION" actualValue="Bach." weight=".349" rank="5"/>
+           </Details>
+
+    101300 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".795" rank="1"/>
+           <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".762" rank="
+           2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".75" rank="3"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".722" rank="4"/>
+           <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".56" rank="5"/>
+           </Details>
+
+    101448 <Details algorithm="Support Vector Machines" class="1">
+           <Attribute name="HOUSEHOLD_SIZE" actualValue="3" weight=".878" rank="1"/>
+           <Attribute name="COUNTRY_NAME" actualValue="United States of America" weight=".784" rank="
+           2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".754" rank="3"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".687" rank="4"/>
+           <Attribute name="EDUCATION" actualValue="Bach." weight=".611" rank="5"/>
+           </Details>
+
+
+18行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --    BUILD and APPLY a transient model using analytic functions
+SQL> -----------------------------------------------------------------------
+SQL> -- In addition to creating a persistent model that is stored as a schema
+SQL> -- object, models can be built and scored on data on the fly using
+SQL> -- Oracle's analytic function syntax.
+SQL>
+SQL> ----------------------
+SQL> -- BUSINESS USE CASE 5
+SQL> --
+SQL> -- Identify rows that do not currently have an affinity card, but
+SQL> -- the customer pattern is like those that do have such a card.
+SQL> -- Perform this analysis by building a classification model on the
+SQL> -- fly and scoring it against the same data, and extract those
+SQL> -- customers who do not have a card, but are predicted to have a card
+SQL> -- based on observed patterns.
+SQL> -- All necessary data preparation steps are automatically performed.
+SQL> select cust_id, round(pred_prob,2) pred_prob from
+  2  (select cust_id, affinity_card,
+  3          prediction(for to_char(affinity_card) using AGE, CUST_GENDER, YRS_RESIDENCE) over () pred_card,
+  4          prediction_probability(for to_char(affinity_card),1 using AGE, CUST_GENDER, YRS_RESIDENCE) over () pred_prob
+  5   from mining_data_build_v)
+  6  where affinity_card = 0
+  7    and pred_card = 1
+  8  order by 2 desc, 1;
+
+   CUST_ID  PRED_PROB
+---------- ----------
+    102555        .98
+    102570        .97
+    102011        .96
+    102557        .95
+    102895        .95
+    102709        .94
+    102763        .93
+    102449        .92
+    101899        .89
+    102647        .89
+    101574        .88
+    102955        .88
+    102286        .87
+    102964        .87
+    102295        .85
+    102421        .85
+    102717        .85
+    102152        .83
+    102183        .83
+    102205        .83
+    102258        .83
+    102749        .83
+    102756        .83
+    101765        .82
+    102285        .82
+    102457        .82
+    102587        .82
+    102687        .82
+    101840        .81
+    102046        .81
+    102667        .81
+    102971        .81
+    101681         .8
+    101918         .8
+    102116         .8
+    102313         .8
+    101685        .79
+    101731        .79
+    101872        .79
+    102053        .79
+    102390        .79
+    102753        .79
+    102785        .79
+    102801        .79
+    102923        .79
+    101757        .78
+    102080        .78
+    102144        .78
+    102172        .78
+    101771        .77
+    101652        .76
+    101861        .76
+    102051        .76
+    101554        .75
+    101614        .75
+    101702        .75
+    101959        .75
+    102017        .75
+    102441        .75
+    102500        .75
+    102825        .75
+    102906        .75
+    102907        .75
+    101521        .74
+    101949        .74
+    101974        .74
+    102002        .74
+    102003        .74
+    102015        .74
+    102093        .74
+    102107        .74
+    102284        .74
+    102378        .74
+    102395        .74
+    102488        .74
+    102678        .74
+    102693        .74
+    102780        .74
+    102844        .74
+    101583        .73
+    101601        .73
+    101625        .73
+    101673        .73
+    101695        .73
+    101722        .73
+    101844        .73
+    102540        .73
+    102572        .73
+    102645        .73
+    102728        .73
+    102918        .73
+    101648        .72
+    102713        .72
+    101569        .71
+    102013        .71
+    102027        .71
+    102071        .71
+    102103        .71
+    102160        .71
+    102487        .71
+    102929        .71
+    101635         .7
+    102147         .7
+    102170         .7
+    102365         .7
+    102447         .7
+    102689         .7
+    102917         .7
+    101638        .69
+    102044        .69
+    102700        .69
+    101566        .68
+    101820        .68
+    102033        .68
+    102384        .68
+    102492        .68
+    102663        .68
+    102675        .68
+    101803        .67
+    102041        .67
+    102226        .67
+    102316        .67
+    102444        .67
+    102644        .67
+    102290        .66
+    102361        .66
+    101509        .65
+    101528        .65
+    101562        .65
+    101645        .65
+    101797        .65
+    101882        .65
+    101900        .65
+    101910        .65
+    101971        .65
+    102090        .65
+    102411        .65
+    102445        .65
+    102474        .65
+    102482        .65
+    102490        .65
+    102521        .65
+    102585        .65
+    102784        .65
+    102838        .65
+    102932        .65
+    102991        .65
+    101547        .64
+    101567        .64
+    101599        .64
+    101848        .64
+    101887        .64
+    101932        .64
+    101947        .64
+    101958        .64
+    101986        .64
+    101999        .64
+    102079        .64
+    102151        .64
+    102227        .64
+    102240        .64
+    102253        .64
+    102423        .64
+    102426        .64
+    102481        .64
+    102578        .64
+    102681        .64
+    102686        .64
+    102811        .64
+    102839        .64
+    102848        .64
+    102878        .64
+    102903        .64
+    101514        .63
+    101579        .63
+    101590        .63
+    101618        .63
+    101933        .63
+    101964        .63
+    102049        .63
+    102085        .63
+    102120        .63
+    102175        .63
+    102298        .63
+    102304        .63
+    102359        .63
+    102381        .63
+    102467        .63
+    102515        .63
+    102518        .63
+    102560        .63
+    102581        .63
+    102673        .63
+    102762        .63
+    102941        .63
+    101604        .62
+    101732        .62
+    101808        .62
+    101894        .62
+    102156        .62
+    102849        .62
+    102912        .62
+    101630        .61
+    101726        .61
+    101733        .61
+    101862        .61
+    101963        .61
+    101993        .61
+    102032        .61
+    102523        .61
+    102596        .61
+    102659        .61
+    102831        .61
+    102898        .61
+    102915        .61
+    102960        .61
+    101524         .6
+    101608         .6
+    101644         .6
+    101684         .6
+    101884         .6
+    101939         .6
+    102030         .6
+    102059         .6
+    102320         .6
+    102330         .6
+    102389         .6
+    102415         .6
+    102538         .6
+    102742         .6
+    102830         .6
+    102876         .6
+    102944         .6
+    101989        .59
+    101990        .59
+    102169        .59
+    102217        .59
+    102233        .59
+    102894        .59
+    102976        .59
+    102990        .59
+    101511        .58
+    101779        .58
+    101973        .58
+    102148        .58
+    102273        .58
+    102317        .58
+    102325        .58
+    102396        .58
+    102589        .58
+    102755        .58
+    102766        .58
+    102901        .58
+    101626        .57
+    101767        .57
+    101909        .57
+    101962        .57
+    102342        .57
+    102458        .57
+    102532        .57
+    102774        .57
+    102779        .57
+    102460        .56
+    101994        .55
+    102176        .55
+    102180        .55
+    102274        .55
+    101666        .54
+    101707        .54
+    101776        .54
+    101832        .54
+    101980        .54
+    101982        .54
+    102004        .54
+    102088        .54
+    102102        .54
+    102125        .54
+    102140        .54
+    102179        .54
+    102369        .54
+    102420        .54
+    102614        .54
+    102712        .54
+    102744        .54
+    102795        .54
+    102797        .54
+    102872        .54
+    102896        .54
+    102993        .54
+    101555        .53
+    101589        .53
+    101646        .53
+    101809        .53
+    101895        .53
+    102007        .53
+    102064        .53
+    102252        .53
+    102281        .53
+    102407        .53
+    102427        .53
+    102452        .53
+    102513        .53
+    102529        .53
+    102542        .53
+    102552        .53
+    102633        .53
+    102636        .53
+    102739        .53
+    102805        .53
+    102812        .53
+    102847        .53
+    102861        .53
+    102871        .53
+    102958        .53
+    102970        .53
+    102972        .53
+    102997        .53
+    101506        .52
+    101532        .52
+    101534        .52
+    101624        .52
+    101811        .52
+    101819        .52
+    101877        .52
+    101904        .52
+    101928        .52
+    101951        .52
+    101965        .52
+    102105        .52
+    102259        .52
+    102294        .52
+    102341        .52
+    102429        .52
+    102472        .52
+    102480        .52
+    102491        .52
+    102579        .52
+    102583        .52
+    102613        .52
+    102735        .52
+    102745        .52
+    102768        .52
+    102799        .52
+    102843        .52
+    102913        .52
+    102933        .52
+    102935        .52
+    102940        .52
+    102945        .52
+    102965        .52
+    101582        .51
+    101632        .51
+    101668        .51
+    101670        .51
+    101748        .51
+    101799        .51
+    101805        .51
+    101919        .51
+    101929        .51
+    101976        .51
+    102031        .51
+    102110        .51
+    102138        .51
+    102200        .51
+    102261        .51
+    102264        .51
+    102321        .51
+    102327        .51
+    102349        .51
+    102517        .51
+    102541        .51
+    102615        .51
+    102625        .51
+    102738        .51
+    102769        .51
+    102781        .51
+    102842        .51
+    102897        .51
+    102924        .51
+    102928        .51
+    102989        .51
+    101516         .5
+    101715         .5
+    101841         .5
+    102465         .5
+    102466         .5
+    102498         .5
+    102531         .5
+    102931         .5
+    102983         .5
+
+390行が選択されました。
+
+SQL> spool oml4sql-classification-text-mining-svm

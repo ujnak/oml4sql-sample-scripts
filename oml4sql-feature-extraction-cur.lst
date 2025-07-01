@@ -1,0 +1,249 @@
+SQL> SET FEEDBACK 1
+SQL> SET NUMWIDTH 10
+SQL> SET LINESIZE 80
+SQL> SET TRIMSPOOL ON
+SQL> SET TAB OFF
+SQL> SET PAGESIZE 100
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SAMPLE PROBLEMS
+SQL> -----------------------------------------------------------------------
+SQL> -- Perform CUR decomposition-based attribute and row importance for:
+SQL> -- Selecting top attributes and rows with highest importance scores
+SQL> -- (Select approximately top 10 attributes and top 50 rows)
+SQL> --
+SQL> -- Cleanup old model with the same name
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('CUR_SH_SAMPLE');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- Build a CUR model
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- Select CUR Decomposition as the Attribute Importance algorithm
+  5    v_setlst('ALGO_NAME')            := 'ALGO_CUR_DECOMPOSITION';
+  6    -- Set row importance to be enabled (disabled by default)
+  7    v_setlst('CURS_ROW_IMPORTANCE')  := 'CURS_ROW_IMP_ENABLE';
+  8    -- Set approximate number of attributes to be selected
+  9    v_setlst('CURS_APPROX_ATTR_NUM') := '10';
+ 10    -- Set approximate number of rows to be selected
+ 11    v_setlst('CURS_APPROX_ROW_NUM')  := '50';
+ 12    -- Set SVD rank parameter
+ 13    v_setlst('CURS_SVD_RANK')        := '5';
+ 14    -- Examples of possible overrides are:
+ 15    -- v_setlst('ODMS_RANDOM_SEED') := '1';
+ 16
+ 17    DBMS_DATA_MINING.CREATE_MODEL2(
+ 18      model_name          => 'CUR_SH_SAMPLE',
+ 19      mining_function     => 'ATTRIBUTE_IMPORTANCE',
+ 20      data_query          => 'SELECT * FROM MINING_DATA_BUILD_V',
+ 21      set_list            => v_setlst,
+ 22      case_id_column_name => 'cust_id');
+ 23  END;
+ 24  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- Display model settings
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'CUR_SH_SAMPLE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_CUR_DECOMPOSITION
+CURS_APPROX_ATTR_NUM           10
+CURS_APPROX_ROW_NUM            50
+CURS_ROW_IMPORTANCE            CURS_ROW_IMP_ENABLE
+CURS_SVD_RANK                  5
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_RANDOM_SEED               0
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+PREP_AUTO                      ON
+
+10行が選択されました。
+
+SQL>
+SQL> -- Display model signature
+SQL> column attribute_name format a40
+SQL> column attribute_type format a20
+SQL> SELECT attribute_name, attribute_type
+  2    FROM user_mining_model_attributes
+  3   WHERE model_name = 'CUR_SH_SAMPLE'
+  4  ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                           ATTRIBUTE_TYPE
+---------------------------------------- --------------------
+AFFINITY_CARD                            NUMERICAL
+AGE                                      NUMERICAL
+BOOKKEEPING_APPLICATION                  NUMERICAL
+BULK_PACK_DISKETTES                      NUMERICAL
+COUNTRY_NAME                             CATEGORICAL
+CUST_GENDER                              CATEGORICAL
+CUST_INCOME_LEVEL                        CATEGORICAL
+CUST_MARITAL_STATUS                      CATEGORICAL
+EDUCATION                                CATEGORICAL
+FLAT_PANEL_MONITOR                       NUMERICAL
+HOME_THEATER_PACKAGE                     NUMERICAL
+HOUSEHOLD_SIZE                           CATEGORICAL
+OCCUPATION                               CATEGORICAL
+OS_DOC_SET_KANJI                         NUMERICAL
+PRINTER_SUPPLIES                         NUMERICAL
+YRS_RESIDENCE                            NUMERICAL
+Y_BOX_GAMES                              NUMERICAL
+
+17行が選択されました。
+
+SQL>
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2    WHERE model_name='CUR_SH_SAMPLE'
+  3    ORDER BY view_name;
+
+VIEW_NAME
+------------------------------
+VIEW_TYPE
+--------------------------------------------------
+DM$VCCUR_SH_SAMPLE
+CUR Decomposition-Based Attribute Importance
+
+DM$VGCUR_SH_SAMPLE
+Global Name-Value Pairs
+
+DM$VRCUR_SH_SAMPLE
+CUR Decomposition-Based Row Importance
+
+DM$VSCUR_SH_SAMPLE
+Computed Settings
+
+DM$VWCUR_SH_SAMPLE
+Model Build Alerts
+
+
+5行が選択されました。
+
+SQL>
+SQL> -- Display global model details
+SQL> column name format a30
+SQL> column numeric_value format 9999999999
+SQL> SELECT name, numeric_value
+  2    FROM DM$VGCUR_SH_SAMPLE
+  3  ORDER BY name;
+
+NAME                           NUMERIC_VALUE
+------------------------------ -------------
+NUM_COMPONENTS                             5
+NUM_ROWS                                1500
+
+2行が選択されました。
+
+SQL>
+SQL> -- Attribute importance and ranks
+SQL> column attribute_name format a15
+SQL> column attribute_subname format a18
+SQL> column attribute_value format a15
+SQL> column attribute_importance format 9.99999999
+SQL> column attribute_rank format 999999
+SQL>
+SQL> SELECT attribute_name, attribute_subname, attribute_value,
+  2         attribute_importance, attribute_rank
+  3  FROM   DM$VCCUR_SH_SAMPLE
+  4  ORDER BY attribute_rank, attribute_name, attribute_subname,
+  5           attribute_value;
+
+ATTRIBUTE_NAME  ATTRIBUTE_SUBNAME  ATTRIBUTE_VALUE ATTRIBUTE_IMPORTANCE
+--------------- ------------------ --------------- --------------------
+ATTRIBUTE_RANK
+--------------
+AGE                                                           .19980898
+             1
+
+YRS_RESIDENCE                                                 .19594776
+             2
+
+FLAT_PANEL_MONI                                               .08077030
+TOR                          3
+
+BULK_PACK_DISKE                                               .07746900
+TTES                         4
+
+CUST_MARITAL_ST                    never married              .04023451
+ATUS                         5
+
+CUST_GENDER                        F                          .03600513
+             6
+
+COUNTRY_NAME                       United States o            .02900677
+                                   f America              7
+
+
+7行が選択されました。
+
+SQL>
+SQL> -- Row importance and ranks
+SQL> column case_id format 999999999
+SQL> column row_importance format 9.99999999
+SQL> column row_rank format 999999999
+SQL>
+SQL> SELECT case_id, row_importance, row_rank
+  2    FROM DM$VRCUR_SH_SAMPLE
+  3  ORDER BY row_rank, case_id;
+
+   CASE_ID ROW_IMPORTANCE   ROW_RANK
+---------- -------------- ----------
+    102449      .00544189          1
+    102740      .00485021          2
+    102570      .00412826          3
+    102926      .00352895          4
+    102203      .00345812          5
+    102720      .00339902          6
+    102194      .00313429          7
+    102258      .00273422          8
+    102361      .00270828          9
+    102277      .00215351         10
+    102420      .00181709         11
+    102710      .00115688         12
+    101752      .00102747         13
+    102906      .00097007         14
+    102714      .00092753         15
+    102205      .00092681         16
+    102773      .00092197         17
+    102634      .00088971         18
+    101766      .00073205         19
+    102816      .00070556         20
+    102273      .00069185         21
+    101815      .00068634         22
+    101656      .00068485         23
+    102951      .00066615         24
+    102702      .00065060         25
+    102732      .00064807         26
+    102185      .00059112         27
+    102691      .00058317         28
+    101622      .00055067         29
+    101923      .00054993         30
+    102221      .00051631         31
+    102025      .00051007         32
+    101998      .00049637         33
+    101977      .00049334         34
+    102847      .00049309         35
+    102913      .00048906         36
+    101852      .00045441         37
+    102652      .00044245         38
+    102543      .00035045         39
+    101809      .00034904         40
+    102244      .00029724         41
+
+41行が選択されました。
+
+SQL> spool oml4sql-feature-extraction-nmf

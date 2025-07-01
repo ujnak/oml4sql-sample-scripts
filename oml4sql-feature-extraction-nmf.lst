@@ -1,0 +1,339 @@
+SQL> @oml4sql-feature-extraction-nmf
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Feature Extraction - Non-Negative Matrix Factorization Algorithm - dmnmdemo.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET serveroutput ON
+SQL> SET trimspool ON
+SQL> SET pages 10000
+SQL> SET linesize 100
+SQL> SET echo ON
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SAMPLE PROBLEM
+SQL> -----------------------------------------------------------------------
+SQL> -- Given demographic data about a set of customers, extract features
+SQL> -- from the given dataset.
+SQL> --
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            BUILD THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL> -- Cleanup old model with same name for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('NMF_SH_sample');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> ---------------------
+SQL> -- CREATE A NEW MODEL
+SQL> --
+SQL> -- Build NMF model
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- NMF is the default Feature Extraction algorithm. For this sample,
+  5    -- we use Data Auto Preparation.
+  6    v_setlst('PREP_AUTO') := 'ON';
+  7
+  8    -- Other examples of possible overrides are:
+  9    -- v_setlst('FEAT_NUM_FEATURES')   := '10';
+ 10    -- v_setlst('NMFS_CONV_TOLERANCE') := '0.05';
+ 11    -- v_setlst('NMFS_NUM_ITERATIONS') := '50';
+ 12    -- v_setlst('NMFS_RANDOM_SEED')    := '-1';
+ 13
+ 14    DBMS_DATA_MINING.CREATE_MODEL2(
+ 15      model_name          => 'NMF_SH_sample',
+ 16      mining_function     => 'FEATURE_EXTRACTION',
+ 17      data_query          => 'SELECT * FROM mining_data_build_v',
+ 18      set_list            => v_setlst,
+ 19      case_id_column_name => 'cust_id');
+ 20  END;
+ 21  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'NMF_SH_SAMPLE'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_NONNEGATIVE_MATRIX_FACTOR
+NMFS_CONV_TOLERANCE            .05
+NMFS_NONNEGATIVE_SCORING       NMFS_NONNEG_SCORING_ENABLE
+NMFS_NUM_ITERATIONS            50
+NMFS_RANDOM_SEED               -1
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+PREP_AUTO                      ON
+
+9行が選択されました。
+
+SQL>
+SQL> --------------------------
+SQL> -- DISPLAY MODEL SIGNATURE
+SQL> --
+SQL> column attribute_name format a40
+SQL> column attribute_type format a20
+SQL> SELECT attribute_name, attribute_type
+  2    FROM user_mining_model_attributes
+  3   WHERE model_name = 'NMF_SH_SAMPLE'
+  4  ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                           ATTRIBUTE_TYPE
+---------------------------------------- --------------------
+AFFINITY_CARD                            NUMERICAL
+AGE                                      NUMERICAL
+BOOKKEEPING_APPLICATION                  NUMERICAL
+BULK_PACK_DISKETTES                      NUMERICAL
+COUNTRY_NAME                             CATEGORICAL
+CUST_GENDER                              CATEGORICAL
+CUST_INCOME_LEVEL                        CATEGORICAL
+CUST_MARITAL_STATUS                      CATEGORICAL
+EDUCATION                                CATEGORICAL
+FLAT_PANEL_MONITOR                       NUMERICAL
+HOME_THEATER_PACKAGE                     NUMERICAL
+HOUSEHOLD_SIZE                           CATEGORICAL
+OCCUPATION                               CATEGORICAL
+ORA$VECTOR                               VECTOR
+OS_DOC_SET_KANJI                         NUMERICAL
+PRINTER_SUPPLIES                         NUMERICAL
+YRS_RESIDENCE                            NUMERICAL
+Y_BOX_GAMES                              NUMERICAL
+
+18行が選択されました。
+
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY MODEL DETAILS
+SQL> --
+SQL>
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2    WHERE model_name='NMF_SH_SAMPLE'
+  3    ORDER BY view_name;
+
+VIEW_NAME                      VIEW_TYPE
+------------------------------ --------------------------------------------------
+DM$VENMF_SH_SAMPLE             Non-Negative Matrix Factorization H Matrix
+DM$VGNMF_SH_SAMPLE             Global Name-Value Pairs
+DM$VINMF_SH_SAMPLE             Non-Negative Matrix Factorization Inverse H Matrix
+DM$VNNMF_SH_SAMPLE             Normalization and Missing Value Handling
+DM$VSNMF_SH_SAMPLE             Computed Settings
+DM$VWNMF_SH_SAMPLE             Model Build Alerts
+
+6行が選択されました。
+
+SQL>
+SQL> -- Each feature is a linear combination of the original attribute set;
+SQL> -- the coefficients of these linear combinations are non-negative.
+SQL> -- The model details return for each feature the coefficients
+SQL> -- associated with each one of the original attributes. Categorical
+SQL> -- attributes are described by (attribute_name, attribute_value) pairs.
+SQL> -- That is, for a given feature, each distinct value of a categorical
+SQL> -- attribute has its own coefficient.
+SQL> --
+SQL> column attribute_name format a20
+SQL> column attribute_value format a60
+SQL> column coefficient format 9.99999
+SQL> SELECT feature_id,
+  2         attribute_name,
+  3         attribute_value,
+  4         coefficient
+  5    FROM DM$VENMF_SH_Sample
+  6  WHERE feature_id = 1
+  7    AND attribute_name in ('AFFINITY_CARD','AGE','COUNTRY_NAME')
+  8  ORDER BY feature_id,attribute_name,attribute_value;
+
+FEATURE_ID ATTRIBUTE_NAME       ATTRIBUTE_VALUE
+---------- -------------------- ------------------------------------------------------------
+COEFFICIENT
+-----------
+         1 AFFINITY_CARD
+     .04351
+
+         1 AGE
+     .03167
+
+         1 COUNTRY_NAME         Argentina
+     .00660
+
+         1 COUNTRY_NAME         Australia
+     .00013
+
+         1 COUNTRY_NAME         Brazil
+     .00207
+
+         1 COUNTRY_NAME         Canada
+     .00104
+
+         1 COUNTRY_NAME         China
+     .00002
+
+         1 COUNTRY_NAME         Denmark
+     .00017
+
+         1 COUNTRY_NAME         France
+     .00000
+
+         1 COUNTRY_NAME         Germany
+     .00351
+
+         1 COUNTRY_NAME         Italy
+     .00418
+
+         1 COUNTRY_NAME         Japan
+     .00020
+
+         1 COUNTRY_NAME         New Zealand
+     .00053
+
+         1 COUNTRY_NAME         Poland
+     .00129
+
+         1 COUNTRY_NAME         Saudi Arabia
+     .00086
+
+         1 COUNTRY_NAME         Singapore
+     .00020
+
+         1 COUNTRY_NAME         South Africa
+     .00005
+
+         1 COUNTRY_NAME         Spain
+     .00057
+
+         1 COUNTRY_NAME         Turkey
+     .00001
+
+         1 COUNTRY_NAME         United Kingdom
+     .00131
+
+         1 COUNTRY_NAME         United States of America
+     .21979
+
+
+21行が選択されました。
+
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               TEST THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL> -- There is no specific set of testing parameters for feature extraction.
+SQL> -- Examination and analysis of features is the main method to prove
+SQL> -- the efficacy of an NMF model.
+SQL> --
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                               APPLY THE MODEL
+SQL> -----------------------------------------------------------------------
+SQL> --
+SQL> -- For a descriptive mining function like feature extraction, "Scoring"
+SQL> -- involves providing the probability values for each feature.
+SQL> -- During model apply, an NMF model maps the original data into the
+SQL> -- new set of attributes (features) discovered by the model.
+SQL> --
+SQL>
+SQL> -------------------------------------------------
+SQL> -- SCORE NEW DATA USING SQL DATA MINING FUNCTIONS
+SQL> --
+SQL> ------------------
+SQL> -- BUSINESS CASE 1
+SQL> -- List the features that correspond to customers in this dataset.
+SQL> -- The feature that is returned for each row is the one with the
+SQL> -- largest value based on the inputs for that row.
+SQL> -- Count the number of rows that have the same "largest" feature value.
+SQL> --
+SQL> SELECT FEATURE_ID(nmf_sh_sample USING *) AS feat, COUNT(*) AS cnt
+  2    FROM mining_data_apply_v
+  3  group by FEATURE_ID(NMF_SH_SAMPLE using *)
+  4  ORDER BY cnt DESC,FEAT DESC;
+
+      FEAT        CNT
+---------- ----------
+         2        378
+         6        357
+         7        248
+         4        167
+         1        117
+         8         98
+         5         79
+         3         56
+
+8行が選択されました。
+
+SQL>
+SQL> ------------------
+SQL> -- BUSINESS CASE 2
+SQL> -- List top (largest) 3 features that represent a customer (100002).
+SQL> -- Explain the attributes which most impact those features.
+SQL> --
+SQL> set line 120
+SQL> column fid format 999
+SQL> column val format 999.999
+SQL> set long 20000
+SQL> SELECT S.feature_id fid, value val,
+  2         FEATURE_DETAILS(nmf_sh_sample, S.feature_id, 5 using T.*) det
+  3  FROM
+  4    (SELECT v.*, FEATURE_SET(nmf_sh_sample, 3 USING *) fset
+  5      FROM mining_data_apply_v v
+  6     WHERE cust_id = 100002) T,
+  7    TABLE(T.fset) S
+  8  order by 2 desc;
+
+ FID      VAL DET
+---- -------- --------------------------------------------------------------------------------
+   7    3.374 <Details algorithm="Non-Negative Matrix Factorization" feature="7">
+              <Attribute name="CUST_MARITAL_STATUS" actualValue="never married" weight=".222"
+              rank="1"/>
+              <Attribute name="EDUCATION" actualValue="Bach." weight=".168" rank="2"/>
+              <Attribute name="CUST_INCOME_LEVEL" actualValue="L: 300,000 and above" weight=".
+              135" rank="3"/>
+              <Attribute name="HOME_THEATER_PACKAGE" actualValue="1" weight=".089" rank="4"/>
+              <Attribute name="OCCUPATION" actualValue="Prof." weight=".048" rank="5"/>
+              </Details>
+
+   1    1.824 <Details algorithm="Non-Negative Matrix Factorization" feature="1">
+              <Attribute name="CUST_GENDER" actualValue="F" weight=".225" rank="1"/>
+              <Attribute name="FLAT_PANEL_MONITOR" actualValue="1" weight=".159" rank="2"/>
+              <Attribute name="EDUCATION" actualValue="Bach." weight=".132" rank="3"/>
+              <Attribute name="CUST_INCOME_LEVEL" actualValue="L: 300,000 and above" weight=".
+              131" rank="4"/>
+              <Attribute name="CUST_MARITAL_STATUS" actualValue="never married" weight=".007"
+              rank="5"/>
+              </Details>
+
+   3    1.722 <Details algorithm="Non-Negative Matrix Factorization" feature="3">
+              <Attribute name="CUST_MARITAL_STATUS" actualValue="never married" weight=".296"
+              rank="1"/>
+              <Attribute name="CUST_GENDER" actualValue="F" weight=".171" rank="2"/>
+              <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight=".12" rank="3"/>
+              <Attribute name="OCCUPATION" actualValue="Prof." weight=".097" rank="4"/>
+              <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=".047" rank="5"
+              />
+              </Details>
+
+
+3行が選択されました。
+
+SQL> spool oml4sql-feature-extraction-svd

@@ -1,0 +1,609 @@
+SQL> @oml4sql-regression-random-forest
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Regression - Random Forest Algorithm - dmrrfdemo.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET ECHO ON
+SQL> SET FEEDBACK 1
+SQL> SET NUMWIDTH 10
+SQL> SET LINESIZE 80
+SQL> SET TRIMSPOOL ON
+SQL> SET TAB OFF
+SQL> SET PAGESIZE 100
+SQL> SET LONG 10000
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                         RANDOMFOREST REGRESSION DEMO
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explaination:
+SQL> -- This demo shows how to implement the random forest regression algorithm in
+SQL> -- Oracle Data Mining using R nnet algorithm.
+SQL>
+SQL> BEGIN
+  2    sys.rqScriptDrop('RF_RDEMO_BUILD_REGRESSION', v_silent => TRUE);
+  3    sys.rqScriptDrop('RF_RDEMO_SCORE_REGRESSION', v_silent => TRUE);
+  4    sys.rqScriptDrop('RF_RDEMO_DETAILS_REGRESSION', v_silent => TRUE);
+  5    sys.rqScriptDrop('RF_RDEMO_WEIGHT_REGRESSION', v_silent => TRUE);
+  6  END;
+  7  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> BEGIN
+  2  -- Build R Function -----------------------------------------------------------
+  3  -- Explanation:
+  4  -- User can define their own R script function to build the model they want.
+  5  -- For example, here a script named RF_RDEMO_BUILD_REGRESSION is defined. This
+  6  -- function builds and returns a random forest regression model using R
+  7  -- randomForest algorithm. User can also choose other R algorithm to implement
+  8  -- the random forest regression algorithm.
+  9
+ 10    sys.rqScriptCreate('RF_RDEMO_BUILD_REGRESSION', 'function(dat, form) {
+ 11     require(randomForest);
+ 12     set.seed(1234);
+ 13     mod <- randomForest(formula = formula(form), data=dat, na.action=na.omit);
+ 14     mod}');
+ 15
+ 16  -- Score R Function -----------------------------------------------------------
+ 17  -- Explanation:
+ 18  -- User can define their own R script function to do the scoring using the built
+ 19  -- model. For example, here a script named RF_RDEMO_SCORE_REGRESSION is defined.
+ 20  -- This function creates and returns an R data.frame containing the target
+ 21  -- predictions. User can also define other prediction functions with different
+ 22  -- settings. Note that the randomForest function in R requires types and levels
+ 23  -- of the scoring data be exactly same with types and levels of training data
+ 24
+ 25    sys.rqScriptCreate('RF_RDEMO_SCORE_REGRESSION', 'function(mod, dat) {
+ 26     require(randomForest);
+ 27
+ 28     for(i in 1:length(names(dat))) {
+ 29         if(is.numeric(dat[1,i])) {
+ 30           dat[,i] = as.numeric(dat[,i]);}
+ 31         else {
+ 32           dat[,i] = factor(dat[,i], levels=mod$forest$xlevels[[i]]);
+ 33         }
+ 34     }
+ 35
+ 36     res <- predict(mod, newdata = dat);
+ 37     data.frame(pred=res)}');
+ 38
+ 39  -- Detail R Function ----------------------------------------------------------
+ 40  -- Explanation:
+ 41  -- User can define their own R script function to show the model details they
+ 42  -- want to display. For example, here a script named RF_RDEMO_DETAILS_REGRESSION
+ 43  -- is defined. This function creates and returns an R data.frame containing the
+ 44  -- attribute importance of the built random forest regression model. User can
+ 45  -- also display other details.
+ 46
+ 47    sys.rqScriptCreate('RF_RDEMO_DETAILS_REGRESSION', 'function(object, x) {
+ 48     mod <- object;
+ 49     data.frame(row_name=row.names(mod$importance), importance=mod$importance)}');
+ 50  END;
+ 51  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('RF_RDEMO_REGRESSION');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL BUILD
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Build the model using the R script user defined. Here R script
+SQL> -- RF_RDEMO_BUILD_REGRESSION will be used to create the random forest
+SQL> -- regression model RF_RDEMO_REGRESSION using dataset mining_data_build_v.
+SQL>
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  5    v_setlst('RALG_BUILD_FUNCTION')   := 'RF_RDEMO_BUILD_REGRESSION';
+  6    v_setlst('RALG_SCORE_FUNCTION')   := 'RF_RDEMO_SCORE_REGRESSION';
+  7    v_setlst('RALG_DETAILS_FUNCTION') := 'RF_RDEMO_DETAILS_REGRESSION';
+  8
+  9    -- Once this setting is specified, a model view will be created. This model
+ 10    -- view will be generated to display the model details, which contains the
+ 11    -- attribute names and the corresponding importance.
+ 12    v_setlst('RALG_DETAILS_FORMAT') := 'select cast(''a'' as varchar2(100)) name, 1 importance from dual';
+ 13
+ 14    -- In this setting, a formula is specified,  which will be passed as a parameter
+ 15    -- to the model build function to build the model.
+ 16    v_setlst('RALG_BUILD_PARAMETER') := 'select ''AGE ~ .'' "form" from dual';
+ 17
+ 18    dbms_data_mining.create_model2(
+ 19      model_name          => 'RF_RDEMO_REGRESSION',
+ 20      mining_function     => 'REGRESSION',
+ 21      data_query          => 'select * from mining_data_build_v',
+ 22      case_id_column_name => 'CUST_ID',
+ 23      target_column_name  => 'AGE',
+ 24      set_list            => v_setlst);
+ 25  END;
+ 26  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL DETAIL
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Display the details of the built model using the R script user defined.
+SQL> -- Here R script RF_RDEMO_DETAIL_REGRESSION will be used to display the model
+SQL> -- details.
+SQL>
+SQL> column name format a30
+SQL> SELECT name, round(importance, 3) as importance,
+  2  rank() OVER (ORDER BY importance DESC) rank
+  3  from DM$VDRF_RDEMO_REGRESSION order by importance desc;
+
+NAME                           IMPORTANCE       RANK
+------------------------------ ---------- ----------
+HOME_THEATER_PACKAGE            90616.232          1
+YRS_RESIDENCE                    49309.45          2
+Y_BOX_GAMES                     45150.887          3
+CUST_MARITAL_STATUS             18165.488          4
+OCCUPATION                      15086.412          5
+EDUCATION                       11435.562          6
+CUST_INCOME_LEVEL               10943.917          7
+HOUSEHOLD_SIZE                   9241.553          8
+COUNTRY_NAME                     3440.965          9
+AFFINITY_CARD                    1955.663         10
+CUST_GENDER                      1214.122         11
+BOOKKEEPING_APPLICATION           994.888         12
+FLAT_PANEL_MONITOR                966.713         13
+BULK_PACK_DISKETTES               835.992         14
+OS_DOC_SET_KANJI                   11.984         15
+PRINTER_SUPPLIES                        0         16
+
+16行が選択されました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL SCORE
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Score the model using the R script user defined. Here R script
+SQL> -- RF_RDEMO_SCORE_REGRESSION will be used to do the scoring.
+SQL>
+SQL> -- PREDICTION/PREDICTION_PROBABILITY ------------------------------------------
+SQL> -- Explanation:
+SQL> -- Show actual target value and predicted target values.
+SQL>
+SQL> SELECT CUST_ID, AGE as AGE_act,
+  2  round(PREDICTION(RF_RDEMO_REGRESSION USING *), 3) as AGE_pred
+  3  FROM mining_data_apply_v where CUST_ID <= 100010
+  4  order by CUST_ID;
+
+   CUST_ID    AGE_ACT   AGE_PRED
+---------- ---------- ----------
+    100001         51     46.095
+    100002         30     28.304
+    100003         23     22.994
+    100004         39     34.274
+    100005         35     34.316
+    100006          9     12.505
+    100007         29     35.559
+    100008         30     31.425
+    100009         18     16.412
+    100010         17     16.807
+
+10行が選択されました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                        RANDOM FOREST CLASSIFICATION DEMO
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explaination:
+SQL> -- This demo shows how to implement the random forest classification algorithm
+SQL> -- in Oracle Data Mining using R randomForest algorithm.
+SQL>
+SQL> BEGIN
+  2    sys.rqScriptDrop('RF_RDEMO_BUILD_CLASSIFICATION', v_silent => TRUE);
+  3    sys.rqScriptDrop('RF_RDEMO_SCORE_CLASSIFICATION', v_silent => TRUE);
+  4    sys.rqScriptDrop('RF_RDEMO_DETAILS_CLASSIFICATION', v_silent => TRUE);
+  5    sys.rqScriptDrop('RF_RDEMO_WEIGHT_CLASSIFICATION', v_silent => TRUE);
+  6  END;
+  7  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> BEGIN
+  2  -- Build Function -------------------------------------------------------------
+  3  -- Explanation:
+  4  -- User can define their own R script function to build the model they want.
+  5  -- For example, here a script named RF_RDEMO_BUILD_CLASSIFICATION is defined.
+  6  -- This function builds and returns a random forest classification model using
+  7  -- R randomForest algorithm. User can also choose other R algorithm to
+  8  -- implement the random forest classification algorithm.
+  9
+ 10    sys.rqScriptCreate('RF_RDEMO_BUILD_CLASSIFICATION', 'function(dat) {
+ 11     require(randomForest);
+ 12     set.seed(1234);
+ 13     dat$AFFINITY_CARD=as.factor(dat$AFFINITY_CARD);
+ 14     mod <- randomForest(AFFINITY_CARD ~ ., data=dat, na.action=na.omit);
+ 15     mod}');
+ 16
+ 17  -- Score R Function -----------------------------------------------------------
+ 18  -- Explanation:
+ 19  -- User can define their own R script function to do the scoring using the built
+ 20  -- model. For example, here a script named RF_RDEMO_SCORE_CLASSIFICATION is
+ 21  -- defined. This function creates and returns an R data.frame containing the
+ 22  -- target predictions with type vote. User can also define other prediction
+ 23  -- functions with other types. Note that the randomForest function in R
+ 24  -- requires types and levels of the scoring data be exactly same with types
+ 25  -- and levels of training data
+ 26
+ 27    sys.rqScriptCreate('RF_RDEMO_SCORE_CLASSIFICATION', 'function(mod, dat) {
+ 28    require(randomForest);
+ 29
+ 30    for(i in 1:length(names(dat))) {
+ 31        if(is.numeric(dat[1,i])) {
+ 32          dat[,i] = as.numeric(dat[,i]);}
+ 33        else {
+ 34          dat[,i] = factor(dat[,i], levels=mod$forest$xlevels[[i]]);
+ 35        }
+ 36    }
+ 37
+ 38    res <- data.frame(predict(mod, newdata=dat, type="vote"));
+ 39    names(res) <- c("0", "1");
+ 40    res}');
+ 41
+ 42  -- Detail R Function -----------------------------------------------------------
+ 43  -- Explanation:
+ 44  -- User can define their own R script function to show the model details they
+ 45  -- want to display. For example, here a script named
+ 46  -- RF_RDEMO_DETAILS_CLASSIFICATION is defined. This function creates and
+ 47  -- returns an R data.frame containing the attribute importance of the built
+ 48  -- random forest classification model. User can also display other details.
+ 49
+ 50    sys.rqScriptCreate('RF_RDEMO_DETAILS_CLASSIFICATION', 'function(object, x) {
+ 51     mod <- object;
+ 52     data.frame(row_name=row.names(mod$importance), importance=mod$importance)}');
+ 53
+ 54  -- Weight R Function -----------------------------------------------------------
+ 55  -- Explanation:
+ 56  -- User can define their own R script function to provide the attribute weights
+ 57  -- of the scoring data. For example, here a script named
+ 58  -- RF_RDEMO_WEIGHT_CLASSIFICATION is defined. This function creates and returns
+ 59  -- an R data.frame containing the weights of each attribute of the scoring data.
+ 60  -- Here we simply use the ratio of the predicted target probability with all
+ 61  -- attribute values present to the predicted target probability with one
+ 62  -- attribute value missing as the weight of the missing attribute. User can
+ 63  -- define their own method to calculate the attribute weight. Note that the
+ 64  -- randomForest function in R requires types and levels of the scoring data be
+ 65  -- exactly same with types and levels of training data.
+ 66
+ 67    sys.rqScriptCreate('RF_RDEMO_WEIGHT_CLASSIFICATION', 'function(mod, dat, clas) {
+ 68     require(randomForest);
+ 69
+ 70     for(i in 1:length(names(dat))) {
+ 71         if(is.numeric(dat[,i])) {
+ 72           dat[,i] = as.numeric(dat[,i]);}
+ 73         else {
+ 74           dat[,i] = factor(dat[,i], levels=mod$forest$xlevels[[i]]);
+ 75         }
+ 76     }
+ 77
+ 78     v0 <- as.data.frame(predict(mod, newdata=dat, type = "prob"));
+ 79     res <- data.frame(lapply(seq_along(dat),
+ 80     function(x, dat) {
+ 81     if(is.numeric(dat[[x]])) dat[,x] <- as.numeric(0)
+ 82     else {dat[,x] <- factor(NA, levels = mod$forest$xlevels[[x]]);};
+ 83     vv <- as.data.frame(predict(mod, newdata = dat, type = "prob"));
+ 84     v0[[clas]] / vv[[clas]]}, dat = dat));
+ 85     names(res) <- names(dat);
+ 86     res}');
+ 87  END;
+ 88  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('RF_RDEMO_CLASSIFICATION');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL BUILD
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Build the model using the R script user defined. Here R script
+SQL> -- RF_RDEMO_BUILD_CLASSIFICATION will be used to create the random forest
+SQL> -- classification model RF_RDEMO_CLASSIFICATION using dataset mining_data_build_v.
+SQL>
+SQL> declare
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  begin
+  4    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  5    v_setlst('RALG_BUILD_FUNCTION')   := 'RF_RDEMO_BUILD_CLASSIFICATION';
+  6    v_setlst('RALG_SCORE_FUNCTION')   := 'RF_RDEMO_SCORE_CLASSIFICATION';
+  7    v_setlst('RALG_DETAILS_FUNCTION') := 'RF_RDEMO_DETAILS_CLASSIFICATION';
+  8    v_setlst('RALG_WEIGHT_FUNCTION')  := 'RF_RDEMO_WEIGHT_CLASSIFICATION';
+  9
+ 10    -- Once this setting is specified, a model view will be created. This model
+ 11    -- view will be generated to display the model details, which contains the
+ 12    -- attribute names and the corresponding importance.
+ 13    v_setlst('RALG_DETAILS_FORMAT') := 'select cast(''a'' as varchar2(100)) name, 1 importance from dual';
+ 14
+ 15    dbms_data_mining.create_model2(
+ 16      model_name          => 'RF_RDEMO_CLASSIFICATION',
+ 17      mining_function     => 'CLASSIFICATION',
+ 18      data_query          => 'select * from mining_data_build_v',
+ 19      case_id_column_name => 'CUST_ID',
+ 20      target_column_name  => 'AFFINITY_CARD',
+ 21      set_list            => v_setlst);
+ 22  end;
+ 23  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL DETAIL
+SQL> -------------------------------------------------------------------------------
+SQL> -- Display the details of the built model using the R script user defined.
+SQL> -- Here R script RF_RDEMO_DETAIL_CLASSIFICATION will be used to display the
+SQL> -- model details.
+SQL>
+SQL> column name format a30
+SQL> select name, round(importance, 3) as importance,
+  2  rank() OVER (ORDER BY importance DESC) rank
+  3  from DM$VDRF_RDEMO_CLASSIFICATION order by importance desc;
+
+NAME                           IMPORTANCE       RANK
+------------------------------ ---------- ----------
+OCCUPATION                         82.906          1
+EDUCATION                           80.85          2
+AGE                                66.443          3
+CUST_INCOME_LEVEL                  59.399          4
+HOUSEHOLD_SIZE                     57.663          5
+CUST_MARITAL_STATUS                54.112          6
+YRS_RESIDENCE                      45.136          7
+COUNTRY_NAME                       13.122          8
+HOME_THEATER_PACKAGE                9.874          9
+CUST_GENDER                          8.19         10
+Y_BOX_GAMES                          6.44         11
+FLAT_PANEL_MONITOR                  6.391         12
+BULK_PACK_DISKETTES                 5.705         13
+BOOKKEEPING_APPLICATION             5.666         14
+OS_DOC_SET_KANJI                     .095         15
+PRINTER_SUPPLIES                        0         16
+
+16行が選択されました。
+
+SQL>
+SQL> -------------------------------------------------------------------------------
+SQL> --                              MODEL SCORE
+SQL> -------------------------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Score the model using the R script user defined.
+SQL>
+SQL> -- PREDICTION/PREDICTION_PROBABILITY ------------------------------------------
+SQL> -- Explanation:
+SQL> -- Here R script RF_RDEMO_SCORE_CLASSIFICATION is used to get the prediction
+SQL> -- value and the prediction probability. Actual target value and predicted
+SQL> -- target values are provided.
+SQL>
+SQL> SELECT cust_id, affinity_card as affinity_card_act,
+  2  PREDICTION(RF_RDEMO_CLASSIFICATION USING *) affinity_card_pred,
+  3  round(PREDICTION_PROBABILITY(RF_RDEMO_CLASSIFICATION USING *), 3)
+  4  as affinity_card_prob
+  5  FROM mining_data_apply_v where CUST_ID <= 100010
+  6  order by cust_id;
+
+   CUST_ID AFFINITY_CARD_ACT AFFINITY_CARD_PRED AFFINITY_CARD_PROB
+---------- ----------------- ------------------ ------------------
+    100001                 0                  0               .936
+    100002                 0                  0               .724
+    100003                 0                  0               .756
+    100004                 0                  0                .86
+    100005                 1                  1               .686
+    100006                 0                  0               .982
+    100007                 0                  0               .966
+    100008                 0                  0               .812
+    100009                 1                  1               .608
+    100010                 0                  0               .882
+
+10行が選択されました。
+
+SQL>
+SQL> -- PREDICTION_SET -------------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- Here R script RF_RDEMO_SCORE_CLASSIFICATION is used to get the
+SQL> -- prediction set. Actual target value and predicted target values are provided.
+SQL>
+SQL> select T.CUST_ID, T.affinity_card, S.prediction,
+  2  round(S.probability, 3) as probability
+  3  from (select CUST_ID, affinity_card,
+  4  PREDICTION_SET(RF_RDEMO_CLASSIFICATION USING *) pset
+  5  from mining_data_apply_v where CUST_ID <= 100010) T, TABLE(T.pset) S
+  6  where S.probability > 0
+  7  order by T.CUST_ID, S.prediction;
+
+   CUST_ID AFFINITY_CARD PREDICTION PROBABILITY
+---------- ------------- ---------- -----------
+    100001             0      .0000  .936000000
+    100001             0     1.0000  .064000000
+    100002             0      .0000  .724000000
+    100002             0     1.0000  .276000000
+    100003             0      .0000  .756000000
+    100003             0     1.0000  .244000000
+    100004             0      .0000  .860000000
+    100004             0     1.0000  .140000000
+    100005             1      .0000  .314000000
+    100005             1     1.0000  .686000000
+    100006             0      .0000  .982000000
+    100006             0     1.0000  .018000000
+    100007             0      .0000  .966000000
+    100007             0     1.0000  .034000000
+    100008             0      .0000  .812000000
+    100008             0     1.0000  .188000000
+    100009             1      .0000  .392000000
+    100009             1     1.0000  .608000000
+    100010             0      .0000  .882000000
+    100010             0     1.0000  .118000000
+
+20行が選択されました。
+
+SQL>
+SQL> -- PREDICTION_DETAILS ---------------------------------------------------------
+SQL> -- Explanation:
+SQL> -- The R script RF_RDEMO_WEIGHT_CLASSIFICATION is used to get the prediction
+SQL> -- details. The AFFINITY_CARD and the prediction details with the weight of each
+SQL> -- attribute are provided.
+SQL>
+SQL> column pred_det format a65
+SQL> SELECT CUST_ID, PREDICTION_DETAILS(RF_RDEMO_CLASSIFICATION, '1' USING *) pred_det
+  2  FROM mining_data_apply_v where CUST_ID <= 100010
+  3  order by CUST_ID;
+
+   CUST_ID PRED_DET
+---------- -----------------------------------------------------------------
+    100001 <Details algorithm="R Extensible" class="1">
+           <Attribute name="AGE" actualValue="51" weight="1.684" rank="1"/>
+           <Attribute name="EDUCATION" actualValue="&lt; Bach." weight="1.06
+           7" rank="2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=
+           "1.032" rank="3"/>
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight="1" r
+           ank="4"/>
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="widowed" weigh
+           t="1" rank="5"/>
+           </Details>
+
+    100002 <Details algorithm="R Extensible" class="1">
+           <Attribute name="EDUCATION" actualValue="Bach." weight="1.84" ran
+           k="1"/>
+           <Attribute name="COUNTRY_NAME" actualValue="United States of Amer
+           ica" weight="1.232" rank="2"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight="1.2
+           11" rank="3"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=
+           "1.15" rank="4"/>
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="1" weight="1" r
+           ank="5"/>
+           </Details>
+
+    100003 <Details algorithm="R Extensible" class="1">
+           <Attribute name="EDUCATION" actualValue="&lt; Bach." weight="4.06
+           7" rank="1"/>
+           <Attribute name="AGE" actualValue="23" weight="1.452" rank="2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=
+           "1.184" rank="3"/>
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="1" weight="1" r
+           ank="4"/>
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="never married"
+            weight="1" rank="5"/>
+           </Details>
+
+    100004 <Details algorithm="R Extensible" class="1">
+           <Attribute name="EDUCATION" actualValue="&lt; Bach." weight="2.33
+           3" rank="1"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=
+           "1.148" rank="2"/>
+           <Attribute name="AGE" actualValue="39" weight="1.061" rank="3"/>
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="1" weight="1" r
+           ank="4"/>
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="divorced" weig
+           ht="1" rank="5"/>
+           </Details>
+
+    100005 <Details algorithm="R Extensible" class="1">
+           <Attribute name="AGE" actualValue="35" weight="1.447" rank="1"/>
+           <Attribute name="EDUCATION" actualValue="Assoc-A" weight="1.132"
+           rank="2"/>
+           <Attribute name="CUST_GENDER" actualValue="M" weight="1.069" rank
+           ="3"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=
+           "1.039" rank="4"/>
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="0" weight="1" r
+           ank="5"/>
+           </Details>
+
+    100006 <Details algorithm="R Extensible" class="1">
+           <Attribute name="EDUCATION" actualValue="&lt; Bach." weight="1" r
+           ank="1"/>
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="never married"
+            weight="1" rank="2"/>
+           <Attribute name="CUST_INCOME_LEVEL" actualValue="G: 130,000 - 149
+           ,999" weight="1" rank="3"/>
+           <Attribute name="CUST_GENDER" actualValue="F" weight="1" rank="4"
+           />
+           <Attribute name="COUNTRY_NAME" actualValue="United States of Amer
+           ica" weight="1" rank="5"/>
+           </Details>
+
+    100007 <Details algorithm="R Extensible" class="1">
+           <Attribute name="EDUCATION" actualValue="HS-grad" weight="1.308"
+           rank="1"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight="1.0
+           62" rank="2"/>
+           <Attribute name="FLAT_PANEL_MONITOR" actualValue="1" weight="1" r
+           ank="3"/>
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="divorced" weig
+           ht="1" rank="4"/>
+           <Attribute name="CUST_INCOME_LEVEL" actualValue="L: 300,000 and a
+           bove" weight="1" rank="5"/>
+           </Details>
+
+    100008 <Details algorithm="R Extensible" class="1">
+           <Attribute name="EDUCATION" actualValue="&lt; Bach." weight="4.47
+           6" rank="1"/>
+           <Attribute name="AGE" actualValue="30" weight="1.424" rank="2"/>
+           <Attribute name="BULK_PACK_DISKETTES" actualValue="1" weight="1.0
+           44" rank="3"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=
+           "1.033" rank="4"/>
+           <Attribute name="CUST_GENDER" actualValue="M" weight="1.022" rank
+           ="5"/>
+
+   CUST_ID PRED_DET
+---------- -----------------------------------------------------------------
+           </Details>
+
+    100009 <Details algorithm="R Extensible" class="1">
+           <Attribute name="AGE" actualValue="18" weight="1.505" rank="1"/>
+           <Attribute name="EDUCATION" actualValue="Bach." weight="1.369" ra
+           nk="2"/>
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=
+           "1.16" rank="3"/>
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="married" weigh
+           t="1" rank="4"/>
+           <Attribute name="CUST_INCOME_LEVEL" actualValue="G: 130,000 - 149
+           ,999" weight="1" rank="5"/>
+           </Details>
+
+    100010 <Details algorithm="R Extensible" class="1">
+           <Attribute name="BOOKKEEPING_APPLICATION" actualValue="1" weight=
+           "1.311" rank="1"/>
+           <Attribute name="EDUCATION" actualValue="HS-grad" weight="1.229"
+           rank="2"/>
+           <Attribute name="AGE" actualValue="17" weight="1.229" rank="3"/>
+           <Attribute name="CUST_MARITAL_STATUS" actualValue="married" weigh
+           t="1" rank="4"/>
+           <Attribute name="CUST_INCOME_LEVEL" actualValue="L: 300,000 and a
+           bove" weight="1" rank="5"/>
+           </Details>
+
+
+10行が選択されました。
+
+SQL> spool oml4sql-regression-svm

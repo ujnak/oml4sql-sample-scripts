@@ -1,0 +1,188 @@
+SQL> @oml4sql-time-series-exponential-smoothing
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Time Series - Exponential Smoothing Algorithm - dmesmdemo.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET ECHO ON
+SQL> SET FEEDBACK 1
+SQL> SET NUMWIDTH 10
+SQL> SET LINESIZE 80
+SQL> SET TRIMSPOOL ON
+SQL> SET TAB OFF
+SQL> SET PAGESIZE 100
+SQL>
+SQL> -----------------------------------------------------------------------
+SQL> --                            SET UP THE DATA
+SQL> -----------------------------------------------------------------------
+SQL> -- Cleanup old model with the same name
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('ESM_SH_SAMPLE');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- Create input time series
+SQL> create or replace view esm_sh_data
+  2         as select time_id, amount_sold
+  3         from sh.sales;
+
+View ESM_SH_DATAは作成されました。
+
+SQL>
+SQL> -- Build the ESM model
+SQL> DECLARE
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3  BEGIN
+  4    -- Select ESM as the algorithm
+  5    v_setlst('ALGO_NAME') := 'ALGO_EXPONENTIAL_SMOOTHING';
+  6    -- Set accumulation interval to be quarter
+  7    v_setlst('EXSM_INTERVAL') := 'EXSM_INTERVAL_QTR';
+  8    -- Set prediction step to be 4 quarters (one year)
+  9    v_setlst('EXSM_PREDICTION_STEP') := '4';
+ 10    -- Set ESM model to be Holt-Winters
+ 11    v_setlst('EXSM_MODEL') := 'EXSM_WINTERS';
+ 12    -- Set seasonal cycle to be 4 quarters
+ 13    v_setlst('EXSM_SEASONALITY') := '4';
+ 14
+ 15    dbms_data_mining.create_model2(
+ 16      model_name          => 'ESM_SH_SAMPLE',
+ 17      mining_function     => 'TIME_SERIES',
+ 18      data_query          => 'select * from esm_sh_data',
+ 19      case_id_column_name => 'time_id',
+ 20      target_column_name  => 'amount_sold',
+ 21      set_list            => v_setlst);
+ 22  END;
+ 23  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -- output setting table
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = upper('ESM_SH_SAMPLE')
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_EXPONENTIAL_SMOOTHING
+EXSM_ACCUMULATE                EXSM_ACCU_TOTAL
+EXSM_BACKCAST_OUTPUT           EXSM_BACKCAST_OUTPUT_ENABLE
+EXSM_CONFIDENCE_LEVEL          .95
+EXSM_INITVL_OPTIMIZE           EXSM_INITVL_OPTIMIZE_ENABLE
+EXSM_INTERVAL                  EXSM_INTERVAL_QTR
+EXSM_MODEL                     EXSM_WINTERS
+EXSM_NMSE                      3
+EXSM_OPTIMIZATION_CRIT         EXSM_OPT_CRIT_LIK
+EXSM_PREDICTION_STEP           4
+EXSM_SEASONALITY               4
+EXSM_SETMISSING                EXSM_MISS_AUTO
+ODMS_BOXCOX                    ODMS_BOXCOX_DISABLE
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+PREP_AUTO                      ON
+
+17行が選択されました。
+
+SQL>
+SQL> -- get signature
+SQL> column attribute_name format a40
+SQL> column attribute_type format a20
+SQL> SELECT attribute_name, attribute_type
+  2  FROM   user_mining_model_attributes
+  3    WHERE  model_name=upper('ESM_SH_SAMPLE')
+  4    ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                           ATTRIBUTE_TYPE
+---------------------------------------- --------------------
+AMOUNT_SOLD                              NUMERICAL
+
+1行が選択されました。
+
+SQL>
+SQL>
+SQL> -- get global diagnostics
+SQL> column name format a20
+SQL> column numeric_value format a20
+SQL> column string_value format a15
+SQL> SELECT name,
+  2  to_char(numeric_value, '99999.99EEEE') numeric_value,
+  3  string_value FROM DM$VGESM_SH_SAMPLE
+  4    ORDER BY name;
+
+NAME                 NUMERIC_VALUE        STRING_VALUE
+-------------------- -------------------- ---------------
+-2 LOG-LIKELIHOOD     -2.27E+02
+AIC                    4.73E+02
+AICC                   5.03E+02
+ALPHA                  7.47E-01
+AMSE                   2.55E+11
+BETA                   5.59E-02
+BIC                    4.80E+02
+CONVERGED                                 YES
+GAMMA                  1.00E-04
+INITIAL LEVEL          6.11E+06
+INITIAL SEASON 1       9.98E-01
+INITIAL SEASON 2       1.02E+00
+INITIAL SEASON 3       9.38E-01
+INITIAL SEASON 4       1.04E+00
+INITIAL TREND          4.21E+04
+MAE                    2.74E+05
+MSE                    1.31E+11
+NUM_ROWS               9.19E+05
+SIGMA                  8.71E-02
+STD                    8.71E-02
+
+20行が選択されました。
+
+SQL>
+SQL> -- get predictions
+SQL> set heading on
+SQL> SET LINES 100
+SQL> SET PAGES 105
+SQL> COLUMN CASE_ID FORMAT A30
+SQL> COLUMN VALUE FORMAT 9999999
+SQL> COLUMN PREDICTION FORMAT 99999999
+SQL> COLUMN LOWER FORMAT 99999999
+SQL> COLUMN UPPER FORMAT 99999999
+SQL> select case_id, value, prediction, lower, upper
+  2  from DM$VPESM_SH_SAMPLE
+  3  ORDER BY case_id;
+
+CASE_ID                           VALUE PREDICTION     LOWER     UPPER
+------------------------------ -------- ---------- --------- ---------
+19-01-01                        6480684    6402751
+19-04-01                        5593994    5868258
+19-07-01                        6071823    6205873
+19-10-01                        5937414    5978511
+20-01-01                        6093747    6223665
+20-04-01                        4925472    5535877
+20-07-01                        5827050    5515472
+20-10-01                        5373679    5601171
+21-01-01                        5984889    5644292
+21-04-01                        5371731    5317402
+21-07-01                        6121239    5845169
+21-10-01                        6287647    5920688
+22-01-01                        6547097    6500126
+22-04-01                        6922468    5930069
+22-07-01                        7195999    7376867
+22-10-01                        7470898    7154088
+23-01-01                                   7819637   6484414   9154860
+23-04-01                                   7151013   5591487   8710540
+23-07-01                                   7907806   5843738   9971875
+23-10-01                                   7821557   5462865  10180250
+
+20行が選択されました。
+
+SQL> spool oml4sql-time-series-mset

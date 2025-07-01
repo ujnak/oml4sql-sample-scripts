@@ -1,0 +1,464 @@
+SQL> @oml4sql-clustering-kmeans-star-schema
+SQL> -----------------------------------------------------------------------
+SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
+SQL> --
+SQL> --   Clustering - K-Means Algorithm - dmstardemo.sql
+SQL> --
+SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
+SQL> --
+SQL> --  The Universal Permissive License (UPL), Version 1.0
+SQL> --
+SQL> --  https://oss.oracle.com/licenses/upl/
+SQL> -----------------------------------------------------------------------
+SQL> SET ECHO ON
+SQL> SET FEEDBACK 1
+SQL> SET NUMWIDTH 10
+SQL> SET LINESIZE 80
+SQL> SET TRIMSPOOL ON
+SQL> SET TAB OFF
+SQL> SET PAGESIZE 100
+SQL>
+SQL>
+SQL> -------------------
+SQL> -- STAR SCHEMA
+SQL> -- Bring together the data in the sh star schema.
+SQL> -- For mining, include the customer demographics, but also include the
+SQL> -- per-subcategory purchase amounts that were made for each customer.
+SQL> -- Include also the dates between which the purchases were made.
+SQL> -- This will enhance the clustering model to account for customer
+SQL> -- behavior as well as demographics.
+SQL> create or replace view cust_with_sales as
+  2  select c.*, v2.sales_from, v2.sales_to, v2.per_subcat_sales from
+  3  sh.customers c,
+  4  (select v.cust_id, min(v.sales_from) sales_from, max(v.sales_to) sales_to,
+  5          cast(collect(dm_nested_numerical(v.prod_subcategory, v.sum_amount_sold))
+  6               as dm_nested_numericals) per_subcat_sales
+  7   from
+  8   (select s.cust_id, p.prod_subcategory, sum(s.amount_sold) sum_amount_sold,
+  9    min(s.time_id) sales_from, max(s.time_id) sales_to
+ 10    from sh.sales s, sh.products p
+ 11    where s.prod_id = p.prod_id
+ 12    group by s.cust_id, p.prod_subcategory) v
+ 13   group by v.cust_id) v2
+ 14  where c.cust_id = v2.cust_id;
+
+View CUST_WITH_SALESは作成されました。
+
+SQL>
+SQL> ---------------------
+SQL> -- CREATE A NEW MODEL
+SQL> --
+SQL> -- Cleanup old model with same name for repeat runs
+SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('DM_STAR_CLUSTER');
+  2  EXCEPTION WHEN OTHERS THEN NULL; END;
+  3  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL> declare
+  2    xform_list dbms_data_mining_transform.TRANSFORM_LIST;
+  3    v_setlst   DBMS_DATA_MINING.SETTING_LIST;
+  4  begin
+  5    -- Transform the purchase dates to a numeric period
+  6    dbms_data_mining_transform.set_transform(xform_list,
+  7      'SALES_PERIOD', NULL, 'SALES_TO - SALES_FROM', NULL);
+  8
+  9    -- Transform the country to a categorical attribute since
+ 10    -- numeric datatypes are treated as numeric attributes.
+ 11    dbms_data_mining_transform.set_transform(xform_list,
+ 12      'COUNTRY_ID', NULL, 'TO_CHAR(COUNTRY_ID)', NULL);
+ 13
+ 14    -- Eliminate columns known to be uninteresting,
+ 15    -- which will speed up the process.
+ 16    -- Alternatively, you can do this when creating the view.
+ 17    dbms_data_mining_transform.set_transform(xform_list,
+ 18      'CUST_EFF_TO', NULL, NULL, NULL);
+ 19    dbms_data_mining_transform.set_transform(xform_list,
+ 20      'CUST_EFF_FROM', NULL, NULL, NULL);
+ 21    dbms_data_mining_transform.set_transform(xform_list,
+ 22      'CUST_CITY_ID', NULL, NULL, NULL);
+ 23    dbms_data_mining_transform.set_transform(xform_list,
+ 24      'CUST_STATE_PROVINCE_ID', NULL, NULL, NULL);
+ 25    dbms_data_mining_transform.set_transform(xform_list,
+ 26      'CUST_STREET_ADDRESS', NULL, NULL, NULL);
+ 27    dbms_data_mining_transform.set_transform(xform_list,
+ 28      'CUST_FIRST_NAME', NULL, NULL, NULL);
+ 29    dbms_data_mining_transform.set_transform(xform_list,
+ 30      'CUST_LAST_NAME', NULL, NULL, NULL);
+ 31    dbms_data_mining_transform.set_transform(xform_list,
+ 32      'CUST_MAIN_PHONE_NUMBER', NULL, NULL, NULL);
+ 33    dbms_data_mining_transform.set_transform(xform_list,
+ 34      'CUST_EMAIL', NULL, NULL, NULL);
+ 35    dbms_data_mining_transform.set_transform(xform_list,
+ 36      'CUST_TOTAL_ID', NULL, NULL, NULL);
+ 37    dbms_data_mining_transform.set_transform(xform_list,
+ 38      'CUST_SRC_ID', NULL, NULL, NULL);
+ 39    dbms_data_mining_transform.set_transform(xform_list,
+ 40      'SALES_TO', NULL, NULL, NULL);
+ 41    dbms_data_mining_transform.set_transform(xform_list,
+ 42      'SALES_FROM', NULL, NULL, NULL);
+ 43
+ 44    -- specify settings
+ 45    v_setlst('PREP_AUTO')    := 'ON';
+ 46    v_setlst('KMNS_DETAILS') := 'KMNS_DETAILS_ALL';
+ 47
+ 48    -- perform the build
+ 49    DBMS_DATA_MINING.CREATE_MODEL2(
+ 50      model_name          => 'DM_STAR_CLUSTER',
+ 51      mining_function     => 'CLUSTERING',
+ 52      data_query          => 'SELECT * FROM cust_with_sales',
+ 53      set_list            => v_setlst,
+ 54      case_id_column_name => 'cust_id',
+ 55      xform_list          => xform_list);
+ 56  end;
+ 57  /
+
+PL/SQLプロシージャが正常に完了しました。
+
+SQL>
+SQL> -------------------------
+SQL> -- DISPLAY MODEL SETTINGS
+SQL> --
+SQL> column setting_name format a30
+SQL> column setting_value format a30
+SQL> SELECT setting_name, setting_value
+  2    FROM user_mining_model_settings
+  3   WHERE model_name = 'DM_STAR_CLUSTER'
+  4  ORDER BY setting_name;
+
+SETTING_NAME                   SETTING_VALUE
+------------------------------ ------------------------------
+ALGO_NAME                      ALGO_KMEANS
+CLUS_NUM_CLUSTERS              10
+KMNS_CONV_TOLERANCE            .001
+KMNS_DETAILS                   KMNS_DETAILS_ALL
+KMNS_DISTANCE                  KMNS_EUCLIDEAN
+KMNS_ITERATIONS                20
+KMNS_MIN_PCT_ATTR_SUPPORT      .1
+KMNS_NUM_BINS                  11
+KMNS_RANDOM_SEED               0
+KMNS_SPLIT_CRITERION           KMNS_VARIANCE
+KMNS_WINSORIZE                 KMNS_WINSORIZE_DISABLE
+ODMS_DETAILS                   ODMS_ENABLE
+ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
+ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
+PREP_AUTO                      ON
+
+15行が選択されました。
+
+SQL>
+SQL> --------------------------
+SQL> -- DISPLAY MODEL SIGNATURE
+SQL> --
+SQL> column attribute_name format a30
+SQL> column attribute_type format a20
+SQL> column data_type format a20
+SQL> SELECT attribute_name, attribute_type, data_type
+  2    FROM user_mining_model_attributes
+  3   WHERE model_name = 'DM_STAR_CLUSTER'
+  4  ORDER BY attribute_name;
+
+ATTRIBUTE_NAME                 ATTRIBUTE_TYPE       DATA_TYPE
+------------------------------ -------------------- --------------------
+COUNTRY_ID                     CATEGORICAL          NUMBER
+CUST_CITY                      CATEGORICAL          VARCHAR2
+CUST_CREDIT_LIMIT              NUMERICAL            NUMBER
+CUST_GENDER                    CATEGORICAL          CHAR
+CUST_INCOME_LEVEL              CATEGORICAL          VARCHAR2
+CUST_MARITAL_STATUS            CATEGORICAL          VARCHAR2
+CUST_POSTAL_CODE               CATEGORICAL          VARCHAR2
+CUST_STATE_PROVINCE            CATEGORICAL          VARCHAR2
+CUST_TOTAL                     CATEGORICAL          VARCHAR2
+CUST_VALID                     CATEGORICAL          VARCHAR2
+CUST_YEAR_OF_BIRTH             NUMERICAL            NUMBER
+PER_SUBCAT_SALES               NUMERICAL            DM_NESTED_NUMERICALS
+SALES_FROM                     NUMERICAL            DATE
+SALES_TO                       NUMERICAL            DATE
+
+14行が選択されました。
+
+SQL>
+SQL>
+SQL> ------------------------
+SQL> -- DISPLAY MODEL DETAILS
+SQL> --
+SQL>
+SQL> -- Get a list of model views
+SQL> col view_name format a30
+SQL> col view_type format a50
+SQL> SELECT view_name, view_type FROM user_mining_model_views
+  2    WHERE model_name='DM_STAR_CLUSTER'
+  3    ORDER BY view_name;
+
+VIEW_NAME
+------------------------------
+VIEW_TYPE
+--------------------------------------------------
+DM$VADM_STAR_CLUSTER
+Clustering Attribute Statistics
+
+DM$VCDM_STAR_CLUSTER
+k-Means Scoring Centroids
+
+DM$VDDM_STAR_CLUSTER
+Clustering Description
+
+DM$VGDM_STAR_CLUSTER
+Global Name-Value Pairs
+
+DM$VHDM_STAR_CLUSTER
+Clustering Histograms
+
+DM$VNDM_STAR_CLUSTER
+Normalization and Missing Value Handling
+
+DM$VRDM_STAR_CLUSTER
+Clustering Rules
+
+DM$VSDM_STAR_CLUSTER
+Computed Settings
+
+DM$VWDM_STAR_CLUSTER
+Model Build Alerts
+
+
+9行が選択されました。
+
+SQL>
+SQL> -- Cluster details are best seen in pieces - based on the kind of
+SQL> -- associations and groupings that are needed to be observed.
+SQL> --
+SQL> -- CLUSTERS
+SQL> -- For each cluster_id, provides the number of records in the cluster,
+SQL> -- the parent cluster id, the level in the hierarchy, and dispersion -
+SQL> -- which is a measure of the quality of the cluster, and computationally,
+SQL> -- the sum of square errors.
+SQL> --
+SQL> SELECT cluster_id clu_id, record_count rec_cnt, parent, tree_level,
+  2         TO_NUMBER(dispersion) dispersion
+  3    FROM DM$VDDM_STAR_CLUSTER
+  4   ORDER BY cluster_id;
+
+    CLU_ID    REC_CNT     PARENT TREE_LEVEL DISPERSION
+---------- ---------- ---------- ---------- ----------
+         1       7059                     1 6.03302676
+         2        844          1          2 6.13840531
+         3       6215          1          2  6.0187163
+         4       5373          3          3 5.99189015
+         5        842          3          3 6.18990028
+         6       4299          4          4 5.89273363
+         7       1074          4          4  6.3887932
+         8       3389          6          5 5.78790189
+         9        910          6          5 6.28314546
+        10        864          8          6 5.88303564
+        11       2525          8          6 5.75534919
+        12        506         10          7 5.82335386
+        13        358         10          7 5.96739034
+        14        892         11          7 6.04040764
+        15       1633         11          7 5.59964059
+        16       1017         15          8 5.52543553
+        17        616         15          8 5.72215123
+        18        411         16          9  5.7266616
+        19        606         16          9 5.38896042
+
+19行が選択されました。
+
+SQL>
+SQL> -- TAXONOMY
+SQL> --
+SQL> SELECT cluster_id, left_child_id, right_child_id
+  2    FROM DM$VDDM_STAR_CLUSTER
+  3  ORDER BY cluster_id;
+
+CLUSTER_ID LEFT_CHILD_ID RIGHT_CHILD_ID
+---------- ------------- --------------
+         1             2              3
+         2
+         3             4              5
+         4             6              7
+         5
+         6             8              9
+         7
+         8            10             11
+         9
+        10            12             13
+        11            14             15
+        12
+        13
+        14
+        15            16             17
+        16            18             19
+        17
+        18
+        19
+
+19行が選択されました。
+
+SQL>
+SQL> -- CENTROIDS FOR LEAF CLUSTERS
+SQL> -- For cluster_id 16, this output lists all the attributes that
+SQL> -- constitute the centroid, with the mean (for numericals) or
+SQL> -- mode (for categoricals)
+SQL> -- Note that per-subcategory sales for each customer are being
+SQL> -- considered when creating clusters.
+SQL> --
+SQL> column aname format a60
+SQL> column mode_val format a40
+SQL> column mean_val format 9999999
+SQL> SELECT NVL2(C.attribute_subname,
+  2              C.attribute_name || '.' || C.attribute_subname,
+  3              C.attribute_name) aname,
+  4         C.mean mean_val,
+  5         C.mode_value mode_val
+  6    FROM DM$VADM_STAR_CLUSTER c
+  7  WHERE cluster_id = 16
+  8  ORDER BY aname;
+
+ANAME                                                        MEAN_VAL
+------------------------------------------------------------ --------
+MODE_VAL
+----------------------------------------
+COUNTRY_ID
+52790
+
+CUST_CITY
+Los Angeles
+
+CUST_CREDIT_LIMIT                                                7783
+
+
+CUST_GENDER
+M
+
+CUST_INCOME_LEVEL
+E: 90,000 - 109,999
+
+CUST_MARITAL_STATUS
+
+
+CUST_POSTAL_CODE
+37400
+
+CUST_STATE_PROVINCE
+CA
+
+CUST_TOTAL
+Customer total
+
+CUST_VALID
+A
+
+CUST_YEAR_OF_BIRTH                                               1957
+
+
+PER_SUBCAT_SALES.Baseball Clothing                                412
+
+
+PER_SUBCAT_SALES.Baseballs                                        377
+
+
+PER_SUBCAT_SALES.Bats                                            1035
+
+
+PER_SUBCAT_SALES.Batting Tees                                     857
+
+
+PER_SUBCAT_SALES.Cricket                                          413
+
+
+PER_SUBCAT_SALES.Cricket Bat                                      801
+
+
+PER_SUBCAT_SALES.Cricket Clothing                                 452
+
+
+PER_SUBCAT_SALES.Cricket Fan Gear                                 671
+
+
+PER_SUBCAT_SALES.Gloves and Mitts                                 758
+
+
+PER_SUBCAT_SALES.Golf Bags and Carts                             4963
+
+
+PER_SUBCAT_SALES.Irons and Iron Sets                             2739
+
+
+PER_SUBCAT_SALES.Soccer / Football                               4304
+
+
+PER_SUBCAT_SALES.Soccer Clothing                                  277
+
+
+PER_SUBCAT_SALES.Soccer Equipment                                 383
+
+
+PER_SUBCAT_SALES.Tennis Balls                                     157
+
+
+PER_SUBCAT_SALES.Tennis Racquet                                  2740
+
+
+PER_SUBCAT_SALES.Tennis Racquet Grip                               27
+
+
+PER_SUBCAT_SALES.Tennis Strings                                   194
+
+
+PER_SUBCAT_SALES.Training Aids and Equipment                     4360
+
+
+SALES_PERIOD                                                     1128
+
+
+
+31行が選択されました。
+
+SQL>
+SQL> -------------------------------------------------
+SQL> -- SCORE NEW DATA USING SQL DATA MINING FUNCTIONS
+SQL> --
+SQL> ------------------
+SQL> -- BUSINESS CASE 1
+SQL> -- List the clusters into which the customers in this
+SQL> -- given dataset have been grouped.
+SQL> --
+SQL> SELECT CLUSTER_ID(DM_STAR_CLUSTER USING *) AS clus, COUNT(*) AS cnt
+  2    FROM cust_with_sales
+  3  GROUP BY CLUSTER_ID(DM_STAR_CLUSTER USING *)
+  4  ORDER BY cnt DESC;
+
+      CLUS        CNT
+---------- ----------
+         7       1074
+         9        910
+        14        892
+         2        844
+         5        842
+        17        616
+        19        606
+        12        506
+        18        411
+        13        358
+
+10行が選択されました。
+
+SQL> --
+SQL> ------------------
+SQL> -- BUSINESS CASE 2
+SQL> -- List the five most relevant attributes for likely cluster assignments
+SQL> -- for customer id 100955 (> 20% likelihood of assignment).
+SQL> --
+SQL> column prob format 9.9999
+SQL> set line 150
+SQL> set long 10000
+SQL> SELECT S.cluster_id, probability prob,
+  2         CLUSTER_DETAILS(DM_STAR_CLUSTER, S.cluster_id, 5 using T.*) det
+  3  FROM
+  4    (SELECT v.*, CLUSTER_SET(DM_STAR_CLUSTER, NULL, 0.2 USING *) pset
+  5      FROM cust_with_sales v
+  6     WHERE cust_id = 100949) T,
+  7    TABLE(T.pset) S
+  8  order by 2 desc;
+行が選択されていません
+SQL> spool oml4sql-clustering-kmeans
