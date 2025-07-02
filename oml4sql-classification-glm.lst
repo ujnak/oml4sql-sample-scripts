@@ -52,7 +52,7 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('GLMC_SH_Clas_sample');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> ---------------------
@@ -64,51 +64,57 @@ SQL> --
 SQL> declare
   2    v_xlst dbms_data_mining_transform.TRANSFORM_LIST;
   3    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  4  BEGIN
-  5    -- Force the column age to be a feature in the model
-  6    dbms_data_mining_transform.set_transform(v_xlst,
-  7      'AGE', NULL, 'AGE', 'AGE', 'FORCE_IN');
-  8
-  9    -- The default classification algorithm is Naive Bayes. So override
- 10    -- this choice to GLM logistic regression.
- 11    -- Turn on feature selection and generation
- 12    --
- 13    v_setlst('ALGO_NAME') := 'ALGO_GENERALIZED_LINEAR_MODEL';
- 14    -- output row diagnostic statistics
- 15    v_setlst('GLMS_ROW_DIAGNOSTICS') := 'GLMS_ROW_DIAG_ENABLE';
- 16    v_setlst('PREP_AUTO')            := 'ON';
- 17    -- turn on feature selection
- 18    v_setlst('GLMS_FTR_SELECTION')   := 'GLMS_FTR_SELECTION_ENABLE';
- 19    -- turn on feature generation
- 20    v_setlst('GLMS_FTR_GENERATION')  := 'GLMS_FTR_GENERATION_ENABLE';
- 21
- 22    /* Examples of possible overrides are shown below. If the user does not
- 23       override, then relevant settings are determined by the algorithm
+  4    v_data_query VARCHAR2(32767);
+  5  BEGIN
+  6    -- Force the column age to be a feature in the model
+  7    dbms_data_mining_transform.set_transform(v_xlst,
+  8      'AGE', NULL, 'AGE', 'AGE', 'FORCE_IN');
+  9
+ 10    -- Model Settings ---------------------------------------------------
+ 11    --
+ 12    -- The default classification algorithm is Naive Bayes. So override
+ 13    -- this choice to GLM logistic regression.
+ 14    -- Turn on feature selection and generation
+ 15    --
+ 16    v_setlst('ALGO_NAME') := 'ALGO_GENERALIZED_LINEAR_MODEL';
+ 17    -- output row diagnostic statistics
+ 18    v_setlst('GLMS_ROW_DIAGNOSTICS') := 'GLMS_ROW_DIAG_ENABLE';
+ 19    v_setlst('PREP_AUTO')            := 'ON';
+ 20    -- turn on feature selection
+ 21    v_setlst('GLMS_FTR_SELECTION')   := 'GLMS_FTR_SELECTION_ENABLE';
+ 22    -- turn on feature generation
+ 23    v_setlst('GLMS_FTR_GENERATION')  := 'GLMS_FTR_GENERATION_ENABLE';
  24
- 25    -- specify a row weight column
- 26    v_setlst('ODMS_ROW_WEIGHT_COLUMN_NAME') := '<row_weight_column_name>';
- 27    -- specify a missing value treatment method:
- 28       Default:  replace with mean (numeric features) or
- 29                 mode (categorical features)
- 30         or delete the row
- 31    v_setlst('ODMS_MISSING_VALUE_TREATMENT') := 'ODMS_MISSING_VALUE_DELETE_ROW';
- 32    -- turn ridge regression on or off
- 33       By default the system turns it on if there is a multicollinearity
- 34    v_setlst('GLMS_RIDGE_REGRESSION') := 'GLMS_RIDGE_REG_ENABLE';
- 35    */
- 36
- 37    DBMS_DATA_MINING.CREATE_MODEL2(
- 38      model_name          => 'GLMC_SH_Clas_sample',
- 39      mining_function     => 'CLASSIFICATION',
- 40      data_query          => 'select * from mining_data_build_v',
- 41      set_list            => v_setlst,
- 42      case_id_column_name => 'cust_id',
- 43      target_column_name  => 'affinity_card',
- 44      xform_list          => v_xlst);
- 45  END;
- 46  /
+ 25    /* Examples of possible overrides are shown below. If the user does not
+ 26       override, then relevant settings are determined by the algorithm
+ 27
+ 28    -- specify a row weight column
+ 29    v_setlst('ODMS_ROW_WEIGHT_COLUMN_NAME') := '<row_weight_column_name>';
+ 30    -- specify a missing value treatment method:
+ 31       Default:  replace with mean (numeric features) or
+ 32                 mode (categorical features)
+ 33         or delete the row
+ 34    v_setlst('ODMS_MISSING_VALUE_TREATMENT') := 'ODMS_MISSING_VALUE_DELETE_ROW';
+ 35    -- turn ridge regression on or off
+ 36       By default the system turns it on if there is a multicollinearity
+ 37    v_setlst('GLMS_RIDGE_REGRESSION') := 'GLMS_RIDGE_REG_ENABLE';
+ 38    */
+ 39
+ 40    v_data_query := q'|SELECT * FROM mining_data_build_v|';
+ 41
+ 42    DBMS_DATA_MINING.CREATE_MODEL2(
+ 43      model_name          => 'GLMC_SH_Clas_sample',
+ 44      mining_function     => 'CLASSIFICATION',
+ 45      data_query          => v_data_query,
+ 46      set_list            => v_setlst,
+ 47      case_id_column_name => 'CUST_ID',
+ 48      target_column_name  => 'AFFINITY_CARD',
+ 49      xform_list          => v_xlst
+ 50    );
+ 51  END;
+ 52  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -139,7 +145,7 @@ ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
 ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
 PREP_AUTO                      ON
 
-15行が選択されました。
+15 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -162,7 +168,7 @@ HOUSEHOLD_SIZE                           CATEGORICAL
 OCCUPATION                               CATEGORICAL
 YRS_RESIDENCE                            NUMERICAL
 
-7行が選択されました。
+7 rows selected.
 
 SQL>
 SQL> ------------------------
@@ -215,7 +221,7 @@ DM$VSGLMC_SH_CLAS_SAMPLE       Computed Settings
 DM$VTGLMC_SH_CLAS_SAMPLE       Classification Targets
 DM$VWGLMC_SH_CLAS_SAMPLE       Model Build Alerts
 
-8行が選択されました。
+8 rows selected.
 
 SQL>
 SQL> -- Global statistics
@@ -248,7 +254,7 @@ SC_INTERCEPT                        1705.216
 SC_MODEL                            1216.090
 VALID_COVARIANCE_MATRIX                      YES
 
-20行が選択されました。
+20 rows selected.
 
 SQL>
 SQL> -- Coefficient statistics
@@ -292,7 +298,7 @@ ATTR_NAME            ATTR_VAL    COEFFICIENT    STD_ERROR TEST_STATISTIC      P_
                                       -2.365        0.492         23.083        0.000          -0.454            -3.329            -1.400           0.094                 0.036                 0.247
                                        0.573        0.111         26.643        0.000           0.606             0.355             0.790           1.773                 1.426                 2.203
 
-15行が選択されました。
+15 rows selected.
 
 SQL>
 SQL> -- Show the features and their p_values
@@ -320,7 +326,7 @@ ATTR_NAME            ATTR_VAL    COEFFICIENT      P_VALUE
                                        1.054        0.006
                                        0.004        0.579
 
-15行が選択されました。
+15 rows selected.
 
 SQL>
 SQL> -- Row diagnostics
@@ -371,7 +377,7 @@ PEARSON_RESIDUAL DEVIANCE_RESIDUAL          C       CBAR     DIFDEV   DIFCHISQ
       2.908E+000         2.12E+000 5.072E-002 5.041E-002 4.544E+000  8.51E+000
 
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -602,7 +608,7 @@ PD
 </Details>
 
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL>
@@ -623,32 +629,38 @@ SQL> BEGIN
   5  END;
   6  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- Turn on ridge regression
-  5    v_setlst('ALGO_NAME')             := 'ALGO_GENERALIZED_LINEAR_MODEL';
-  6    -- output row diagnostic statistics into a table named GLMC_SH_SAMPLE_DIAG
-  7    v_setlst('GLMS_ROW_DIAGNOSTICS')  := 'GLMS_ROW_DIAG_ENABLE';
-  8    v_setlst('PREP_AUTO')             := 'ON';
-  9    -- turn on ridge regression
- 10    v_setlst('GLMS_RIDGE_REGRESSION') := 'GLMS_RIDGE_REG_ENABLE';
- 11    v_setlst('GLMS_SOLVER')           := 'GLMS_SOLVER_QR';
- 12
- 13    DBMS_DATA_MINING.CREATE_MODEL2(
- 14      model_name          => 'GLMC_SH_Clas_sample',
- 15      mining_function     => 'CLASSIFICATION',
- 16      data_query          => 'select * from mining_data_build_v',
- 17      set_list            => v_setlst,
- 18      case_id_column_name => 'cust_id',
- 19      target_column_name  => 'affinity_card');
- 20  END;
- 21  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    --
+  7    -- Turn on ridge regression
+  8    v_setlst('ALGO_NAME')             := 'ALGO_GENERALIZED_LINEAR_MODEL';
+  9    -- output row diagnostic statistics into a table named GLMC_SH_SAMPLE_DIAG
+ 10    v_setlst('GLMS_ROW_DIAGNOSTICS')  := 'GLMS_ROW_DIAG_ENABLE';
+ 11    v_setlst('PREP_AUTO')             := 'ON';
+ 12    -- turn on ridge regression
+ 13    v_setlst('GLMS_RIDGE_REGRESSION') := 'GLMS_RIDGE_REG_ENABLE';
+ 14    v_setlst('GLMS_SOLVER')           := 'GLMS_SOLVER_QR';
+ 15
+ 16    v_data_query := q'|SELECT * FROM mining_data_build_v|';
+ 17
+ 18    DBMS_DATA_MINING.CREATE_MODEL2(
+ 19      model_name          => 'GLMC_SH_Clas_sample',
+ 20      mining_function     => 'CLASSIFICATION',
+ 21      data_query          => v_data_query,
+ 22      set_list            => v_setlst,
+ 23      case_id_column_name => 'CUST_ID',
+ 24      target_column_name  => 'AFFINITY_CARD'
+ 25    );
+ 26  END;
+ 27  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -679,7 +691,7 @@ ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
 ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
 PREP_AUTO                      ON
 
-15行が選択されました。
+15 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -712,7 +724,7 @@ PRINTER_SUPPLIES                         NUMERICAL
 YRS_RESIDENCE                            NUMERICAL
 Y_BOX_GAMES                              NUMERICAL
 
-17行が選択されました。
+17 rows selected.
 
 SQL>
 SQL> ------------------------
@@ -759,7 +771,7 @@ DM$VWGLMC_SH_CLAS_SAMPLE
 Model Build Alerts
 
 
-8行が選択されました。
+8 rows selected.
 
 SQL>
 SQL> -- Global statistics
@@ -795,7 +807,7 @@ SC_INTERCEPT                        1705.216
 SC_MODEL                            1577.199
 VALID_COVARIANCE_MATRIX                      YES
 
-21行が選択されました。
+21 rows selected.
 
 SQL>
 SQL> -- Coefficient statistics
@@ -902,7 +914,7 @@ STD_COEFFICIENT LOWER_COEFF_LIMIT UPPER_COEFF_LIMIT EXP_COEFFICIENT EXP_LOWER_CO
          -0.073            -1.536             0.171           0.505                 0.215                 1.187
 
 
-14行が選択されました。
+14 rows selected.
 
 SQL>
 SQL> -- Limited row diagnostics - working_residuals only, others are NULL
@@ -924,7 +936,7 @@ SQL> SELECT CASE_id, TARGET_value, TARGET_value_prob, working_residual
     101509            0        9.277E-001       -1.08E+000
     101510            1        1.114E-001       8.977E+000
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -1158,6 +1170,6 @@ PD
 </Details>
 
 
-10行が選択されました。
+10 rows selected.
 
 SQL> spool oml4sql-classification-naive-bayes

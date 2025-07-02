@@ -44,18 +44,23 @@ BEGIN DBMS_DATA_MINING.DROP_MODEL('ESM_SALES_FORECAST_1');
 EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 DECLARE
-    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN 
-    v_setlst('ALGO_NAME')            := 'ALGO_EXPONENTIAL_SMOOTHING';
-    v_setlst('EXSM_INTERVAL')       := 'EXSM_INTERVAL_DAY';
+  -- Model Settings ---------------------------------------------------
+  v_setlst('ALGO_NAME')            := 'ALGO_EXPONENTIAL_SMOOTHING';
+  v_setlst('EXSM_INTERVAL')       := 'EXSM_INTERVAL_DAY';
 
-    DBMS_DATA_MINING.CREATE_MODEL2(
-        MODEL_NAME          => 'ESM_SALES_FORECAST_1',
-        MINING_FUNCTION     => 'TIME_SERIES',
-        DATA_QUERY          => 'select * from ESM_SH_DATA',
-        SET_LIST            => v_setlst,
-        CASE_ID_COLUMN_NAME => 'TIME_ID',
-        TARGET_COLUMN_NAME  => 'AMOUNT_SOLD');
+  v_data_query := q'|SELECT * FROM ESM_SH_DATA|';
+
+  DBMS_DATA_MINING.CREATE_MODEL2(
+    model_name          => 'ESM_SALES_FORECAST_1',
+    mining_function     => 'TIME_SERIES',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => 'TIME_ID',
+    target_column_name  => 'AMOUNT_SOLD'
+  );
 END;
 /
 

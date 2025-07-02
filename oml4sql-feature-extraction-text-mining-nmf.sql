@@ -60,23 +60,29 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 -- to be treated as unstructured text data
 --
 DECLARE
-    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  xformlist dbms_data_mining_transform.TRANSFORM_LIST;
+  v_xlst   dbms_data_mining_transform.TRANSFORM_LIST;
+  v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
-    dbms_data_mining_transform.SET_TRANSFORM(
-    xformlist, 'comments', null, 'comments', null, 'TEXT(TOKEN_TYPE:STEM)');
---    xformlist, 'comments', null, 'comments', null, 'TEXT(TOKEN_TYPE:THEME)');
+  dbms_data_mining_transform.SET_TRANSFORM(
+    v_xlst, 'comments', null, 'comments', null, 'TEXT(TOKEN_TYPE:STEM)');
+    -- v_xlst, 'comments', null, 'comments', null, 'TEXT(TOKEN_TYPE:THEME)');
 
-    v_setlst('PREP_AUTO') := 'ON';
-    v_setlst('ALGO_NAME') := 'ALGO_NONNEGATIVE_MATRIX_FACTOR';
-    v_setlst('ODMS_TEXT_POLICY_NAME') := 'DMDEMO_NMF_POLICY';
-    DBMS_DATA_MINING.CREATE_MODEL2(
-        model_name      => 'T_NMF_Sample',
-        mining_function =>'FEATURE_EXTRACTION',
-        data_query      => 'SELECT * FROM mining_build_text',
-        set_list        => v_setlst,
-        case_id_column_name => 'cust_id',
-        xform_list      => xformlist);
+  -- Model Settings ---------------------------------------------------
+  v_setlst('ALGO_NAME') := 'ALGO_NONNEGATIVE_MATRIX_FACTOR';
+  v_setlst('PREP_AUTO') := 'ON';
+  v_setlst('ODMS_TEXT_POLICY_NAME') := 'DMDEMO_NMF_POLICY';
+
+  v_data_query := q'|SELECT * FROM mining_build_text|';
+
+  DBMS_DATA_MINING.CREATE_MODEL2(
+    model_name          => 'T_NMF_Sample',
+    mining_function     =>'FEATURE_EXTRACTION',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => 'CUST_ID',
+    xform_list          => v_xlst
+  );
 END;
 /
 

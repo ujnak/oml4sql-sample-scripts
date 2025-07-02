@@ -15,8 +15,9 @@ SQL> SET trimspool ON
 SQL> SET pages 10000
 SQL> SET linesize 420
 SQL> SET echo ON
-SQL> SET long 2000000000
-警告: このLONG設定によってJavaメモリーの問題が発生する可能性があります。この設定を引き下げるか、Javaが使用できるメモリーを増やす(あるいはその両方)ことをお薦めします。
+SQL> SET long 200000000
+Warning: This LONG setting may cause Java memory problems.
+It is recommended to reduce the setting and/or increase the memory available to Java.
 SQL>
 SQL> -----------------------------------------------------------------------
 SQL> --                            SAMPLE PROBLEM
@@ -68,7 +69,7 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('RF_SH_Clas_Sample');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> --------------------------------
@@ -79,15 +80,12 @@ SQL> -- has not been specially prepared.  For this example, no data preparation
 SQL> -- will be performed.
 SQL> --
 SQL>
-SQL> -------------------
-SQL> -- SPECIFY SETTINGS
-SQL> --
 SQL> -- Cleanup old settings table objects for repeat runs
 SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE rf_sh_sample_cost';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- CREATE AND POPULATE A COST MATRIX TABLE
@@ -101,23 +99,27 @@ SQL> CREATE TABLE rf_sh_sample_cost (
   3    predicted_target_value        NUMBER,
   4    cost                          NUMBER);
 
-Table RF_SH_SAMPLE_COSTは作成されました。
+Table RF_SH_SAMPLE_COST created.
 
 SQL> INSERT INTO rf_sh_sample_cost VALUES (0,0,0);
 
-1行挿入しました。
+1 row inserted.
 
 SQL> INSERT INTO rf_sh_sample_cost VALUES (0,1,1);
 
-1行挿入しました。
+1 row inserted.
 
 SQL> INSERT INTO rf_sh_sample_cost VALUES (1,0,8);
 
-1行挿入しました。
+1 row inserted.
 
 SQL> INSERT INTO rf_sh_sample_cost VALUES (1,1,0);
 
-1行挿入しました。
+1 row inserted.
+
+SQL> commit;
+
+Commit complete.
 
 SQL>
 SQL> ---------------------
@@ -126,36 +128,41 @@ SQL> --
 SQL> -- Build a RF model
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    v_setlst('ALGO_NAME')            := 'ALGO_RANDOM_FOREST';
-  5    v_setlst('CLAS_COST_TABLE_NAME') := 'rf_sh_sample_cost';
-  6    v_setlst('RFOR_NUM_TREES')       := '25';
-  7
-  8    -- Examples of other possible settings are:
-  9    --v_setlst('RFOR_MTRY') := '5';
- 10    -- rfor_mtry specifies the number of attributes that are to be
- 11    -- randomly chosen for computing splits at each node of the trees in
- 12    -- the forest.
- 13    --v_setlst('RFOR_SAMPLING_RATIO')    := '0.5';
- 14    --v_setlst('ODMS_RANDOM_SEED')       := '41';
- 15    --v_setlst('TREE_IMPURITY_METRIC')   := 'TREE_IMPURITY_ENTROPY';
- 16    --v_setlst('TREE_TERM_MAX_DEPTH')    := '5';
- 17    --v_setlst('TREE_TERM_MINREC_SPLIT') := '5';
- 18    --v_setlst('TREE_TERM_MINPCT_SPLIT') := '2';
- 19    --v_setlst('TREE_TERM_MINREC_NODE')  := '5';
- 20    --v_setlst('TREE_TERM_MINPCT_NODE')  := '0.05';
- 21
- 22    DBMS_DATA_MINING.CREATE_MODEL2(
- 23      model_name          => 'RF_SH_Clas_Sample',
- 24      mining_function     => 'CLASSIFICATION',
- 25      data_query          => 'select * from mining_data_build_parallel_v',
- 26      set_list            => v_setlst,
- 27      case_id_column_name => 'cust_id',
- 28      target_column_name  => 'affinity_card');
- 29  END;
- 30  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    v_setlst('ALGO_NAME')            := 'ALGO_RANDOM_FOREST';
+  7    v_setlst('CLAS_COST_TABLE_NAME') := 'rf_sh_sample_cost';
+  8    v_setlst('RFOR_NUM_TREES')       := '25';
+  9
+ 10    -- Examples of other possible settings are:
+ 11    -- v_setlst('RFOR_MTRY') := '5';
+ 12    -- rfor_mtry specifies the number of attributes that are to be
+ 13    -- randomly chosen for computing splits at each node of the trees in
+ 14    -- the forest.
+ 15    -- v_setlst('RFOR_SAMPLING_RATIO')    := '0.5';
+ 16    -- v_setlst('ODMS_RANDOM_SEED')       := '41';
+ 17    -- v_setlst('TREE_IMPURITY_METRIC')   := 'TREE_IMPURITY_ENTROPY';
+ 18    -- v_setlst('TREE_TERM_MAX_DEPTH')    := '5';
+ 19    -- v_setlst('TREE_TERM_MINREC_SPLIT') := '5';
+ 20    -- v_setlst('TREE_TERM_MINPCT_SPLIT') := '2';
+ 21    -- v_setlst('TREE_TERM_MINREC_NODE')  := '5';
+ 22    -- v_setlst('TREE_TERM_MINPCT_NODE')  := '0.05';
+ 23
+ 24    v_data_query := q'|SELECT * FROM mining_data_build_parallel_v|';
+ 25
+ 26    DBMS_DATA_MINING.CREATE_MODEL2(
+ 27      model_name          => 'RF_SH_Clas_Sample',
+ 28      mining_function     => 'CLASSIFICATION',
+ 29      data_query          => v_data_query,
+ 30      set_list            => v_setlst,
+ 31      case_id_column_name => 'CUST_ID',
+ 32      target_column_name  => 'AFFINITY_CARD'
+ 33    );
+ 34  END;
+ 35  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -188,7 +195,7 @@ TREE_TERM_MINPCT_SPLIT         .1
 TREE_TERM_MINREC_NODE          10
 TREE_TERM_MINREC_SPLIT         20
 
-17行が選択されました。
+17 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -217,7 +224,7 @@ OCCUPATION                               CATEGORICAL
 YRS_RESIDENCE                            NUMERICAL
 Y_BOX_GAMES                              NUMERICAL
 
-13行が選択されました。
+13 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -240,7 +247,7 @@ DM$VSRF_SH_CLAS_SAMPLE         Computed Settings
 DM$VTRF_SH_CLAS_SAMPLE         Classification Targets
 DM$VWRF_SH_CLAS_SAMPLE         Model Build Alerts
 
-6行が選択されました。
+6 rows selected.
 
 SQL>
 SQL> ------------------------
@@ -263,7 +270,7 @@ MIN_DEPTH                             12.000
 MIN_NODECOUNT                         67.000
 NUM_ROWS                            1500.000
 
-7行が選択されました。
+7 rows selected.
 
 SQL>
 SQL> -- Get computed settings --
@@ -299,7 +306,7 @@ CUST_INCOME_LEVEL                                 0
 OS_DOC_SET_KANJI                                  0
 PRINTER_SUPPLIES                                  0
 
-16行が選択されました。
+16 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -420,7 +427,7 @@ SQL> SELECT cust_id FROM
     100324
     101345
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> ------------------
@@ -487,7 +494,7 @@ SQL> SELECT T.cust_id, S.prediction, S.probability, S.cost
     100010          0  .858233927 1.134128581
     100010          1  .141766073 .858233927
 
-20行が選択されました。
+20 rows selected.
 
 SQL>
 SQL> ------------------
@@ -793,6 +800,6 @@ SQL> SELECT cust_id, education,
                                           </Details>
 
 
-32行が選択されました。
+32 rows selected.
 
 SQL> spool oml4sql-classification-regression-xgboost

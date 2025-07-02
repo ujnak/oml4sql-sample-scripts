@@ -109,21 +109,26 @@ END;
 --
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST; 
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
   v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
   v_setlst('RALG_BUILD_FUNCTION')   := 'RPCA_BUILD';
   v_setlst('RALG_SCORE_FUNCTION')   := 'RPCA_SCORE';
   v_setlst('RALG_WEIGHT_FUNCTION')  := 'RPCA_WEIGHT';
   v_setlst('RALG_DETAILS_FUNCTION') := 'RPCA_DETAILS';
   v_setlst('RALG_DETAILS_FORMAT')   := 
-    'select 1 feature, 1 sd from dual';
+    q'|select 1 feature, 1 sd from dual|';
+
+  v_data_query := q'|SELECT * FROM PCA_BUILD_V|';
 
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'RPCA_SH_FE_SAMPLE',
     mining_function     => 'FEATURE_EXTRACTION',
-    data_query          => 'select * from PCA_BUILD_V',
-    case_id_column_name => 'CUST_ID',
-    set_list            => v_setlst);
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => 'CUST_ID'
+  );
 END;
 /
 
@@ -224,24 +229,29 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 --
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
   v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
   v_setlst('RALG_BUILD_FUNCTION')   := 'RPCA_BUILD';
   v_setlst('RALG_SCORE_FUNCTION')   := 'RPCA_SCORE';
   v_setlst('RALG_WEIGHT_FUNCTION')  := 'RPCA_WEIGHT';
   v_setlst('RALG_DETAILS_FUNCTION') := 'RPCA_DETAILS';
   v_setlst('RALG_DETAILS_FORMAT')   :=
-    'select 1 feature, 1 sd from dual';
+    q'|select 1 feature, 1 sd from dual|';
 
   -- Specify the column CUST_GENDER as the partition column
   v_setlst('ODMS_PARTITION_COLUMNS') := 'CUST_GENDER';
 
+  v_data_query := q'|SELECT * FROM PCA_BUILD_PARTITION_V|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'RPCA_SH_FE_SAMPLE_P',
     mining_function     => 'FEATURE_EXTRACTION',
-    data_query          => 'select * from PCA_BUILD_PARTITION_V',
-    case_id_column_name => 'CUST_ID',
-    set_list            => v_setlst);
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => 'CUST_ID'
+  );
 END;
 /
 

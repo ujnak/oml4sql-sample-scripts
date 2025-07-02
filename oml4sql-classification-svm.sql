@@ -46,10 +46,6 @@ BEGIN DBMS_DATA_MINING.DROP_MODEL('SVMC_SH_Clas_sample');
 EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 
-
-------------------
--- SPECIFY SETTINGS
---
 -- Cleanup old settings table for repeat runs
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE svmc_sh_sample_class_wt';  
 EXCEPTION WHEN OTHERS THEN NULL; END;
@@ -69,23 +65,26 @@ CREATE TABLE svmc_sh_sample_class_wt (
   class_weight NUMBER);
 INSERT INTO svmc_sh_sample_class_wt VALUES (0,0.35);
 INSERT INTO svmc_sh_sample_class_wt VALUES (1,0.65);
-COMMIT;
+commit;
 
--- The default classification algorithm is Naive Bayes. So override
--- this choice to SVM using a settings table.
--- SVM chooses a kernel type automatically. This choice can be overriden
--- by the user. Linear kernel is preferred for high dimensional data, and 
--- Gaussian kernel for low dimensional data. Here we use linear kernel
--- to demonstrate the coefficient model view, which applies only for
--- linear kernel models.
---    
 ---------------------
 -- CREATE A NEW MODEL
 --
 -- Build a new SVM Model
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
+  --
+  -- The default classification algorithm is Naive Bayes. So override
+  -- this choice to SVM using a settings.
+  -- SVM chooses a kernel type automatically. This choice can be overriden
+  -- by the user. Linear kernel is preferred for high dimensional data, and
+  -- Gaussian kernel for low dimensional data. Here we use linear kernel
+  -- to demonstrate the coefficient model view, which applies only for
+  -- linear kernel models.
+  --
   v_setlst('ALGO_NAME')               := 'ALGO_SUPPORT_VECTOR_MACHINES';
   v_setlst('SVMS_KERNEL_FUNCTION')    := 'SVMS_LINEAR';
   v_setlst('CLAS_WEIGHTS_TABLE_NAME') := 'svmc_sh_sample_class_wt';
@@ -94,13 +93,16 @@ BEGIN
   --v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_GAUSSIAN';
   --v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_COMPLEXITY_FACTOR';
 
+  v_data_query := q'|SELECT * FROM mining_data_build_v|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'SVMC_SH_Clas_sample',
     mining_function     => 'CLASSIFICATION',
-    data_query          => 'SELECT * FROM mining_data_build_v',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id',
-    target_column_name  => 'affinity_card');
+    case_id_column_name => 'CUST_ID',
+    target_column_name  => 'AFFINITY_CARD'
+  );
 END;
 /
 

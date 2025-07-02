@@ -31,7 +31,7 @@ SQL> BEGIN EXECUTE IMMEDIATE 'DROP VIEW sales_trans_cust';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------
@@ -55,7 +55,7 @@ SQL> CREATE VIEW sales_trans_cust AS
   6         WHERE a.prod_id = b.prod_id AND
   7               a.cust_id between 100001 AND 104500);
 
-View SALES_TRANS_CUSTは作成されました。
+View SALES_TRANS_CUST created.
 
 SQL>
 SQL> -----------
@@ -123,7 +123,7 @@ Right-Handed Graphite Shaft Iron Set            2
 Lithium Electric Golf Caddy                     2
 Sonic Core Graphite Racquet                     1
 
-14行が選択されました。
+14 rows selected.
 
 SQL>
 SQL> -- 4. Compute the average number of products purchased per customer (2.98)
@@ -156,7 +156,7 @@ SQL> --
 SQL> --------------------------------------------------------------------------------
 SQL> CREATE or REPLACE VIEW sales_trans_cust_parallel AS SELECT /*+ parallel (4)*/ * FROM sales_trans_cust;
 
-View SALES_TRANS_CUST_PARALLELは作成されました。
+View SALES_TRANS_CUST_PARALLEL created.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -202,49 +202,51 @@ SQL> -- PREPARE BUILD (TRAINING) DATA
 SQL> --
 SQL> -- Data for AR modeling may need binning if it contains numerical data.
 SQL>
-SQL> -------------------
-SQL> -- SPECIFY SETTINGS
-SQL> --
-SQL> -- The default (and only) algorithm for association rules is
-SQL> -- Apriori AR. However, we need a settings table
-SQL> -- to override the default Min Support, Min Confidence,
-SQL> -- and Max items settings.
-SQL> -- Add settings for Transaction Input - the presence
-SQL> -- of an Item Id column specification indicates to the
-SQL> -- API that the input is transactional
+SQL> ----------------------------------------------
+SQL> -- Build AR model with transactional input
 SQL> --
 SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('AR_SH_SAMPLE');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
-SQL> ----------------------------------------------
-SQL> -- Build AR model with transactional input
-SQL> --
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    v_setlst('ALGO_NAME')                := 'ALGO_APRIORI_ASSOCIATION_RULES';
-  5    v_setlst('PREP_AUTO')                := 'ON';
-  6    v_setlst('ASSO_MIN_SUPPORT')         := '0.1';
-  7    v_setlst('ASSO_MIN_CONFIDENCE')      := '0.1';
-  8    v_setlst('ASSO_MAX_RULE_LENGTH')     := '3';
-  9    v_setlst('ODMS_ITEM_ID_COLUMN_NAME') := 'PROD_NAME';
- 10    v_setlst('ASSO_AGGREGATES')          := 'AMOUNT_SOLD';
- 11
- 12    DBMS_DATA_MINING.CREATE_MODEL2(
- 13      model_name          => 'AR_SH_SAMPLE',
- 14      mining_function     => 'ASSOCIATION',
- 15      data_query          => 'SELECT * FROM sales_trans_cust_parallel',
- 16      set_list            => v_setlst,
- 17      case_id_column_name => 'CUST_ID'
- 18    );
- 19  END;
- 20  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    --
+  7    -- The default (and only) algorithm for association rules is
+  8    -- Apriori AR. However, we need a settings
+  9    -- to override the default Min Support, Min Confidence,
+ 10    -- and Max items settings.
+ 11    -- Add settings for Transaction Input - the presence
+ 12    -- of an Item Id column specification indicates to the
+ 13    -- API that the input is transactional
+ 14    --
+ 15    v_setlst('ALGO_NAME')                := 'ALGO_APRIORI_ASSOCIATION_RULES';
+ 16    v_setlst('PREP_AUTO')                := 'ON';
+ 17    v_setlst('ASSO_MIN_SUPPORT')         := '0.1';
+ 18    v_setlst('ASSO_MIN_CONFIDENCE')      := '0.1';
+ 19    v_setlst('ASSO_MAX_RULE_LENGTH')     := '3';
+ 20    v_setlst('ODMS_ITEM_ID_COLUMN_NAME') := 'PROD_NAME';
+ 21    v_setlst('ASSO_AGGREGATES')          := 'AMOUNT_SOLD';
+ 22
+ 23    v_data_query := q'|SELECT * FROM sales_trans_cust_parallel|';
+ 24
+ 25    DBMS_DATA_MINING.CREATE_MODEL2(
+ 26      model_name          => 'AR_SH_SAMPLE',
+ 27      mining_function     => 'ASSOCIATION',
+ 28      data_query          => v_data_query,
+ 29      set_list            => v_setlst,
+ 30      case_id_column_name => 'CUST_ID'
+ 31    );
+ 32  END;
+ 33  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -272,7 +274,7 @@ ODMS_MISSING_VALUE_TREATMENT    ODMS_MISSING_VALUE_AUTO
 ODMS_SAMPLING                   ODMS_SAMPLING_DISABLE
 PREP_AUTO                       ON
 
-12行が選択されました。
+12 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -331,7 +333,7 @@ Pro Style Batting Tee                    .318085106               1
 2 Competition Grade NFHS Baseballs       .321276596               1
 Linseed Oil                              .322340426               1
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> ----------------------------------------------------------
@@ -392,7 +394,7 @@ Linseed Oil                    Tennis Racquet Cushi .178 .551          1
 
 Cricket Wickets                Catchers Mitt        .153 .524          1
 
-13行が選択されました。
+13 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -443,7 +445,7 @@ Tennis Racquet Cushioned OverGrip            2341.07    .312               1
 Pro Style Batting Tee                       44847.01    .318               1
 2 Competition Grade NFHS Baseballs           6942.98    .321               1
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> ----------------------------------------------------------
@@ -493,7 +495,7 @@ Linseed Oil                    Tennis Racquet Cushi    1334.33 .178 .551     1
 
 Cricket Wickets                Catchers Mitt           7198.56 .153 .524     1
 
-13行が選択されました。
+13 rows selected.
 
 SQL>
 SQL> --- ------------------------------------------------------------------
@@ -506,7 +508,7 @@ SQL>
 SQL> CREATE OR REPLACE VIEW sales_trans_cust_2col AS
   2  SELECT cust_id, prod_name from sales_trans_cust;
 
-View SALES_TRANS_CUST_2COLは作成されました。
+View SALES_TRANS_CUST_2COL created.
 
 SQL>
 SQL> --------------------------------------------------------------------------------
@@ -516,37 +518,40 @@ SQL> --
 SQL> --------------------------------------------------------------------------------
 SQL> CREATE or REPLACE VIEW sales_trans_2col_parallel AS SELECT /*+ parallel (4)*/ * FROM sales_trans_cust_2col;
 
-View SALES_TRANS_2COL_PARALLELは作成されました。
+View SALES_TRANS_2COL_PARALLEL created.
 
 SQL>
 SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('AR_SH_SAMPLE_2COL');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    v_setlst('ALGO_NAME')                := 'ALGO_APRIORI_ASSOCIATION_RULES';
-  5    v_setlst('PREP_AUTO')                := 'ON';
-  6    v_setlst('ASSO_MIN_SUPPORT')         := '0.1';
-  7    v_setlst('ASSO_MIN_CONFIDENCE')      := '0.1';
-  8    v_setlst('ASSO_MAX_RULE_LENGTH')     := '3';
-  9    v_setlst('ODMS_ITEM_ID_COLUMN_NAME') := 'PROD_NAME';
- 10
- 11    DBMS_DATA_MINING.CREATE_MODEL2(
- 12      model_name          => 'AR_SH_SAMPLE_2COL',
- 13      mining_function     => 'ASSOCIATION',
- 14      data_query          => 'SELECT * FROM sales_trans_2col_parallel',
- 15      set_list            => v_setlst,
- 16      case_id_column_name => 'CUST_ID'
- 17    );
- 18  END;
- 19  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    v_setlst('ALGO_NAME')                := 'ALGO_APRIORI_ASSOCIATION_RULES';
+  6    v_setlst('PREP_AUTO')                := 'ON';
+  7    v_setlst('ASSO_MIN_SUPPORT')         := '0.1';
+  8    v_setlst('ASSO_MIN_CONFIDENCE')      := '0.1';
+  9    v_setlst('ASSO_MAX_RULE_LENGTH')     := '3';
+ 10    v_setlst('ODMS_ITEM_ID_COLUMN_NAME') := 'PROD_NAME';
+ 11
+ 12    v_data_query := q'|SELECT * FROM sales_trans_2col_parallel|';
+ 13
+ 14    DBMS_DATA_MINING.CREATE_MODEL2(
+ 15      model_name          => 'AR_SH_SAMPLE_2COL',
+ 16      mining_function     => 'ASSOCIATION',
+ 17      data_query          => v_data_query,
+ 18      set_list            => v_setlst,
+ 19      case_id_column_name => 'CUST_ID'
+ 20    );
+ 21  END;
+ 22  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> ---- Lets display the model content using views.
@@ -571,7 +576,7 @@ DM$VSAR_SH_SAMPLE_2COL         Computed Settings
 DM$VTAR_SH_SAMPLE_2COL         Association Rule Itemsets For Transactional Data
 DM$VWAR_SH_SAMPLE_2COL         Model Build Alerts
 
-7行が選択されました。
+7 rows selected.
 
 SQL>
 SQL> set echo off
@@ -589,7 +594,7 @@ Tennis Racquet Cushioned OverGrip           .312               1
 Pro Style Batting Tee                       .318               1
 2 Competition Grade NFHS Baseballs          .321               1
 
-10行が選択されました。
+10 rows selected.
 
 
 ANTECEDENT                     CONSEQUENT           SUPP CONF        NUM
@@ -625,7 +630,7 @@ Tennis Racquet Cushioned OverG Linseed Oil          .178 .570          2
 rip
 
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> spool oml4sql-attribute-importance

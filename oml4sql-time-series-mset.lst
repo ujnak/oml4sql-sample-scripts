@@ -39,7 +39,7 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('MSET_SH_MODEL');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- Create training multivariate time series data from year 1998 and 1999
@@ -48,7 +48,7 @@ SQL> CREATE OR replace VIEW mset_build_sh_data
   3    sum(amount_sold) amount from (SELECT * FROM sh.sales WHERE
   4    time_id <= '30-DEC-99') GROUP BY time_id ORDER BY time_id;
 
-View MSET_BUILD_SH_DATAは作成されました。
+View MSET_BUILD_SH_DATA created.
 
 SQL>
 SQL> -- Create testing multivariate time series data from year 2000-2001
@@ -57,7 +57,7 @@ SQL> CREATE OR replace VIEW mset_test_sh_data
   3      amount FROM (SELECT * FROM sh.sales WHERE time_id > '30-DEC-99')
   4      GROUP BY time_id ORDER BY time_id;
 
-View MSET_TEST_SH_DATAは作成されました。
+View MSET_TEST_SH_DATA created.
 
 SQL>
 SQL> -----------------------------------------------------------------
@@ -65,36 +65,41 @@ SQL> --                (2)  Build the MSET model
 SQL> -----------------------------------------------------------------
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- Select MSET-SPRT as the algorithm
-  5    v_setlst('ALGO_NAME') := 'ALGO_MSET_SPRT';
-  6    -- Turn on automatic data preparation
-  7    v_setlst('PREP_AUTO') := 'ON';
-  8    -- Set memory vector
-  9    v_setlst('MSET_MEMORY_VECTORS') := '100';
- 10    -- Set alpha
- 11    v_setlst('MSET_ALPHA_PROB') := '0.1';
- 12    -- Set alert count
- 13    v_setlst('MSET_ALERT_COUNT') := '3';
- 14    -- Set alert window
- 15    v_setlst('MSET_ALERT_WINDOW') := '5';
- 16    -- Examples of other possible settings are:
- 17    -- v_setlst('MSET_BETA_PROB')     := '0.1';
- 18    -- v_setlst('MSET_ADB_HEIGHT')    := '0.01';
- 19    -- v_setlst('MSET_STD_TOLERANCE') := '3';
- 20    -- v_setlst('MSET_HELDASIDE')     := '500';
- 21
- 22    dbms_data_mining.create_model2(
- 23      model_name          => 'MSET_SH_MODEL',
- 24      mining_function     => 'CLASSIFICATION',
- 25      data_query          => 'select * from mset_build_sh_data',
- 26      case_id_column_name => 'time_id',
- 27      target_column_name  => '',
- 28      set_list            => v_setlst);
- 29  END;
- 30  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    --
+  7    -- Select MSET-SPRT as the algorithm
+  8    v_setlst('ALGO_NAME') := 'ALGO_MSET_SPRT';
+  9    -- Turn on automatic data preparation
+ 10    v_setlst('PREP_AUTO') := 'ON';
+ 11    -- Set memory vector
+ 12    v_setlst('MSET_MEMORY_VECTORS') := '100';
+ 13    -- Set alpha
+ 14    v_setlst('MSET_ALPHA_PROB') := '0.1';
+ 15    -- Set alert count
+ 16    v_setlst('MSET_ALERT_COUNT') := '3';
+ 17    -- Set alert window
+ 18    v_setlst('MSET_ALERT_WINDOW') := '5';
+ 19    -- Examples of other possible settings are:
+ 20    -- v_setlst('MSET_BETA_PROB')     := '0.1';
+ 21    -- v_setlst('MSET_ADB_HEIGHT')    := '0.01';
+ 22    -- v_setlst('MSET_STD_TOLERANCE') := '3';
+ 23    -- v_setlst('MSET_HELDASIDE')     := '500';
+ 24
+ 25    v_data_query := q'|SELECT * FROM mset_build_sh_data|';
+ 26
+ 27    DBMS_DATA_MINING.CREATE_MODEL2(
+ 28      model_name          => 'MSET_SH_MODEL',
+ 29      mining_function     => 'CLASSIFICATION',
+ 30      data_query          => v_data_query,
+ 31      set_list            => v_setlst,
+ 32      case_id_column_name => 'TIME_ID'
+ 33    );
+ 34  END;
+ 35  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> ------------------------
@@ -123,7 +128,7 @@ ODMS_RANDOM_SEED               0
 ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
 PREP_AUTO                      ON
 
-14行が選択されました。
+14 rows selected.
 
 SQL>
 SQL> -------------------------
@@ -134,7 +139,7 @@ SQL> SELECT attribute_name, attribute_type
   2  FROM   user_mining_model_attributes
   3    WHERE  model_name = 'MSET_SH_MODEL'
   4    ORDER BY attribute_name;
-行が選択されていません
+no rows selected
 SQL>
 SQL> -- Get a list of model views
 SQL> col view_name format a30
@@ -166,7 +171,7 @@ DM$VWMSET_SH_MODEL
 Model Build Alerts
 
 
-6行が選択されました。
+6 rows selected.
 
 SQL>
 SQL> -- get global diagnostics
@@ -182,7 +187,7 @@ NAME                 NUMERIC_VALUE        STRING_VALUE
 -------------------- -------------------- ---------------
 NUM_ROWS                  0
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -199,12 +204,12 @@ SQL> SELECT time_id, prediction(mset_sh_model using *) over
   3    over (ORDER BY time_id) prob
   4    FROM (SELECT * FROM mset_test_sh_data  WHERE time_id > '15-DEC-01' AND
   5    time_id <= '25-DEC-01' ) ORDER BY time_id;
-行が選択されていません
+no rows selected
 SQL>
 SQL> -- display all dates of year 2000 to 2001 when anomalies occur
 SQL> SELECT time_id, pred FROM (SELECT time_id, prediction(mset_sh_model using *)
   2    over (ORDER BY time_id) pred FROM mset_test_sh_data) WHERE pred = 0;
-行が選択されていません
+no rows selected
 SQL>
 SQL> -- display total anomaly count for year 2000 to 2001
 SQL> col min(prob) format 0.999
@@ -218,7 +223,7 @@ SQL> SELECT pred, count(pred), min(prob), max(prob) FROM (
 ----- ----------- --------- ---------
                 0
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> -- display anomly rate: number of anomaly/total number of data
@@ -231,7 +236,7 @@ ANOMALYRATE
 -----------
 
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> -- display prediction details
@@ -241,7 +246,7 @@ SQL> SELECT time_id, prediction(mset_sh_model using *) over (ORDER BY time_id)
   2    pred, prediction_details(mset_sh_model using *) over (ORDER BY time_id)
   3    anomalyDetails FROM mset_test_sh_data  WHERE time_id > '15-DEC-01' AND
   4    time_id <= '25-DEC-01' ORDER BY time_id;
-行が選択されていません
+no rows selected
 SQL>
 SQL>
 SQL> spool oml4sql-time-series-regression

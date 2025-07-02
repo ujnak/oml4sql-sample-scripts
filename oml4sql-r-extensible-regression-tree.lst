@@ -34,14 +34,14 @@ SQL> BEGIN
   6  END;
   7  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('DT_RDEMO_REGRESSION');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> BEGIN
@@ -87,7 +87,7 @@ SQL> BEGIN
  41  END;
  42  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -100,33 +100,35 @@ SQL> -- DT_RDEMO_REGRESSION using dataset mining_data_build_v.
 SQL>
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- Model Settings -----------------------------------------------------------
-  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
-  6    v_setlst('RALG_BUILD_FUNCTION')   := 'DT_RDEMO_BUILD_REGRESSION';
-  7    v_setlst('RALG_SCORE_FUNCTION')   := 'DT_RDEMO_SCORE_REGRESSION';
-  8    v_setlst('RALG_DETAILS_FUNCTION') := 'DT_RDEMO_DETAILS_REGRESSION';
-  9
- 10    -- Once this setting is specified, a model view will be created. This model
- 11    -- view will be generated to display the model details, which contains the
- 12    -- split attributes, node counts, weights, deviation and mean of the built model
- 13
- 14    v_setlst('RALG_DETAILS_FORMAT') :=
- 15      'select cast(''a'' as varchar2(20)) node, ' ||
- 16      'cast(''a'' as varchar2(20)) split, ' ||
- 17      '1 NodeCnt, 1 wt, 1 deviation, 1 mean from dual';
- 18
- 19    DBMS_DATA_MINING.CREATE_MODEL2(
- 20      model_name          => 'DT_RDEMO_REGRESSION',
- 21      mining_function     => 'REGRESSION',
- 22      data_query          => 'select * from mining_data_build_v',
- 23      case_id_column_name => 'CUST_ID',
- 24      target_column_name  => 'AGE',
- 25      set_list            => v_setlst);
- 26  END;
- 27  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings -----------------------------------------------------------
+  6    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  7    v_setlst('RALG_BUILD_FUNCTION')   := 'DT_RDEMO_BUILD_REGRESSION';
+  8    v_setlst('RALG_SCORE_FUNCTION')   := 'DT_RDEMO_SCORE_REGRESSION';
+  9    v_setlst('RALG_DETAILS_FUNCTION') := 'DT_RDEMO_DETAILS_REGRESSION';
+ 10
+ 11    -- Once this setting is specified, a model view will be created. This model
+ 12    -- view will be generated to display the model details, which contains the
+ 13    -- split attributes, node counts, weights, deviation and mean of the built model
+ 14
+ 15    v_setlst('RALG_DETAILS_FORMAT') :=
+ 16      q'|select cast('a' as varchar2(20)) node, cast('a' as varchar2(20)) split, 1 NodeCnt, 1 wt, 1 deviation, 1 mean from dual|';
+ 17
+ 18    v_data_query := q'|SELECT * FROM mining_data_build_v|';
+ 19
+ 20    DBMS_DATA_MINING.CREATE_MODEL2(
+ 21      model_name          => 'DT_RDEMO_REGRESSION',
+ 22      mining_function     => 'REGRESSION',
+ 23      data_query          => v_data_query,
+ 24      set_list            => v_setlst,
+ 25      case_id_column_name => 'CUST_ID',
+ 26      target_column_name  => 'AGE'
+ 27    );
+ 28  END;
+ 29  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -170,7 +172,7 @@ SQL> select to_number(node) as node, split, NodeCnt, wt,
         50 <leaf>               16         16    964.938       34.063
         51 <leaf>               16         16   2141.438       54.688
 
-15行が選択されました。
+15 rows selected.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -199,7 +201,7 @@ SQL> SELECT CUST_ID, AGE as AGE_act, round(PREDICTION(DT_RDEMO_REGRESSION USING 
     100009         18     15.593
     100010         17     15.593
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -217,14 +219,14 @@ SQL> Begin
   6  End;
   7  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('DT_RDEMO_CLASSIFICATION');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> BEGIN
@@ -297,7 +299,7 @@ SQL> BEGIN
  68  END;
  69  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -310,35 +312,37 @@ SQL> -- model DT_RDEMO_CLASSIFICATION using dataset mining_data_build_v.
 SQL>
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- Model Settings -------------------------------------------------------------
-  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
-  6    v_setlst('RALG_BUILD_FUNCTION')   := 'DT_RDEMO_BUILD_CLASSIFICATION';
-  7    v_setlst('RALG_SCORE_FUNCTION')   := 'DT_RDEMO_SCORE_CLASSIFICATION';
-  8    v_setlst('RALG_DETAILS_FUNCTION') := 'DT_RDEMO_DETAILS_CLASSIFICATION';
-  9    v_setlst('RALG_WEIGHT_FUNCTION')  := 'DT_RDEMO_WEIGHT_CLASSIFICATION';
- 10
- 11    -- Once this setting is specified, a model view will be created. This model
- 12    -- view will be generated to display the model details, which contains the
- 13    -- split attributes, node counts, left node counts, right node counts of
- 14    -- the built model
- 15
- 16    v_setlst('RALG_DETAILS_FORMAT') :=
- 17      'select cast(''a'' as varchar2(20)) node, ' ||
- 18      'cast(''a'' as varchar2(20)) split, ' ||
- 19      '1 NodeCnt, 1 LeftNodeCnt, 1 RightNodeCnt from dual';
- 20
- 21    DBMS_DATA_MINING.CREATE_MODEL2(
- 22      model_name          => 'DT_RDEMO_CLASSIFICATION',
- 23      mining_function     => 'CLASSIFICATION',
- 24      data_query          => 'select * from mining_data_build_v',
- 25      case_id_column_name => 'CUST_ID',
- 26      target_column_name  => 'AFFINITY_CARD',
- 27      set_list            => v_setlst);
- 28  END;
- 29  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings -------------------------------------------------------------
+  6    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  7    v_setlst('RALG_BUILD_FUNCTION')   := 'DT_RDEMO_BUILD_CLASSIFICATION';
+  8    v_setlst('RALG_SCORE_FUNCTION')   := 'DT_RDEMO_SCORE_CLASSIFICATION';
+  9    v_setlst('RALG_DETAILS_FUNCTION') := 'DT_RDEMO_DETAILS_CLASSIFICATION';
+ 10    v_setlst('RALG_WEIGHT_FUNCTION')  := 'DT_RDEMO_WEIGHT_CLASSIFICATION';
+ 11
+ 12    -- Once this setting is specified, a model view will be created. This model
+ 13    -- view will be generated to display the model details, which contains the
+ 14    -- split attributes, node counts, left node counts, right node counts of
+ 15    -- the built model
+ 16
+ 17    v_setlst('RALG_DETAILS_FORMAT') :=
+ 18      q'|select cast('a' as varchar2(20)) node, cast('a' as varchar2(20)) split, 1 NodeCnt, 1 LeftNodeCnt, 1 RightNodeCnt from dual|';
+ 19
+ 20    v_data_query := q'|SELECT * FROM mining_data_build_v|';
+ 21
+ 22    DBMS_DATA_MINING.CREATE_MODEL2(
+ 23      model_name          => 'DT_RDEMO_CLASSIFICATION',
+ 24      mining_function     => 'CLASSIFICATION',
+ 25      data_query          => v_data_query,
+ 26      set_list            => v_setlst,
+ 27      case_id_column_name => 'CUST_ID',
+ 28      target_column_name  => 'AFFINITY_CARD'
+ 29    );
+ 30  END;
+ 31  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -369,7 +373,7 @@ SQL> select to_number(node) as node, split, nodecnt, leftnodecnt, rightnodecnt
         26 <leaf>               28          21            7
         27 <leaf>               89          32           57
 
-11行が選択されました。
+11 rows selected.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -404,7 +408,7 @@ SQL> SELECT cust_id, affinity_card as affinity_card_act,
     100009                 1                  1               .761
     100010                 0                  0               .751
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -- PREDICTION_SET -------------------------------------------------------------
@@ -442,7 +446,7 @@ SQL> SELECT T.CUST_ID, T.affinity_card, S.prediction,
     100010             0          0  .751000000
     100010             0          1  .249000000
 
-20行が選択されました。
+20 rows selected.
 
 SQL>
 SQL> -- PREDICTION_DETAILS ---------------------------------------------------------
@@ -566,6 +570,6 @@ SQL> SELECT CUST_ID, PREDICTION_DETAILS(DT_RDEMO_CLASSIFICATION, '1' USING *) pr
            </Details>
 
 
-8行が選択されました。
+8 rows selected.
 
 SQL> spool oml4sql-regression-glm

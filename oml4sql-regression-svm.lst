@@ -50,7 +50,7 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('SVMR_SH_Regr_sample');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> ---------------------
@@ -58,28 +58,34 @@ SQL> -- CREATE A NEW MODEL
 SQL> --
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- The default algorithm for regression is SVM.
-  5    -- see dmsvcdem.sql on choice of kernel function.
-  6    v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_GAUSSIAN';
-  7     v_setlst('PREP_AUTO') := 'ON';
-  8
-  9    -- Examples of other possible overrides are:
- 10    -- v_setlst('SVMS_CONV_TOLERANCE')  := '0.01';
- 11    -- v_setlst('SVMS_EPSILON')         := '0.1';
- 12    -- v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_LINEAR';
- 13
- 14    DBMS_DATA_MINING.CREATE_MODEL2(
- 15      model_name          => 'SVMR_SH_Regr_sample',
- 16      mining_function     => 'REGRESSION',
- 17      data_query          => 'SELECT * FROM mining_data_build_parallel_v',
- 18      set_list            => v_setlst,
- 19      case_id_column_name => 'cust_id',
- 20      target_column_name  => 'age');
- 21  END;
- 22  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    --
+  7    -- The default algorithm for regression is SVM.
+  8    -- see dmsvcdem.sql on choice of kernel function.
+  9    v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_GAUSSIAN';
+ 10    v_setlst('PREP_AUTO')            := 'ON';
+ 11
+ 12    -- Examples of other possible overrides are:
+ 13    -- v_setlst('SVMS_CONV_TOLERANCE')  := '0.01';
+ 14    -- v_setlst('SVMS_EPSILON')         := '0.1';
+ 15    -- v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_LINEAR';
+ 16
+ 17    v_data_query := q'|SELECT * FROM mining_data_build_parallel_v|';
+ 18
+ 19    DBMS_DATA_MINING.CREATE_MODEL2(
+ 20      model_name          => 'SVMR_SH_Regr_sample',
+ 21      mining_function     => 'REGRESSION',
+ 22      data_query          => v_data_query,
+ 23      set_list            => v_setlst,
+ 24      case_id_column_name => 'CUST_ID',
+ 25      target_column_name  => 'AGE'
+ 26    );
+ 27  END;
+ 28  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -104,7 +110,7 @@ SVMS_EPSILON                   .1
 SVMS_KERNEL_FUNCTION           SVMS_GAUSSIAN
 SVMS_NUM_PIVOTS                200
 
-9行が選択されました。
+9 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -137,7 +143,7 @@ PRINTER_SUPPLIES               NUMERICAL
 YRS_RESIDENCE                  NUMERICAL
 Y_BOX_GAMES                    NUMERICAL
 
-17行が選択されました。
+17 rows selected.
 
 SQL>
 SQL> ------------------------
@@ -170,7 +176,7 @@ DM$VWSVMR_SH_REGR_SAMPLE
 Model Build Alerts
 
 
-4行が選択されました。
+4 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -192,7 +198,7 @@ SQL> SELECT SQRT(AVG((prediction - age) * (prediction - age))) rmse
 --------
     6.73
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> -- 2. Mean Absolute Error - Mean(|(y - y')|)
@@ -206,7 +212,7 @@ SQL> SELECT AVG(ABS(prediction - age)) mae
 --------
     4.37
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> -- 3. Residuals
@@ -690,7 +696,7 @@ PREDICTION   RESIDUAL
    17.4680 -0.531999732
    17.4809 .480901484
 
-466行が選択されました。
+466 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -718,7 +724,7 @@ CUST_GENDER         CNT    AVG_AGE
 F                   512     25.079
 M                   988      27.57
 
-2行が選択されました。
+2 rows selected.
 
 SQL>
 SQL> ------------------
@@ -781,7 +787,7 @@ SQL> SELECT cust_id,
     100898    46.13          5
     101251    47.77          5
 
-43行が選択されました。
+43 rows selected.
 
 SQL>
 SQL> ------------------
@@ -811,7 +817,7 @@ PREDICTION_DETAILS
 <Attribute name="CUST_GENDER" actualValue="F" weight=".03" rank="8"/>
 </Details>
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -911,6 +917,6 @@ SQL> select cust_id, age, pred_age, age-pred_age age_diff, pred_det from
                                         </Details>
 
 
-5行が選択されました。
+5 rows selected.
 
 SQL> spool oml4sql-singular-value-decomposition

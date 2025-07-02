@@ -48,62 +48,67 @@ where c.cust_id = v2.cust_id;
 BEGIN DBMS_DATA_MINING.DROP_MODEL('DM_STAR_CLUSTER');
 EXCEPTION WHEN OTHERS THEN NULL; END;
 /
-declare
-  xform_list dbms_data_mining_transform.TRANSFORM_LIST;
-  v_setlst   DBMS_DATA_MINING.SETTING_LIST;
-begin
+
+DECLARE
+  v_xlst   dbms_data_mining_transform.TRANSFORM_LIST;
+  v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
+BEGIN
   -- Transform the purchase dates to a numeric period
-  dbms_data_mining_transform.set_transform(xform_list,
+  dbms_data_mining_transform.set_transform(v_xlst,
     'SALES_PERIOD', NULL, 'SALES_TO - SALES_FROM', NULL);
 
   -- Transform the country to a categorical attribute since
   -- numeric datatypes are treated as numeric attributes.
-  dbms_data_mining_transform.set_transform(xform_list,
+  dbms_data_mining_transform.set_transform(v_xlst,
     'COUNTRY_ID', NULL, 'TO_CHAR(COUNTRY_ID)', NULL);
 
   -- Eliminate columns known to be uninteresting,
   -- which will speed up the process.
   -- Alternatively, you can do this when creating the view.
-  dbms_data_mining_transform.set_transform(xform_list,
+  dbms_data_mining_transform.set_transform(v_xlst,
     'CUST_EFF_TO', NULL, NULL, NULL);
-  dbms_data_mining_transform.set_transform(xform_list,
+  dbms_data_mining_transform.set_transform(v_xlst,
     'CUST_EFF_FROM', NULL, NULL, NULL);
-  dbms_data_mining_transform.set_transform(xform_list,
+  dbms_data_mining_transform.set_transform(v_xlst,
     'CUST_CITY_ID', NULL, NULL, NULL);
-  dbms_data_mining_transform.set_transform(xform_list,
+  dbms_data_mining_transform.set_transform(v_xlst,
     'CUST_STATE_PROVINCE_ID', NULL, NULL, NULL);
-  dbms_data_mining_transform.set_transform(xform_list,
+  dbms_data_mining_transform.set_transform(v_xlst,
     'CUST_STREET_ADDRESS', NULL, NULL, NULL);
-  dbms_data_mining_transform.set_transform(xform_list,
+  dbms_data_mining_transform.set_transform(v_xlst,
     'CUST_FIRST_NAME', NULL, NULL, NULL);
-  dbms_data_mining_transform.set_transform(xform_list,
+  dbms_data_mining_transform.set_transform(v_xlst,
     'CUST_LAST_NAME', NULL, NULL, NULL);
-  dbms_data_mining_transform.set_transform(xform_list,
+  dbms_data_mining_transform.set_transform(v_xlst,
     'CUST_MAIN_PHONE_NUMBER', NULL, NULL, NULL);
-  dbms_data_mining_transform.set_transform(xform_list,
+  dbms_data_mining_transform.set_transform(v_xlst,
     'CUST_EMAIL', NULL, NULL, NULL);
-  dbms_data_mining_transform.set_transform(xform_list,
+  dbms_data_mining_transform.set_transform(v_xlst,
     'CUST_TOTAL_ID', NULL, NULL, NULL);
-  dbms_data_mining_transform.set_transform(xform_list,
+  dbms_data_mining_transform.set_transform(v_xlst,
     'CUST_SRC_ID', NULL, NULL, NULL);
-  dbms_data_mining_transform.set_transform(xform_list,
+  dbms_data_mining_transform.set_transform(v_xlst,
     'SALES_TO', NULL, NULL, NULL);
-  dbms_data_mining_transform.set_transform(xform_list,
+  dbms_data_mining_transform.set_transform(v_xlst,
     'SALES_FROM', NULL, NULL, NULL);
 
-  -- specify settings
+  -- Model Settings ---------------------------------------------------
   v_setlst('PREP_AUTO')    := 'ON';
   v_setlst('KMNS_DETAILS') := 'KMNS_DETAILS_ALL';
+
+  v_data_query := q'|SELECT * FROM cust_with_sales|';
 
   -- perform the build
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'DM_STAR_CLUSTER',
     mining_function     => 'CLUSTERING',
-    data_query          => 'SELECT * FROM cust_with_sales',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id',
-    xform_list          => xform_list);
-end;
+    case_id_column_name => 'CUST_ID',
+    xform_list          => v_xlst
+  );
+END;
 /
 
 -------------------------

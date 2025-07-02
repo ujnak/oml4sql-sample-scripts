@@ -152,22 +152,26 @@ END;
 --
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST; 
+  v_data_query VARCHAR2(32767);
 BEGIN
-  -- specify settings
+  -- Model Settings ---------------------------------------------------
   v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
   v_setlst('RALG_BUILD_FUNCTION')   := 'RKM_BUILD';
   v_setlst('RALG_SCORE_FUNCTION')   := 'RKM_SCORE';
   v_setlst('RALG_WEIGHT_FUNCTION')  := 'RKM_WEIGHT';
   v_setlst('RALG_DETAILS_FUNCTION') := 'RKM_DETAILS';
   v_setlst('RALG_DETAILS_FORMAT')   := 
-    'select 1 clus, 1 withinss, 1 clussize from dual';
+    q'|select 1 clus, 1 withinss, 1 clussize from dual|';
+
+  v_data_query := q'|SELECT * FROM KM_BUILD_V|';
 
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'RKM_SH_CLUS_SAMPLE',
     mining_function     => 'CLUSTERING',
-    data_query          => 'select * from KM_BUILD_V',
-    case_id_column_name => 'CUST_ID',
-    set_list            => v_setlst);
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => 'CUST_ID'
+  );
 END;
 /
 
@@ -274,26 +278,30 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 --
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
-  -- specify settings
+  -- Model Settings ---------------------------------------------------
   v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
   v_setlst('RALG_BUILD_FUNCTION')   := 'RKM_BUILD';
   v_setlst('RALG_SCORE_FUNCTION')   := 'RKM_SCORE';
   v_setlst('RALG_WEIGHT_FUNCTION')  := 'RKM_WEIGHT';
   v_setlst('RALG_DETAILS_FUNCTION') := 'RKM_DETAILS';
   v_setlst('RALG_DETAILS_FORMAT')   := 
-    'select 1 clus, 1 withinss, 1 clussize from dual';
+    q'|select 1 clus, 1 withinss, 1 clussize from dual|';
 
   -- Enable sampling and specify sample size
   v_setlst('ODMS_SAMPLING')    := 'ODMS_SAMPLING_ENABLE';
   v_setlst('ODMS_SAMPLE_SIZE') := '1000';
 
+  v_data_query := q'|SELECT * FROM KM_BUILD_V|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'RKM_SH_CLUS_SAMPLE_S',
     mining_function     => 'CLUSTERING',
-    data_query          => 'select * from KM_BUILD_V',
-    case_id_column_name => 'CUST_ID',
-    set_list            => v_setlst);
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => 'CUST_ID'
+  );
 END;
 /
 

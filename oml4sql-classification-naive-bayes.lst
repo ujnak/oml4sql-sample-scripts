@@ -2,7 +2,7 @@ SQL> @oml4sql-classification-naive-bayes
 SQL> -----------------------------------------------------------------------
 SQL> --   Oracle Machine Learning for SQL (OML4SQL) 23ai
 SQL> --
-SQL> --   Classification - Naïve Bayes Algorithm - dmnbdemo.sql
+SQL> --   Classification - Na??ve Bayes Algorithm - dmnbdemo.sql
 SQL> --
 SQL> --   Copyright (c) 2024 Oracle Corporation and/or its affilitiates.
 SQL> --
@@ -37,21 +37,13 @@ SQL> -----------------------------------------------------------------------
 SQL> --                            BUILD THE MODEL
 SQL> -----------------------------------------------------------------------
 SQL>
-SQL> -------------------
-SQL> -- SPECIFY SETTINGS
-SQL> --
 SQL> -- Cleanup old settings table objects for repeat runs
 SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_sample_priors';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
-SQL>
-SQL> -- Algorithm setting:
-SQL> -- NB is the default classifier, thus there is no need to specify
-SQL> -- the algorithm in settings table when the mining_function parameter
-SQL> -- of the CREATE_MODEL operation specifies classification.
 SQL>
 SQL> -- CREATE AND POPULATE A PRIORS TABLE
 SQL> -- The priors represent the overall distribution of the target in
@@ -67,15 +59,19 @@ SQL> CREATE TABLE nb_sh_sample_priors (
   2    target_value      NUMBER,
   3    prior_probability NUMBER);
 
-Table NB_SH_SAMPLE_PRIORSは作成されました。
+Table NB_SH_SAMPLE_PRIORS created.
 
 SQL> INSERT INTO nb_sh_sample_priors VALUES (0,0.65);
 
-1行挿入しました。
+1 row inserted.
 
 SQL> INSERT INTO nb_sh_sample_priors VALUES (1,0.35);
 
-1行挿入しました。
+1 row inserted.
+
+SQL> commit;
+
+Commit complete.
 
 SQL>
 SQL> ---------------------
@@ -86,26 +82,36 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('NB_SH_Clas_sample');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> -- Build a new NB model
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    v_setlst('PREP_AUTO')              := 'ON';
-  5    v_setlst('CLAS_PRIORS_TABLE_NAME') := 'nb_sh_sample_priors';
-  6
-  7    DBMS_DATA_MINING.CREATE_MODEL2(
-  8      model_name          => 'NB_SH_Clas_sample',
-  9      mining_function     => 'CLASSIFICATION',
- 10      data_query          => 'select * from mining_data_build_parallel_v',
- 11      set_list            => v_setlst,
- 12      case_id_column_name => 'cust_id',
- 13      target_column_name  => 'affinity_card');
- 14  END;
- 15  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    --
+  7    -- NB is the default classifier, thus there is no need to specify
+  8    -- the algorithm in settings when the mining_function parameter
+  9    -- of the CREATE_MODEL2 operation specifies classification.
+ 10    --
+ 11    v_setlst('PREP_AUTO')              := 'ON';
+ 12    v_setlst('CLAS_PRIORS_TABLE_NAME') := 'nb_sh_sample_priors';
+ 13
+ 14    v_data_query := q'|SELECT * FROM mining_data_build_parallel_v|';
+ 15
+ 16    DBMS_DATA_MINING.CREATE_MODEL2(
+ 17      model_name          => 'NB_SH_Clas_sample',
+ 18      mining_function     => 'CLASSIFICATION',
+ 19      data_query          => v_data_query,
+ 20      set_list            => v_setlst,
+ 21      case_id_column_name => 'CUST_ID',
+ 22      target_column_name  => 'AFFINITY_CARD'
+ 23    );
+ 24  END;
+ 25  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -130,7 +136,7 @@ ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
 ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
 PREP_AUTO                      ON
 
-9行が選択されました。
+9 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -157,7 +163,7 @@ OCCUPATION                               CATEGORICAL
 YRS_RESIDENCE                            NUMERICAL
 Y_BOX_GAMES                              NUMERICAL
 
-11行が選択されました。
+11 rows selected.
 
 SQL>
 SQL> ------------------------
@@ -189,7 +195,7 @@ DM$VTNB_SH_CLAS_SAMPLE         Classification Targets
 DM$VVNB_SH_CLAS_SAMPLE         Naive Bayes Conditional Probabilities
 DM$VWNB_SH_CLAS_SAMPLE         Model Build Alerts
 
-8行が選択されました。
+8 rows selected.
 
 SQL>
 SQL> -- Naive Bayes Target Priors
@@ -415,7 +421,7 @@ PARTITION_NAME TARGET_NAME           TARGET_VALUE ATTRIBUTE_NAME ATTRIBUTE_SUBNA
                RD
 
 
-50行が選択されました。
+50 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -428,43 +434,43 @@ SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_sample_test_apply';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_sample_confusion_matrix';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_sample_cm_no_cost';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_sample_lift';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_sample_roc';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_alter_cost';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_alter_confusion_matrix';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> ------------------------------------
@@ -483,7 +489,7 @@ SQL> CREATE OR REPLACE VIEW nb_sh_sample_test_targets AS
   2  SELECT cust_id, affinity_card
   3    FROM mining_data_apply_parallel_v;
 
-View NB_SH_SAMPLE_TEST_TARGETSは作成されました。
+View NB_SH_SAMPLE_TEST_TARGETS created.
 
 SQL>
 SQL> -- APPLY MODEL ON TEST DATA
@@ -497,7 +503,7 @@ SQL> BEGIN
   7  END;
   8  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> ----------------------------------
@@ -548,7 +554,7 @@ SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_cost';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- CREATE A COST MATRIX TABLE
@@ -558,26 +564,30 @@ SQL> CREATE TABLE nb_sh_cost (
   3    predicted_target_value NUMBER,
   4    cost                   NUMBER);
 
-Table NB_SH_COSTは作成されました。
+Table NB_SH_COST created.
 
 SQL>
 SQL> -- POPULATE THE COST MATRIX
 SQL> --
 SQL> INSERT INTO nb_sh_cost VALUES (0,0,0);
 
-1行挿入しました。
+1 row inserted.
 
 SQL> INSERT INTO nb_sh_cost VALUES (0,1,.35);
 
-1行挿入しました。
+1 row inserted.
 
 SQL> INSERT INTO nb_sh_cost VALUES (1,0,.65);
 
-1行挿入しました。
+1 row inserted.
 
 SQL> INSERT INTO nb_sh_cost VALUES (1,1,0);
 
-1行挿入しました。
+1 row inserted.
+
+SQL> commit;
+
+Commit complete.
 
 SQL>
 SQL> -- Compute Test Metrics
@@ -625,7 +635,7 @@ SQL> DECLARE
 **** AREA UNDER ROC CURVE ****: .8684
 
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- TEST RESULT OBJECTS:
@@ -682,7 +692,7 @@ SQL> DECLARE
 ** ACCURACY W/ NO COST **: .79
 
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- Confusion matrix without Cost:
@@ -714,7 +724,7 @@ SQL>
 SQL> -- DISPLAY ROC - TOP PROBABILITIE THRESHOLDS LEADING TO MINIMIZED COST
 SQL> --
 SQL> column prob format .9999
-SP2-0246: FORMAT文字列".9999"が不正です
+SP2-0246: Illegal FORMAT string ".9999"
 SQL> column tp format 9999
 SQL> column fn format 9999
 SQL> column fp format 9999
@@ -751,7 +761,7 @@ SQL> SELECT *
       .585   278    68   244   910 .8035 .2114   129.60
      .4718   289    57   265   889 .8353 .2296   129.80
 
-13行が選択されました。
+13 rows selected.
 
 SQL>
 SQL> -- Here we see 13 different probability thresholds resulting in
@@ -807,7 +817,7 @@ SQL> CREATE TABLE nb_alter_cost AS
  34         0 cost
  35    FROM dual;
 
-Table NB_ALTER_COSTは作成されました。
+Table NB_ALTER_COST created.
 
 SQL>
 SQL>
@@ -845,7 +855,7 @@ SQL> DECLARE
 **** MODEL ACCURACY ****: .8027
 
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> SELECT actual_target_value as actual,
@@ -890,7 +900,7 @@ SQL> SELECT quantile_number               qtl,
          9 1.10789981         .9        345 .255555556
         10          1          1        346 .230666667
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -902,13 +912,13 @@ SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_sample_apply_result';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_sample_apply_ranked';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> ------------------
@@ -923,7 +933,7 @@ SQL> BEGIN
   7  END;
   8  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- APPLY RESULT OBJECTS: nb_sh_sample_apply_result
@@ -955,7 +965,7 @@ SQL> SELECT cust_id, prediction, ROUND(probability,4) probability
     100005          0      .01310
     100005          1      .98690
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------
@@ -977,15 +987,15 @@ SQL> -- results will reflect these new column names.
 SQL> --
 SQL> ALTER TABLE nb_sh_sample_apply_result RENAME COLUMN cust_id TO customer_id;
 
-Table NB_SH_SAMPLE_APPLY_RESULTが変更されました。
+Table NB_SH_SAMPLE_APPLY_RESULT altered.
 
 SQL> ALTER TABLE nb_sh_sample_apply_result RENAME COLUMN prediction TO score;
 
-Table NB_SH_SAMPLE_APPLY_RESULTが変更されました。
+Table NB_SH_SAMPLE_APPLY_RESULT altered.
 
 SQL> ALTER TABLE nb_sh_sample_apply_result RENAME COLUMN probability TO chance;
 
-Table NB_SH_SAMPLE_APPLY_RESULTが変更されました。
+Table NB_SH_SAMPLE_APPLY_RESULT altered.
 
 SQL>
 SQL> -- RANK APPLY RESULTS (WITH COST MATRIX INPUT)
@@ -1002,7 +1012,7 @@ SQL> BEGIN
  10  END;
  11  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- RANK_APPLY RESULT OBJECTS: nb_sh_sample_apply_ranked
@@ -1030,6 +1040,6 @@ CUSTOMER_ID      SCORE CHANCE COST       RANK
      100005          1    .99  .01          1
      100005          0    .01  .39          2
 
-10行が選択されました。
+10 rows selected.
 
 SQL> spool oml4sql-classification-neural-networks

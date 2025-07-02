@@ -51,46 +51,49 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('KM_SH_Clus_sample');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
-SQL> -------------------
-SQL> -- SPECIFY SETTINGS
-SQL> --
-SQL> -- K-Means is the default Clustering algorithm. For this sample,
-SQL> -- we skip specification of any overrides to defaults
-SQL> --
-SQL> -- Uncomment the appropriate sections of the code below for
-SQL> -- changing settings values.
-SQL> --
 SQL> ---------------------
 SQL> -- CREATE A NEW MODEL
 SQL> --
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    v_setlst('KMNS_DISTANCE')           := 'KMNS_EUCLIDEAN';
-  5    v_setlst('PREP_AUTO')               := 'ON';
-  6    v_setlst('KMNS_DETAILS')            := 'KMNS_DETAILS_ALL';
-  7
-  8    -- Other examples of overrides are:
-  9    -- v_setlst('KMNS_ITERATIONS')      := '3';
- 10    -- v_setlst('KMNS_RANDOM_SEED')     := '2';
- 11    -- v_setlst('KMNS_CONV_TOLERANCE')  := '0.01';
- 12    -- v_setlst('KMNS_SPLIT_CRITERION') := 'KMNS_VARIANCE';
- 13    -- v_setlst('KMNS_MIN_PCT_ATTR_SUPPORT') := '0.1';
- 14    -- v_setlst('KMNS_NUM_BINS')        := '10';
- 15
- 16    DBMS_DATA_MINING.CREATE_MODEL2(
- 17      model_name          => 'KM_SH_Clus_sample',
- 18      mining_function     => 'CLUSTERING',
- 19      data_query          => 'select * from mining_data_build_v',
- 20      set_list            => v_setlst,
- 21      case_id_column_name => 'cust_id');
- 22  END;
- 23  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    --
+  7    -- K-Means is the default Clustering algorithm. For this sample,
+  8    -- we skip specification of any overrides to defaults
+  9    --
+ 10    -- Uncomment the appropriate sections of the code below for
+ 11    -- changing settings values.
+ 12    --
+ 13    v_setlst('KMNS_DISTANCE')           := 'KMNS_EUCLIDEAN';
+ 14    v_setlst('PREP_AUTO')               := 'ON';
+ 15    v_setlst('KMNS_DETAILS')            := 'KMNS_DETAILS_ALL';
+ 16
+ 17    -- Other examples of overrides are:
+ 18    -- v_setlst('KMNS_ITERATIONS')      := '3';
+ 19    -- v_setlst('KMNS_RANDOM_SEED')     := '2';
+ 20    -- v_setlst('KMNS_CONV_TOLERANCE')  := '0.01';
+ 21    -- v_setlst('KMNS_SPLIT_CRITERION') := 'KMNS_VARIANCE';
+ 22    -- v_setlst('KMNS_MIN_PCT_ATTR_SUPPORT') := '0.1';
+ 23    -- v_setlst('KMNS_NUM_BINS')        := '10';
+ 24
+ 25    v_data_query := q'|SELECT * FROM mining_data_build_v|';
+ 26
+ 27    DBMS_DATA_MINING.CREATE_MODEL2(
+ 28      model_name          => 'KM_SH_Clus_sample',
+ 29      mining_function     => 'CLUSTERING',
+ 30      data_query          => v_data_query,
+ 31      set_list            => v_setlst,
+ 32      case_id_column_name => 'CUST_ID'
+ 33    );
+ 34  END;
+ 35  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -121,7 +124,7 @@ ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
 ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
 PREP_AUTO                      ON
 
-15行が選択されました。
+15 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -154,7 +157,7 @@ PRINTER_SUPPLIES                         NUMERICAL
 YRS_RESIDENCE                            NUMERICAL
 Y_BOX_GAMES                              NUMERICAL
 
-17行が選択されました。
+17 rows selected.
 
 SQL>
 SQL> -------------------------
@@ -170,7 +173,7 @@ MINING_FUNCTION      ALGORITHM
 -------------------- --------------------
 CLUSTERING           KMEANS
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> ------------------------
@@ -196,7 +199,7 @@ DM$VRKM_SH_CLUS_SAMPLE         Clustering Rules
 DM$VSKM_SH_CLUS_SAMPLE         Computed Settings
 DM$VWKM_SH_CLUS_SAMPLE         Model Build Alerts
 
-9行が選択されました。
+9 rows selected.
 
 SQL>
 SQL> -- Cluster details are best seen in pieces - based on the kind of
@@ -238,7 +241,7 @@ SQL> SELECT cluster_id clu_id, record_count rec_cnt, parent, tree_level,
         18        194         13          7 5.25566923
         19        337         13          7 6.46922663
 
-19行が選択されました。
+19 rows selected.
 
 SQL>
 SQL> -- TAXONOMY
@@ -269,7 +272,7 @@ CLUSTER_ID LEFT_CHILD_ID RIGHT_CHILD_ID
         18
         19
 
-19行が選択されました。
+19 rows selected.
 
 SQL>
 SQL> -- CENTROIDS FOR LEAF CLUSTERS
@@ -316,7 +319,7 @@ CLUSTER_ID ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME            MEAN     VARIANCE M
         18 YRS_RESIDENCE                                    5.211        2.478
         18 Y_BOX_GAMES                                       .000         .000
 
-17行が選択されました。
+17 rows selected.
 
 SQL>
 SQL> -- HISTOGRAM FOR ATTRIBUTE OF A LEAF CLUSTER
@@ -341,7 +344,7 @@ CLUSTER_ID ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME        BIN_ID LOWER_BIN_BOUNDA
         18 AGE                                                9             64.400             71.700                                3
         18 AGE                                               10             71.700             79.000                                1
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -- RULES FOR LEAF CLUSTERS
@@ -388,7 +391,7 @@ CLUSTER_ID RULE_SUPPORT RULE_CONFIDENCE
         18          167            .861
         19          288            .855
 
-19行が選択されました。
+19 rows selected.
 
 SQL>
 SQL> -- RULE DETAILS FOR LEAF CLUSTERS
@@ -535,7 +538,7 @@ CLUSTER_ID ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME    OP NUMERIC_VALUE ATTRIBUTE_
          2 Y_BOX_GAMES                               <=         1.000                         1497        .000
          2 Y_BOX_GAMES                               >=          .000                         1497        .000
 
-110行が選択されました。
+110 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -579,7 +582,7 @@ SQL> SELECT CLUSTER_ID(km_sh_clus_sample USING *) AS clus, COUNT(*) AS cnt
         11         69
          3          4
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> ------------------
@@ -606,7 +609,7 @@ SQL> SELECT cust_id
     100009
     100010
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> ------------------
@@ -646,7 +649,7 @@ CLUSTER_ID PROB DET
                 </Details>
 
 
-2行が選択されました。
+2 rows selected.
 
 SQL>
 SQL> ------------------
@@ -679,7 +682,7 @@ SQL> SELECT cust_id
     100930
     100199
 
-11行が選択されました。
+11 rows selected.
 
 SQL>
 SQL>
@@ -807,6 +810,6 @@ SQL> select * from (
                       </Details>
 
 
-10行が選択されました。
+10 rows selected.
 
 SQL> spool oml4sql-clustering-ocluster

@@ -79,22 +79,27 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 SET echo ON;
 DECLARE
-    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
-    v_setlst('ALGO_NAME')            := 'ALGO_EXPONENTIAL_SMOOTHING';
-    v_setlst('EXSM_INTERVAL')        := 'EXSM_INTERVAL_DAY';
-    v_setlst('EXSM_MODEL')           := 'EXSM_ADDWINTERS_DAMPED';
-    v_setlst('EXSM_SEASONALITY')     := '7';
-    v_setlst('EXSM_PREDICTION_STEP') := '1';
-    v_setlst('EXSM_SERIES_LIST')     := 'SMI,CAC,FTSE';
+  -- Model Settings ---------------------------------------------------
+  v_setlst('ALGO_NAME')            := 'ALGO_EXPONENTIAL_SMOOTHING';
+  v_setlst('EXSM_INTERVAL')        := 'EXSM_INTERVAL_DAY';
+  v_setlst('EXSM_MODEL')           := 'EXSM_ADDWINTERS_DAMPED';
+  v_setlst('EXSM_SEASONALITY')     := '7';
+  v_setlst('EXSM_PREDICTION_STEP') := '1';
+  v_setlst('EXSM_SERIES_LIST')     := 'SMI,CAC,FTSE';
+
+  v_data_query := q'|SELECT * FROM EUSTOCK|';
 	 
-    dbms_data_mining.create_model2(
-               MODEL_NAME          => 'MSDEMO_MODEL',
-               MINING_FUNCTION     => 'TIME_SERIES',
-               DATA_QUERY          => 'SELECT * FROM EUSTOCK',
-               CASE_ID_COLUMN_NAME => 'DATES',
-               TARGET_COLUMN_NAME  => 'DAX',
-               SET_LIST            => v_setlst);
+  DBMS_DATA_MINING.CREATE_MODEL2(
+    model_name          => 'MSDEMO_MODEL',
+    mining_function     => 'TIME_SERIES',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => 'DATES',
+    target_column_name  => 'DAX'
+  );
 END;
 /
 
@@ -160,17 +165,22 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 SET echo ON;
 DECLARE
-    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
-    v_setlst('ALGO_NAME')          := 'ALGO_GENERALIZED_LINEAR_MODEL';
-	
-    DBMS_DATA_MINING.CREATE_MODEL2(
-               MODEL_NAME          => 'MS_GLM_MODEL',
-               MINING_FUNCTION     => dbms_data_mining.regression,
-                DATA_QUERY         => 'SELECT * FROM tmesm_ms_train',
-               CASE_ID_COLUMN_NAME => 'CASE_ID',
-               TARGET_COLUMN_NAME  => 'DAX',
-               SET_LIST            => v_setlst);    
+  -- Model Settings ---------------------------------------------------
+  v_setlst('ALGO_NAME')          := 'ALGO_GENERALIZED_LINEAR_MODEL';
+
+  v_data_query := q'|SELECT * FROM tmesm_ms_train|';
+
+  DBMS_DATA_MINING.CREATE_MODEL2(
+    model_name          => 'MS_GLM_MODEL',
+    mining_function     => 'REGRESSION',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => 'CASE_ID',
+    target_column_name  => 'DAX'
+  );
 END;
 /
 
@@ -228,17 +238,22 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 SET echo ON;
 DECLARE
-    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
-    v_setlst('ALGO_NAME')          := 'ALGO_XGBOOST';
-	
-    DBMS_DATA_MINING.CREATE_MODEL2(
-               MODEL_NAME          => 'MS_XGB_MODEL',
-               MINING_FUNCTION     => dbms_data_mining.regression,
-               DATA_QUERY          => 'SELECT * FROM tmesm_ms_train',
-               CASE_ID_COLUMN_NAME => 'CASE_ID',
-               TARGET_COLUMN_NAME  => 'DAX',
-               SET_LIST            => v_setlst);    
+  -- Model Settings ---------------------------------------------------
+  v_setlst('ALGO_NAME')          := 'ALGO_XGBOOST';
+
+  v_data_query := q'|SELECT * FROM tmesm_ms_train|';
+
+  DBMS_DATA_MINING.CREATE_MODEL2(
+    model_name          => 'MS_XGB_MODEL',
+    mining_function     => 'REGRESSION', 
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => 'CASE_ID',
+    target_column_name  => 'DAX'
+  );
 END;
 /
 	  

@@ -33,14 +33,14 @@ SQL> Begin
   5  End;
   6  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('GLM_RDEMO_REGRESSION');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> Begin
@@ -82,7 +82,7 @@ SQL> Begin
  37  End;
  38  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -95,35 +95,39 @@ SQL> -- GLM_RDEMO_REGRESSION using dataset mining_data_build_v.
 SQL>
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- Model Settings -----------------------------------------------------------
-  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
-  6    v_setlst('RALG_BUILD_FUNCTION')   := 'GLM_RDEMO_BUILD_REGRESSION';
-  7    v_setlst('RALG_SCORE_FUNCTION')   := 'GLM_RDEMO_SCORE_REGRESSION';
-  8    v_setlst('RALG_DETAILS_FUNCTION') := 'GLM_RDEMO_DETAILS_REGRESSION';
-  9
- 10    -- Once this setting is specified, a model view will be created. This model
- 11    -- view will be generated to display the model details, which contains the
- 12    -- attribute names and the corresponding coefficients.
- 13
- 14    v_setlst('RALG_DETAILS_FORMAT') :=
- 15      'select cast(''a'' as varchar2(200)) attr, 1 coef from dual';
- 16
- 17    -- Column YRS_RESIDENCE has row weights.
- 18
- 19    v_setlst('ODMS_ROW_WEIGHT_COLUMN_NAME') := 'YRS_RESIDENCE';
- 20
- 21    DBMS_DATA_MINING.CREATE_MODEL2(
- 22      model_name          => 'GLM_RDEMO_REGRESSION',
- 23      mining_function     => 'REGRESSION',
- 24      data_query          => 'select * from mining_data_build_v',
- 25      case_id_column_name => 'CUST_ID',
- 26      target_column_name  => 'AGE',
- 27      set_list            => v_setlst);
- 28  END;
- 29  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings -----------------------------------------------------------
+  6    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  7    v_setlst('RALG_BUILD_FUNCTION')   := 'GLM_RDEMO_BUILD_REGRESSION';
+  8    v_setlst('RALG_SCORE_FUNCTION')   := 'GLM_RDEMO_SCORE_REGRESSION';
+  9    v_setlst('RALG_DETAILS_FUNCTION') := 'GLM_RDEMO_DETAILS_REGRESSION';
+ 10
+ 11    -- Once this setting is specified, a model view will be created. This model
+ 12    -- view will be generated to display the model details, which contains the
+ 13    -- attribute names and the corresponding coefficients.
+ 14
+ 15    v_setlst('RALG_DETAILS_FORMAT') :=
+ 16      q'|select cast('a' as varchar2(200)) attr, 1 coef from dual|';
+ 17
+ 18    -- Column YRS_RESIDENCE has row weights.
+ 19
+ 20    v_setlst('ODMS_ROW_WEIGHT_COLUMN_NAME') := 'YRS_RESIDENCE';
+ 21
+ 22    v_data_query := q'|SELECT * FROM mining_data_build_v|';
+ 23
+ 24    DBMS_DATA_MINING.CREATE_MODEL2(
+ 25      model_name          => 'GLM_RDEMO_REGRESSION',
+ 26      mining_function     => 'REGRESSION',
+ 27      data_query          => v_data_query,
+ 28      set_list            => v_setlst,
+ 29      case_id_column_name => 'CUST_ID',
+ 30      target_column_name  => 'AGE'
+ 31    );
+ 32  END;
+ 33  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -218,7 +222,7 @@ OS_DOC_SET_KANJI                             -8.211
 PRINTER_SUPPLIES
 Y_BOX_GAMES                                  -6.601
 
-77行が選択されました。
+77 rows selected.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -250,7 +254,7 @@ SQL> SELECT CUST_ID, round(PREDICTION(GLM_RDEMO_REGRESSION USING *), 3) as AGE_p
     100009     18.548         18
     100010     13.598         17
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -- PREDICTION_BOUND -----------------------------------------------------------
@@ -278,7 +282,7 @@ SQL> SELECT CUST_ID, AGE,
     100009         18     18.548     21.331     15.765
     100010         17     13.598     15.857     11.339
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -- Specify Confidence Level 0.9 -----------------------------------------------
@@ -306,7 +310,7 @@ SQL> select CUST_ID, round(AGE_pred, 3) as AGE_pred,
     100009     18.548      2.326     18.548
     100010     13.598      1.888     13.598
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -324,14 +328,14 @@ SQL> Begin
   6  End;
   7  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('GLM_RDEMO_CLASSIFICATION');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> Begin
@@ -401,7 +405,7 @@ SQL> Begin
  65  End;
  66  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -414,39 +418,42 @@ SQL> -- model GLM_RDEMO_CLASSIFICATION using dataset mining_data_build_v.
 SQL>
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- Model Settings -----------------------------------------------------------
-  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
-  6    v_setlst('RALG_BUILD_FUNCTION')   := 'GLM_RDEMO_BUILD_CLASSIFICATION';
-  7    v_setlst('RALG_SCORE_FUNCTION')   := 'GLM_RDEMO_SCORE_CLASSIFICATION';
-  8    v_setlst('RALG_DETAILS_FUNCTION') := 'GLM_RDEMO_DETAILS_CLASSIFICATION';
-  9    v_setlst('RALG_WEIGHT_FUNCTION')  := 'GLM_RDEMO_WEIGHT_CLASSIFICATION';
- 10
- 11    -- Once this setting is specified, a model view will be created. This model
- 12    -- view will be generated to display the model details, which contains the
- 13    -- attribute names and the corresponding coefficients.
- 14
- 15    v_setlst('RALG_DETAILS_FORMAT') :=
- 16      'select cast(''a'' as varchar2(200)) attr, 1 coef from dual';
- 17
- 18    -- In this setting, a formula is specified,  which will be passed as a parameter
- 19    -- to the model build function to build the model.
- 20
- 21    v_setlst('RALG_BUILD_PARAMETER') :=
- 22      'select ''AFFINITY_CARD ~ AGE + EDUCATION + HOUSEHOLD_SIZE + OCCUPATION'' ' ||
- 23      '"form", 0 "keep.model" from dual';
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings -----------------------------------------------------------
+  6    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  7    v_setlst('RALG_BUILD_FUNCTION')   := 'GLM_RDEMO_BUILD_CLASSIFICATION';
+  8    v_setlst('RALG_SCORE_FUNCTION')   := 'GLM_RDEMO_SCORE_CLASSIFICATION';
+  9    v_setlst('RALG_DETAILS_FUNCTION') := 'GLM_RDEMO_DETAILS_CLASSIFICATION';
+ 10    v_setlst('RALG_WEIGHT_FUNCTION')  := 'GLM_RDEMO_WEIGHT_CLASSIFICATION';
+ 11
+ 12    -- Once this setting is specified, a model view will be created. This model
+ 13    -- view will be generated to display the model details, which contains the
+ 14    -- attribute names and the corresponding coefficients.
+ 15
+ 16    v_setlst('RALG_DETAILS_FORMAT') :=
+ 17      q'|select cast('a' as varchar2(200)) attr, 1 coef from dual|';
+ 18
+ 19    -- In this setting, a formula is specified,  which will be passed as a parameter
+ 20    -- to the model build function to build the model.
+ 21
+ 22    v_setlst('RALG_BUILD_PARAMETER') :=
+ 23      q'|select 'AFFINITY_CARD ~ AGE + EDUCATION + HOUSEHOLD_SIZE + OCCUPATION' "form", 0 "keep.model" from dual|';
  24
- 25    DBMS_DATA_MINING.CREATE_MODEL2(
- 26      model_name          => 'GLM_RDEMO_CLASSIFICATION',
- 27      mining_function     => 'CLASSIFICATION',
- 28      data_query          => 'select * from mining_data_build_v',
- 29      case_id_column_name => 'CUST_ID',
- 30      target_column_name  => 'AFFINITY_CARD',
- 31      set_list            => v_setlst);
- 32  END;
- 33  /
+ 25    v_data_query := q'|SELECT * FROM mining_data_build_v|';
+ 26
+ 27    DBMS_DATA_MINING.CREATE_MODEL2(
+ 28      model_name          => 'GLM_RDEMO_CLASSIFICATION',
+ 29      mining_function     => 'CLASSIFICATION',
+ 30      data_query          => v_data_query,
+ 31      set_list            => v_setlst,
+ 32      case_id_column_name => 'CUST_ID',
+ 33      target_column_name  => 'AFFINITY_CARD'
+ 34    );
+ 35  END;
+ 36  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -499,7 +506,7 @@ OCCUPATIONSales                                .402
 OCCUPATIONTechSup                              .538
 OCCUPATIONTransp.                              .499
 
-36行が選択されました。
+36 rows selected.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -534,7 +541,7 @@ SQL> SELECT CUST_ID, AFFINITY_CARD as AFFINITY_CARD_act,
     100009                 1                  1               .575
     100010                 0                  0               .785
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -- PREDICTION_SET -------------------------------------------------------------
@@ -573,7 +580,7 @@ SQL> select T.CUST_ID, T.AFFINITY_CARD, S.prediction,
     100010             0          0  .785000000
     100010             0          1  .215000000
 
-20行が選択されました。
+20 rows selected.
 
 SQL>
 SQL> -- PREDICTION_DETAILS ---------------------------------------------------------
@@ -712,6 +719,6 @@ SQL> SELECT CUST_ID, PREDICTION_DETAILS(GLM_RDEMO_CLASSIFICATION, '0' USING *) p
            </Details>
 
 
-10行が選択されました。
+10 rows selected.
 
 SQL> spool oml4sql-r-extensible-kmeans

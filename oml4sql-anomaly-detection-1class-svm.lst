@@ -27,7 +27,7 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('SVMO_SH_Clas_sample');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> ---------------------
@@ -37,10 +37,10 @@ SQL> -- Build a new one-class SVM Model
 SQL> -- Note the NULL sprecification for target column name
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- Set algorithm to Support Vector Machines
-  5    v_setlst('ALGO_NAME') := 'ALGO_SUPPORT_VECTOR_MACHINES';
-  6    -- Enable automatic data preparation
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    v_setlst('ALGO_NAME') := 'ALGO_SUPPORT_VECTOR_MACHINES';
   7    v_setlst('PREP_AUTO') := 'ON';
   8
   9    -- Examples of other possible overrides:
@@ -50,17 +50,20 @@ SQL> DECLARE
  13    -- v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_LINEAR';
  14    -- v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_GAUSSIAN';
  15
- 16    DBMS_DATA_MINING.CREATE_MODEL2(
- 17      model_name          => 'SVMO_SH_Clas_sample',
- 18      mining_function     => 'CLASSIFICATION',
- 19      data_query          => 'SELECT * FROM mining_data_one_class_pv',
- 20      set_list            => v_setlst,
- 21      case_id_column_name => 'cust_id',
- 22      target_column_name  => NULL);
- 23  END;
- 24  /
+ 16    v_data_query := q'|SELECT * FROM mining_data_one_class_pv|';
+ 17
+ 18    DBMS_DATA_MINING.CREATE_MODEL2(
+ 19      model_name          => 'SVMO_SH_Clas_sample',
+ 20      mining_function     => 'CLASSIFICATION',
+ 21      data_query          => v_data_query,
+ 22      set_list            => v_setlst,
+ 23      case_id_column_name => 'CUST_ID',
+ 24      target_column_name  => NULL
+ 25    );
+ 26  END;
+ 27  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -84,7 +87,7 @@ SVMS_CONV_TOLERANCE             .0001
 SVMS_KERNEL_FUNCTION            SVMS_LINEAR
 SVMS_OUTLIER_RATE               .01
 
-8行が選択されました。
+8 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -115,7 +118,7 @@ DM$VSSVMO_SH_CLAS_SAMPLE    Computed Settings
 DM$VTSVMO_SH_CLAS_SAMPLE    Classification Targets
 DM$VWSVMO_SH_CLAS_SAMPLE    Model Build Alerts
 
-7行が選択されました。
+7 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -338,6 +341,6 @@ __________ ______________________ ____________ _________________________________
 </Details>
 
 
-11行が選択されました。
+11 rows selected.
 
 SQL> spool oml4sql-anomaly-detection-em

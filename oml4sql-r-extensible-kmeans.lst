@@ -27,7 +27,7 @@ SQL> BEGIN EXECUTE IMMEDIATE 'DROP VIEW km_build_v';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- Create a view for building kmeans model
@@ -36,7 +36,7 @@ SQL> create view km_build_v as
   3  flat_panel_monitor, home_theater_package, bookkeeping_application, y_box_games
   4  from mining_data_build_v;
 
-View KM_BUILD_Vは作成されました。
+View KM_BUILD_V created.
 
 SQL>
 SQL>
@@ -49,7 +49,7 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('RKM_SH_CLUS_SAMPLE');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> BEGIN
@@ -60,7 +60,7 @@ SQL> BEGIN
   6  EXCEPTION WHEN OTHERS THEN NULL; END;
   7  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> ------------
@@ -160,7 +160,7 @@ SQL> BEGIN
  78  END;
  79  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> ---------------------
@@ -168,26 +168,30 @@ SQL> -- CREATE A NEW MODEL
 SQL> --
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- specify settings
-  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
-  6    v_setlst('RALG_BUILD_FUNCTION')   := 'RKM_BUILD';
-  7    v_setlst('RALG_SCORE_FUNCTION')   := 'RKM_SCORE';
-  8    v_setlst('RALG_WEIGHT_FUNCTION')  := 'RKM_WEIGHT';
-  9    v_setlst('RALG_DETAILS_FUNCTION') := 'RKM_DETAILS';
- 10    v_setlst('RALG_DETAILS_FORMAT')   :=
- 11      'select 1 clus, 1 withinss, 1 clussize from dual';
- 12
- 13    DBMS_DATA_MINING.CREATE_MODEL2(
- 14      model_name          => 'RKM_SH_CLUS_SAMPLE',
- 15      mining_function     => 'CLUSTERING',
- 16      data_query          => 'select * from KM_BUILD_V',
- 17      case_id_column_name => 'CUST_ID',
- 18      set_list            => v_setlst);
- 19  END;
- 20  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  7    v_setlst('RALG_BUILD_FUNCTION')   := 'RKM_BUILD';
+  8    v_setlst('RALG_SCORE_FUNCTION')   := 'RKM_SCORE';
+  9    v_setlst('RALG_WEIGHT_FUNCTION')  := 'RKM_WEIGHT';
+ 10    v_setlst('RALG_DETAILS_FUNCTION') := 'RKM_DETAILS';
+ 11    v_setlst('RALG_DETAILS_FORMAT')   :=
+ 12      q'|select 1 clus, 1 withinss, 1 clussize from dual|';
+ 13
+ 14    v_data_query := q'|SELECT * FROM KM_BUILD_V|';
+ 15
+ 16    DBMS_DATA_MINING.CREATE_MODEL2(
+ 17      model_name          => 'RKM_SH_CLUS_SAMPLE',
+ 18      mining_function     => 'CLUSTERING',
+ 19      data_query          => v_data_query,
+ 20      set_list            => v_setlst,
+ 21      case_id_column_name => 'CUST_ID'
+ 22    );
+ 23  END;
+ 24  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -211,7 +215,7 @@ RALG_DETAILS_FUNCTION          RKM_DETAILS
 RALG_SCORE_FUNCTION            RKM_SCORE
 RALG_WEIGHT_FUNCTION           RKM_WEIGHT
 
-8行が選択されました。
+8 rows selected.
 
 SQL>
 SQL> -------------------------
@@ -227,7 +231,7 @@ MODEL_NAME           MINING_FUNCTION      ALGORITHM
 -------------------- -------------------- --------------------
 RKM_SH_CLUS_SAMPLE   CLUSTERING           R_EXTENSIBLE
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> ------------------------
@@ -242,7 +246,7 @@ PARTITION_NAME             CLUS   WITHINSS   CLUSSIZE
                               2 1946.30861        534
                               3 3765.46322        788
 
-3行が選択されました。
+3 rows selected.
 
 SQL>
 SQL>
@@ -266,7 +270,7 @@ SQL> SELECT CLUSTER_ID(RKM_SH_CLUS_SAMPLE USING *) AS clus, COUNT(*) AS cnt
          2        564
          3        767
 
-3行が選択されました。
+3 rows selected.
 
 SQL>
 SQL> -- List the cluster and the corresponding probabilities for 15 new customers
@@ -299,7 +303,7 @@ SQL> SELECT cust_id, clus, prob, prob_1, prob_2, prob_3, prob_1+prob_2+prob_3 pr
     100014          3 .6290 1.842E-001 1.868E-001  6.29E-001   1.0E+000
     100015          3 .5981 1.786E-001 2.233E-001 5.981E-001   1.0E+000
 
-15行が選択されました。
+15 rows selected.
 
 SQL>
 SQL> -- List the probabilities for each cluster for 15 new customers
@@ -359,7 +363,7 @@ SQL> select T.cust_id, S.cluster_id, S.probability
     100015          2  .223305075
     100015          3  .598128270
 
-45行が選択されました。
+45 rows selected.
 
 SQL>
 SQL> -- List the cluster and distance to its centroid for 15 new customers
@@ -387,7 +391,7 @@ SQL> select cust_id, CLUSTER_ID(RKM_SH_CLUS_SAMPLE USING *) clus,
     100014          3 1.856E+000
     100015          3 1.676E+000
 
-15行が選択されました。
+15 rows selected.
 
 SQL>
 SQL> -- List the 5 most important attributes for each row for 15 new customers
@@ -594,7 +598,7 @@ SQL> SELECT cust_id, CLUSTER_DETAILS(RKM_SH_CLUS_SAMPLE USING *) clus_det
            </Details>
 
 
-15行が選択されました。
+15 rows selected.
 
 SQL>
 SQL> -- List the 10 rows which are most anomalous as measured by their
@@ -622,7 +626,7 @@ SQL> select cust_id, dist
     100962 3.724E+000
     101039 3.645E+000
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL>
@@ -639,7 +643,7 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('RKM_SH_CLUS_SAMPLE_S');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -----------------------------------
@@ -647,30 +651,34 @@ SQL> -- CREATE A NEW MODEL WITH SAMPLING
 SQL> --
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- specify settings
-  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
-  6    v_setlst('RALG_BUILD_FUNCTION')   := 'RKM_BUILD';
-  7    v_setlst('RALG_SCORE_FUNCTION')   := 'RKM_SCORE';
-  8    v_setlst('RALG_WEIGHT_FUNCTION')  := 'RKM_WEIGHT';
-  9    v_setlst('RALG_DETAILS_FUNCTION') := 'RKM_DETAILS';
- 10    v_setlst('RALG_DETAILS_FORMAT')   :=
- 11      'select 1 clus, 1 withinss, 1 clussize from dual';
- 12
- 13    -- Enable sampling and specify sample size
- 14    v_setlst('ODMS_SAMPLING')    := 'ODMS_SAMPLING_ENABLE';
- 15    v_setlst('ODMS_SAMPLE_SIZE') := '1000';
- 16
- 17    DBMS_DATA_MINING.CREATE_MODEL2(
- 18      model_name          => 'RKM_SH_CLUS_SAMPLE_S',
- 19      mining_function     => 'CLUSTERING',
- 20      data_query          => 'select * from KM_BUILD_V',
- 21      case_id_column_name => 'CUST_ID',
- 22      set_list            => v_setlst);
- 23  END;
- 24  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  7    v_setlst('RALG_BUILD_FUNCTION')   := 'RKM_BUILD';
+  8    v_setlst('RALG_SCORE_FUNCTION')   := 'RKM_SCORE';
+  9    v_setlst('RALG_WEIGHT_FUNCTION')  := 'RKM_WEIGHT';
+ 10    v_setlst('RALG_DETAILS_FUNCTION') := 'RKM_DETAILS';
+ 11    v_setlst('RALG_DETAILS_FORMAT')   :=
+ 12      q'|select 1 clus, 1 withinss, 1 clussize from dual|';
+ 13
+ 14    -- Enable sampling and specify sample size
+ 15    v_setlst('ODMS_SAMPLING')    := 'ODMS_SAMPLING_ENABLE';
+ 16    v_setlst('ODMS_SAMPLE_SIZE') := '1000';
+ 17
+ 18    v_data_query := q'|SELECT * FROM KM_BUILD_V|';
+ 19
+ 20    DBMS_DATA_MINING.CREATE_MODEL2(
+ 21      model_name          => 'RKM_SH_CLUS_SAMPLE_S',
+ 22      mining_function     => 'CLUSTERING',
+ 23      data_query          => v_data_query,
+ 24      set_list            => v_setlst,
+ 25      case_id_column_name => 'CUST_ID'
+ 26    );
+ 27  END;
+ 28  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -692,7 +700,7 @@ RALG_DETAILS_FUNCTION          RKM_DETAILS
 RALG_SCORE_FUNCTION            RKM_SCORE
 RALG_WEIGHT_FUNCTION           RKM_WEIGHT
 
-8行が選択されました。
+8 rows selected.
 
 SQL>
 SQL> -------------------------
@@ -705,7 +713,7 @@ MODEL_NAME           MINING_FUNCTION      ALGORITHM
 -------------------- -------------------- --------------------
 RKM_SH_CLUS_SAMPLE_S CLUSTERING           R_EXTENSIBLE
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> ------------------------
@@ -720,7 +728,7 @@ PARTITION_NAME             CLUS   WITHINSS   CLUSSIZE
                               2  1360.1586        342
                               3 1168.80096        314
 
-3行が選択されました。
+3 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -757,6 +765,6 @@ SQL> SELECT cust_id, clus, prob, prob_1, prob_2, prob_3, prob_1+prob_2+prob_3 pr
     100014          1 .6577 6.577E-001 1.009E-001 2.414E-001   1.0E+000
     100015          3 .6078 2.461E-001 1.462E-001 6.078E-001   1.0E+000
 
-15行が選択されました。
+15 rows selected.
 
 SQL> spool oml4sql-r-extensible-principal-components

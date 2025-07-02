@@ -54,24 +54,30 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 --
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
+  --
   -- The default algorithm for regression is SVM.
   -- see dmsvcdem.sql on choice of kernel function.
   v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_GAUSSIAN';
-   v_setlst('PREP_AUTO') := 'ON';
+  v_setlst('PREP_AUTO')            := 'ON';
 
   -- Examples of other possible overrides are:
   -- v_setlst('SVMS_CONV_TOLERANCE')  := '0.01';
   -- v_setlst('SVMS_EPSILON')         := '0.1';
   -- v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_LINEAR';
+
+  v_data_query := q'|SELECT * FROM mining_data_build_parallel_v|';
  
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'SVMR_SH_Regr_sample',
     mining_function     => 'REGRESSION',
-    data_query          => 'SELECT * FROM mining_data_build_parallel_v',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id',
-    target_column_name  => 'age');
+    case_id_column_name => 'CUST_ID',
+    target_column_name  => 'AGE'
+  );
 END;
 /
 

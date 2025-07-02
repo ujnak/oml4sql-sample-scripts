@@ -60,6 +60,7 @@ CREATE OR replace VIEW mdb_rdemo_v AS
 declare
   v_xlst dbms_data_mining_transform.TRANSFORM_LIST;
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
   -- Force the column affinity_card to be a feature in the model
   dbms_data_mining_transform.set_transform(v_xlst,
@@ -90,14 +91,17 @@ BEGIN
   -- By default the system turns it on if there is a multicollinearity
   -- v_setlst('GLMS_RIDGE_REGRESSION') := 'GLMS_RIDGE_REG_ENABLE';
 
+  v_data_query := q'|SELECT * FROM mdb_rdemo_v|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'GLMR_SH_Regr_sample',
     mining_function     => 'REGRESSION',
-    data_query          => 'SELECT * FROM mdb_rdemo_v',
-    case_id_column_name => 'cust_id',
-    target_column_name  => 'age',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    xform_list          => v_xlst);
+    case_id_column_name => 'CUST_ID',
+    target_column_name  => 'AGE',
+    xform_list          => v_xlst
+  );
 END;
 /
 
@@ -255,8 +259,9 @@ END;
 
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
-  -- specify settings
+  -- Model Settings ---------------------------------------------------
   v_setlst('ALGO_NAME')             := 'ALGO_GENERALIZED_LINEAR_MODEL';
   -- output row diagnostic statistics
   v_setlst('GLMS_ROW_DIAGNOSTICS')  := 'GLMS_ROW_DIAG_ENABLE';
@@ -264,14 +269,17 @@ BEGIN
   -- turn on ridge regression
   v_setlst('GLMS_RIDGE_REGRESSION') := 'GLMS_RIDGE_REG_ENABLE';
   v_setlst('GLMS_SOLVER')           := 'GLMS_SOLVER_QR';
+
+  v_data_query := q'|SELECT * FROM mining_data_build_v|';
   
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'GLMR_SH_Regr_sample',
     mining_function     => 'REGRESSION',
-    data_query          => 'SELECT * FROM mining_data_build_v',
-    case_id_column_name => 'cust_id',
-    target_column_name  => 'age',
-    set_list            => v_setlst);
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => 'CUST_ID',
+    target_column_name  => 'AGE'
+  );
 END;
 /
 

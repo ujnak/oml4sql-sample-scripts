@@ -24,12 +24,6 @@ column algorithm_type format a15;
 column description format a11;
 column algorithm_metadata format a20;
 
-/*
-connect sys/knl_test7 as sysdba;
-GRANT rqadmin TO dmuser;
-connect dmuser/dmuser
-*/
-
 -------------------------------------------------------------------------------
 --                        R Algorithm Registration DEMO 1
 -------------------------------------------------------------------------------
@@ -75,6 +69,7 @@ END;
 -- Build the model using the R build function script user has already registered. 
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
   -- Model Settings -----------------------------------------------------------
   v_setlst('ALGO_EXTENSIBLE_LANG') := 'R';
@@ -82,13 +77,16 @@ BEGIN
   v_setlst('R_FORMULA') := 'AGE + EDUCATION + HOUSEHOLD_SIZE + OCCUPATION';
   v_setlst('ralg_parameter_keep.model') := '1';
 
+  v_data_query := q'|SELECT * FROM mining_data_build_v|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'GLM_RDEMO_CLASSIFICATION',
     mining_function     => 'CLASSIFICATION',
-    data_query          => 'select * from mining_data_build_v',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
     case_id_column_name => 'CUST_ID',
-    target_column_name  => 'AFFINITY_CARD',
-    set_list            => v_setlst);
+    target_column_name  => 'AFFINITY_CARD'
+  );
 END;
 /
 
@@ -165,19 +163,23 @@ END;
 
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
   -- Model Settings -----------------------------------------------------------
   v_setlst('ALGO_EXTENSIBLE_LANG') := 'R';
   v_setlst('ALGO_NAME') := 't1';
   v_setlst('R_FORMULA') := 'AGE + EDUCATION + HOUSEHOLD_SIZE + OCCUPATION';
 
+  v_data_query := q'|SELECT * FROM mining_data_build_v|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'DT_RDEMO_CLASSIFICATION',
     mining_function     => 'CLASSIFICATION',
-    data_query          => 'select * from mining_data_build_v',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
     case_id_column_name => 'CUST_ID',
-    target_column_name  => 'AFFINITY_CARD',
-    set_list            => v_setlst);
+    target_column_name  => 'AFFINITY_CARD'
+  );
 END;
 /
 

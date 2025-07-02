@@ -36,9 +36,13 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 -- Build NMF model
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
+  --
   -- NMF is the default Feature Extraction algorithm. For this sample,
   -- we use Data Auto Preparation.
+  --
   v_setlst('PREP_AUTO') := 'ON';
 
   -- Other examples of possible overrides are:
@@ -47,12 +51,15 @@ BEGIN
   -- v_setlst('NMFS_NUM_ITERATIONS') := '50';
   -- v_setlst('NMFS_RANDOM_SEED')    := '-1';
 
+  v_data_query := q'|SELECT * FROM mining_data_build_v|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'NMF_SH_sample',
     mining_function     => 'FEATURE_EXTRACTION',
-    data_query          => 'SELECT * FROM mining_data_build_v',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id');
+    case_id_column_name => 'CUST_ID'
+  );
 END;
 /
 

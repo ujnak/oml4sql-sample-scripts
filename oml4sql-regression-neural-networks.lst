@@ -50,7 +50,7 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('NNR_SH_Regr_sample');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> ---------------------
@@ -58,40 +58,44 @@ SQL> -- CREATE A NEW MODEL
 SQL> --
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- specify settings
-  5    v_setlst('ALGO_NAME')        := 'ALGO_NEURAL_NETWORK';
-  6    v_setlst('PREP_AUTO')        := 'ON';
-  7    v_setlst('ODMS_RANDOM_SEED') := '12';
-  8
-  9    -- Examples of other possible settings are:
- 10    --v_setlst('NNET_HIDDEN_LAYERS')       := '2';
- 11    --v_setlst('NNET_NODES_PER_LAYER')     := '10, 30';
- 12    --v_setlst('NNET_ITERATIONS')          := '100';
- 13    --v_setlst('NNET_TOLERANCE')           := '0.0001';
- 14    --v_setlst('NNET_ACTIVATIONS')         := 'NNET_ACTIVATIONS_LOG_SIG';
- 15    --v_setlst('NNET_REGULARIZER')         := 'NNET_REGULARIZER_HELDASIDE';
- 16    --v_setlst('NNET_HELDASIDE_RATIO')     := '0.3';
- 17    --v_setlst('NNET_HELDASIDE_MAX_FAIL')  := '5';
- 18    --v_setlst('NNET_REGULARIZER')         := 'NNET_REGULARIZER_L2';
- 19    --v_setlst('NNET_REG_LAMBDA')          := '0.5';
- 20    --v_setlst('NNET_WEIGHT_UPPER_BOUND')  := '0.7';
- 21    --v_setlst('NNET_WEIGHT_LOWER_BOUND')  := '-0.6';
- 22    --v_setlst('LBFGS_HISTORY_DEPTH')      := '20';
- 23    --v_setlst('LBFGS_SCALE_HESSIAN')      := 'LBFGS_SCALE_HESSIAN_DISABLE';
- 24    --v_setlst('LBFGS_GRADIENT_TOLERANCE') := '0.0001';
- 25
- 26    DBMS_DATA_MINING.CREATE_MODEL2(
- 27      model_name          => 'NNR_SH_Regr_sample',
- 28      mining_function     => 'REGRESSION',
- 29      data_query          => 'SELECT * FROM mining_data_build_v',
- 30      set_list            => v_setlst,
- 31      case_id_column_name => 'cust_id',
- 32      target_column_name  => 'age');
- 33  END;
- 34  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    v_setlst('ALGO_NAME')        := 'ALGO_NEURAL_NETWORK';
+  7    v_setlst('PREP_AUTO')        := 'ON';
+  8    v_setlst('ODMS_RANDOM_SEED') := '12';
+  9
+ 10    -- Examples of other possible settings are:
+ 11    -- v_setlst('NNET_HIDDEN_LAYERS')       := '2';
+ 12    -- v_setlst('NNET_NODES_PER_LAYER')     := '10, 30';
+ 13    -- v_setlst('NNET_ITERATIONS')          := '100';
+ 14    -- v_setlst('NNET_TOLERANCE')           := '0.0001';
+ 15    -- v_setlst('NNET_ACTIVATIONS')         := 'NNET_ACTIVATIONS_LOG_SIG';
+ 16    -- v_setlst('NNET_REGULARIZER')         := 'NNET_REGULARIZER_HELDASIDE';
+ 17    -- v_setlst('NNET_HELDASIDE_RATIO')     := '0.3';
+ 18    -- v_setlst('NNET_HELDASIDE_MAX_FAIL')  := '5';
+ 19    -- v_setlst('NNET_REGULARIZER')         := 'NNET_REGULARIZER_L2';
+ 20    -- v_setlst('NNET_REG_LAMBDA')          := '0.5';
+ 21    -- v_setlst('NNET_WEIGHT_UPPER_BOUND')  := '0.7';
+ 22    -- v_setlst('NNET_WEIGHT_LOWER_BOUND')  := '-0.6';
+ 23    -- v_setlst('LBFGS_HISTORY_DEPTH')      := '20';
+ 24    -- v_setlst('LBFGS_SCALE_HESSIAN')      := 'LBFGS_SCALE_HESSIAN_DISABLE';
+ 25    -- v_setlst('LBFGS_GRADIENT_TOLERANCE') := '0.0001';
+ 26
+ 27    v_data_query := q'|SELECT * FROM mining_data_build_v|';
+ 28
+ 29    DBMS_DATA_MINING.CREATE_MODEL2(
+ 30      model_name          => 'NNR_SH_Regr_sample',
+ 31      mining_function     => 'REGRESSION',
+ 32      data_query          => v_data_query,
+ 33      set_list            => v_setlst,
+ 34      case_id_column_name => 'CUST_ID',
+ 35      target_column_name  => 'AGE'
+ 36    );
+ 37  END;
+ 38  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -116,7 +120,7 @@ ODMS_RANDOM_SEED               12
 ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
 PREP_AUTO                      ON
 
-9行が選択されました。
+9 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -149,7 +153,7 @@ PRINTER_SUPPLIES               NUMERICAL
 YRS_RESIDENCE                  NUMERICAL
 Y_BOX_GAMES                    NUMERICAL
 
-17行が選択されました。
+17 rows selected.
 
 SQL>
 SQL> ------------------------
@@ -170,7 +174,7 @@ DM$VNNNR_SH_REGR_SAMPLE        Normalization and Missing Value Handling
 DM$VSNNR_SH_REGR_SAMPLE        Computed Settings
 DM$VWNNR_SH_REGR_SAMPLE        Model Build Alerts
 
-5行が選択されました。
+5 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -192,7 +196,7 @@ SQL> SELECT SQRT(AVG((prediction - age) * (prediction - age))) rmse
 --------
     7.18
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> -- 2. Mean Absolute Error - Mean(|(y - y')|)
@@ -206,7 +210,7 @@ SQL> SELECT AVG(ABS(prediction - age)) mae
 --------
     4.99
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> -- 3. Residuals
@@ -703,7 +707,7 @@ PREDICTION   RESIDUAL
    17.4759 -2.52414502
    17.4932 -1.50684162
 
-479行が選択されました。
+479 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -731,7 +735,7 @@ CUST_GENDER         CNT    AVG_AGE
 F                   512    26.8525
 M                   988    27.8007
 
-2行が選択されました。
+2 rows selected.
 
 SQL>
 SQL> ------------------
@@ -794,7 +798,7 @@ SQL> SELECT cust_id,
     101251    44.10          4
     101445    44.99          4
 
-43行が選択されました。
+43 rows selected.
 
 SQL>
 SQL> ------------------
@@ -824,7 +828,7 @@ PREDICTION_DETAILS
 026" rank="8"/>
 </Details>
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> spool oml4sql-regression-random-forest

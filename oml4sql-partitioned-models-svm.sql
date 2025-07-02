@@ -33,22 +33,28 @@ SET pages 10000
 BEGIN DBMS_DATA_MINING.DROP_MODEL('part_clas_sample');
 EXCEPTION WHEN OTHERS THEN NULL; END;
 /
+
 -- Build a new partitioned SVM model
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
   v_setlst('ALGO_NAME')              := 'ALGO_SUPPORT_VECTOR_MACHINES';
   v_setlst('PREP_AUTO')              := 'ON';
   v_setlst('SVMS_KERNEL_FUNCTION')   := 'SVMS_LINEAR';
   v_setlst('ODMS_PARTITION_COLUMNS') := 'CUST_GENDER';
 
+  v_data_query := q'|SELECT * FROM mining_data_build_parallel_v|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'part_clas_sample',
     mining_function     => 'CLASSIFICATION',
-    data_query          => 'select * from mining_data_build_parallel_v',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id',
-    target_column_name  => 'affinity_card');
+    case_id_column_name => 'CUST_ID',
+    target_column_name  => 'AFFINITY_CARD'
+  );
 END;
 /
 
@@ -104,28 +110,33 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 -- Build another partitioned model with two partition columns
 -- with three partition values for CUST_INCOME_LEVEL
 DECLARE
-  xform_list dbms_data_mining_transform.TRANSFORM_LIST;
+  v_xlst   dbms_data_mining_transform.TRANSFORM_LIST;
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
-  dbms_data_mining_transform.set_transform(xform_list,
+  dbms_data_mining_transform.set_transform(v_xlst,
     'CUST_INCOME_LEVEL', null, 
     'CASE CUST_INCOME_LEVEL WHEN ''A: Below 30,000'' THEN ''LOW'' 
     WHEN ''L: 300,000 and above'' THEN ''HIGH'' 
     ELSE ''MEDIUM'' END', null);
 
+  -- Model Settings ---------------------------------------------------
   v_setlst('ALGO_NAME')               := 'ALGO_SUPPORT_VECTOR_MACHINES';
   v_setlst('PREP_AUTO')               := 'ON';
   v_setlst('SVMS_KERNEL_FUNCTION')    := 'SVMS_LINEAR';
   v_setlst('ODMS_PARTITION_COLUMNS')  := 'CUST_GENDER,CUST_INCOME_LEVEL';
 
+  v_data_query := q'|SELECT * FROM mining_data_build_parallel_v|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'part2_clas_sample',
     mining_function     => 'CLASSIFICATION',
-    data_query          => 'select * from mining_data_build_parallel_v',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id',
-    target_column_name  => 'affinity_card',
-    xform_list          => xform_list);
+    case_id_column_name => 'CUST_ID',
+    target_column_name  => 'AFFINITY_CARD',
+    xform_list          => v_xlst
+  );
 END;
 /
 

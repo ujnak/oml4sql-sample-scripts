@@ -31,7 +31,7 @@ SQL> begin
   4  end;
   5  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> begin
   2    ctx_ddl.drop_preference('dmdemo_nmf_lexer');
@@ -39,7 +39,7 @@ SQL> begin
   4  end;
   5  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> begin
   2    ctx_ddl.create_preference('dmdemo_nmf_lexer', 'BASIC_LEXER');
@@ -48,14 +48,14 @@ SQL> begin
   5  end;
   6  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> begin
   2    ctx_ddl.create_policy('dmdemo_nmf_policy', lexer=>'dmdemo_nmf_lexer');
   3  end;
   4  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -67,7 +67,7 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('T_NMF_Sample');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> --------------------------------------------------------
@@ -76,27 +76,33 @@ SQL> -- Note the transform makes the 'comments' attribute
 SQL> -- to be treated as unstructured text data
 SQL> --
 SQL> DECLARE
-  2      v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3    xformlist dbms_data_mining_transform.TRANSFORM_LIST;
-  4  BEGIN
-  5      dbms_data_mining_transform.SET_TRANSFORM(
-  6      xformlist, 'comments', null, 'comments', null, 'TEXT(TOKEN_TYPE:STEM)');
-  7  --    xformlist, 'comments', null, 'comments', null, 'TEXT(TOKEN_TYPE:THEME)');
-  8
-  9      v_setlst('PREP_AUTO') := 'ON';
- 10      v_setlst('ALGO_NAME') := 'ALGO_NONNEGATIVE_MATRIX_FACTOR';
- 11      v_setlst('ODMS_TEXT_POLICY_NAME') := 'DMDEMO_NMF_POLICY';
- 12      DBMS_DATA_MINING.CREATE_MODEL2(
- 13          model_name      => 'T_NMF_Sample',
- 14          mining_function =>'FEATURE_EXTRACTION',
- 15          data_query      => 'SELECT * FROM mining_build_text',
- 16          set_list        => v_setlst,
- 17          case_id_column_name => 'cust_id',
- 18          xform_list      => xformlist);
- 19  END;
- 20  /
+  2    v_xlst   dbms_data_mining_transform.TRANSFORM_LIST;
+  3    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  4    v_data_query VARCHAR2(32767);
+  5  BEGIN
+  6    dbms_data_mining_transform.SET_TRANSFORM(
+  7      v_xlst, 'comments', null, 'comments', null, 'TEXT(TOKEN_TYPE:STEM)');
+  8      -- v_xlst, 'comments', null, 'comments', null, 'TEXT(TOKEN_TYPE:THEME)');
+  9
+ 10    -- Model Settings ---------------------------------------------------
+ 11    v_setlst('ALGO_NAME') := 'ALGO_NONNEGATIVE_MATRIX_FACTOR';
+ 12    v_setlst('PREP_AUTO') := 'ON';
+ 13    v_setlst('ODMS_TEXT_POLICY_NAME') := 'DMDEMO_NMF_POLICY';
+ 14
+ 15    v_data_query := q'|SELECT * FROM mining_build_text|';
+ 16
+ 17    DBMS_DATA_MINING.CREATE_MODEL2(
+ 18      model_name          => 'T_NMF_Sample',
+ 19      mining_function     =>'FEATURE_EXTRACTION',
+ 20      data_query          => v_data_query,
+ 21      set_list            => v_setlst,
+ 22      case_id_column_name => 'CUST_ID',
+ 23      xform_list          => v_xlst
+ 24    );
+ 25  END;
+ 26  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -124,7 +130,7 @@ ODMS_TEXT_MIN_DOCUMENTS        1
 ODMS_TEXT_POLICY_NAME          DMDEMO_NMF_POLICY
 PREP_AUTO                      ON
 
-12行が選択されました。
+12 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -159,7 +165,7 @@ PRINTER_SUPPLIES                         NUMERICAL
 YRS_RESIDENCE                            NUMERICAL
 Y_BOX_GAMES                              NUMERICAL
 
-19行が選択されました。
+19 rows selected.
 
 SQL>
 SQL> ------------------------
@@ -199,7 +205,7 @@ DM$VXT_NMF_SAMPLE
 Text Features
 
 
-7行が選択されました。
+7 rows selected.
 
 SQL>
 SQL> column attribute_name format a30
@@ -246,7 +252,7 @@ FEATURE_ID ATTRIBUTE_NAME                 ATTRIBUTE_VALUE      COEFFICIENT
            COMMENTS.ASK                                             .00056
            COMMENTS.ATTRACT                                         .00019
 
-20行が選択されました。
+20 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------

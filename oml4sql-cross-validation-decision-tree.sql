@@ -17,7 +17,7 @@ SET LINESIZE 80
 SET TRIMSPOOL ON
 SET TAB OFF
 SET PAGESIZE 100
-SET long 2000000000
+SET long 2000000
 
 -----------------------------------------------------------------------
 --                            SAMPLE PROBLEM
@@ -30,13 +30,6 @@ SET long 2000000000
 -- described in dmdtdemo.sql. We perform 10 fold cross-validation
 -- using the training data set alone.
 
---------------------------
--- CREATE A SETTINGS TABLE
---
--- The default classification algorithm is Naive Bayes. In order to override
--- this, create and populate a settings table to be used as input for
--- CREATE_MODEL.
--- 
 DECLARE
  nfolds         NUMBER;
  maxbucket      NUMBER;       -- max buckets for ORA_HASH()
@@ -51,6 +44,7 @@ DECLARE
  type dmdtcurtyp IS REF CURSOR;
  tgtcur         dmdtcurtyp;
  v_setlst       DBMS_DATA_MINING.SETTING_LIST;
+ v_data_query VARCHAR2(32767);
 BEGIN       
  nfolds := 10;               -- number of folds (typically 10 fold)
  maxbucket := nfolds-1;      -- max buckets for ORA_HASH(); max of 9 means
@@ -66,16 +60,20 @@ BEGIN
  -- "partitioned" table
  tabname_p := tabname || '_P';
 
- -- Setup settings list
+ -- Model Settings ---------------------------------------------------
+ -- The default classification algorithm is Naive Bayes. In order to override
+ -- this, create and populate a settings table to be used as input for
+ -- CREATE_MODEL.
+ --
  v_setlst('ALGO_NAME') := 'ALGO_DECISION_TREE';
 
  -- Examples of other possible settings are:
- --v_setlst('TREE_IMPURITY_METRIC')   := 'TREE_IMPURITY_ENTROPY';
- --v_setlst('TREE_TERM_MAX_DEPTH')    := '5';
- --v_setlst('TREE_TERM_MINREC_SPLIT') := '5';
- --v_setlst('TREE_TERM_MINPCT_SPLIT') := '2';
- --v_setlst('TREE_TERM_MINREC_NODE')  := '5';
- --v_setlst('TREE_TERM_MINPCT_NODE')  := '0.05';
+ -- v_setlst('TREE_IMPURITY_METRIC')   := 'TREE_IMPURITY_ENTROPY';
+ -- v_setlst('TREE_TERM_MAX_DEPTH')    := '5';
+ -- v_setlst('TREE_TERM_MINREC_SPLIT') := '5';
+ -- v_setlst('TREE_TERM_MINPCT_SPLIT') := '2';
+ -- v_setlst('TREE_TERM_MINREC_NODE')  := '5';
+ -- v_setlst('TREE_TERM_MINPCT_NODE')  := '0.05';
 
  BEGIN EXECUTE IMMEDIATE 'DROP TABLE dmdtxvld_c';
  EXCEPTION WHEN OTHERS THEN NULL; END;
@@ -141,6 +139,7 @@ BEGIN
   'SELECT * FROM ' || tabname_p || ' WHERE pn = '|| iter;
 
   -- Build a model with this subset of data
+  v_data_query := q'|SELECT * FROM xvld_tmp_bld_v|';
   BEGIN
     -- Cleanup old model with same name for repeat runs
     BEGIN DBMS_DATA_MINING.DROP_MODEL(model_name);
@@ -151,10 +150,11 @@ BEGIN
       DBMS_DATA_MINING.CREATE_MODEL2(
         model_name          => model_name,
         mining_function     => 'CLASSIFICATION',
-        data_query          => 'SELECT * FROM xvld_tmp_bld_v',
+        data_query          => v_data_query,
         set_list            => v_setlst,
         case_id_column_name => case_id,
-        target_column_name  => tgtname);
+        target_column_name  => tgtname
+      );
     END;
   
     -- Apply the model, and compute confusion matrix

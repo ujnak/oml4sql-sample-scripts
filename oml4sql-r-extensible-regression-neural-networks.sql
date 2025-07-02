@@ -88,6 +88,7 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
   -- Model Settings -----------------------------------------------------------
   v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
@@ -99,15 +100,18 @@ BEGIN
   -- view will be generated to display the model details, which contains the
   -- weights of the built neural network regression model.
 
-  v_setlst('RALG_DETAILS_FORMAT') := 'select 1 wts from dual';
+  v_setlst('RALG_DETAILS_FORMAT') := q'|select 1 wts from dual|';
+
+  v_data_query := q'|SELECT * FROM mining_data_build_v|'; 
 
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'NN_RDEMO_REGRESSION',
     mining_function     => 'REGRESSION',
-    data_query          => 'select * from mining_data_build_v',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
     case_id_column_name => 'CUST_ID',
-    target_column_name  => 'AGE',
-    set_list            => v_setlst);
+    target_column_name  => 'AGE'
+  );
 END;
 /
 
@@ -236,6 +240,7 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
   -- Model Settings -----------------------------------------------------------
   v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
@@ -250,13 +255,16 @@ BEGIN
 
   v_setlst('RALG_DETAILS_FORMAT') := 'select 1 wts from dual';
 
+  v_data_query := q'|SELECT * FROM mining_data_build_v|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'NN_RDEMO_CLASSIFICATION',
     mining_function     => 'CLASSIFICATION',
-    data_query          => 'select * from mining_data_build_v',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
     case_id_column_name => 'CUST_ID',
-    target_column_name  => 'HOUSEHOLD_SIZE',
-    set_list            => v_setlst);
+    target_column_name  => 'HOUSEHOLD_SIZE'
+  );
 END;
 /
 

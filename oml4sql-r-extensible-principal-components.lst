@@ -27,7 +27,7 @@ SQL> BEGIN EXECUTE IMMEDIATE 'DROP VIEW pca_build_v';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- Create a view for building PCA model
@@ -36,7 +36,7 @@ SQL> create view pca_build_v as
   3  flat_panel_monitor, home_theater_package, bookkeeping_application, y_box_games
   4  from mining_data_build_v;
 
-View PCA_BUILD_Vは作成されました。
+View PCA_BUILD_V created.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -47,7 +47,7 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('RPCA_SH_FE_SAMPLE');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> BEGIN
@@ -58,7 +58,7 @@ SQL> BEGIN
   6  EXCEPTION WHEN OTHERS THEN NULL; END;
   7  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> ------------
@@ -116,7 +116,7 @@ SQL> BEGIN
  37  END;
  38  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL>
@@ -125,25 +125,30 @@ SQL> -- CREATE A NEW MODEL
 SQL> --
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
-  5    v_setlst('RALG_BUILD_FUNCTION')   := 'RPCA_BUILD';
-  6    v_setlst('RALG_SCORE_FUNCTION')   := 'RPCA_SCORE';
-  7    v_setlst('RALG_WEIGHT_FUNCTION')  := 'RPCA_WEIGHT';
-  8    v_setlst('RALG_DETAILS_FUNCTION') := 'RPCA_DETAILS';
-  9    v_setlst('RALG_DETAILS_FORMAT')   :=
- 10      'select 1 feature, 1 sd from dual';
- 11
- 12    DBMS_DATA_MINING.CREATE_MODEL2(
- 13      model_name          => 'RPCA_SH_FE_SAMPLE',
- 14      mining_function     => 'FEATURE_EXTRACTION',
- 15      data_query          => 'select * from PCA_BUILD_V',
- 16      case_id_column_name => 'CUST_ID',
- 17      set_list            => v_setlst);
- 18  END;
- 19  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  7    v_setlst('RALG_BUILD_FUNCTION')   := 'RPCA_BUILD';
+  8    v_setlst('RALG_SCORE_FUNCTION')   := 'RPCA_SCORE';
+  9    v_setlst('RALG_WEIGHT_FUNCTION')  := 'RPCA_WEIGHT';
+ 10    v_setlst('RALG_DETAILS_FUNCTION') := 'RPCA_DETAILS';
+ 11    v_setlst('RALG_DETAILS_FORMAT')   :=
+ 12      q'|select 1 feature, 1 sd from dual|';
+ 13
+ 14    v_data_query := q'|SELECT * FROM PCA_BUILD_V|';
+ 15
+ 16    DBMS_DATA_MINING.CREATE_MODEL2(
+ 17      model_name          => 'RPCA_SH_FE_SAMPLE',
+ 18      mining_function     => 'FEATURE_EXTRACTION',
+ 19      data_query          => v_data_query,
+ 20      set_list            => v_setlst,
+ 21      case_id_column_name => 'CUST_ID'
+ 22    );
+ 23  END;
+ 24  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL>
@@ -165,7 +170,7 @@ RALG_DETAILS_FUNCTION          RPCA_DETAILS
 RALG_SCORE_FUNCTION            RPCA_SCORE
 RALG_WEIGHT_FUNCTION           RPCA_WEIGHT
 
-7行が選択されました。
+7 rows selected.
 
 SQL>
 SQL> -------------------------
@@ -181,7 +186,7 @@ MODEL_NAME           MINING_FUNCTION      ALGORITHM
 -------------------- -------------------- --------------------
 RPCA_SH_FE_SAMPLE    FEATURE_EXTRACTION   R_EXTENSIBLE
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> ------------------------
@@ -201,7 +206,7 @@ PARTITION_NAME          FEATURE         SD
                               7 .238525714
                               8 .147466454
 
-8行が選択されました。
+8 rows selected.
 
 SQL>
 SQL>
@@ -239,7 +244,7 @@ SQL> SELECT cust_id, round(FEATURE_VALUE(RPCA_SH_FE_SAMPLE, 1 USING *), 3)
     100014     10.163     -0.062     -0.806     -0.223
     100015      5.277      1.399         .6     -0.292
 
-15行が選択されました。
+15 rows selected.
 
 SQL>
 SQL> -- List the PCA projection values of the top three features for 10 customers
@@ -285,7 +290,7 @@ SQL> SELECT cust_id, S.feature_id fid, round(S.value, 3) value
     100010    2 -.09500
     100010    3 .50700
 
-30行が選択されました。
+30 rows selected.
 
 SQL>
 SQL> -- List the 2 most important attributes for the top feature for each row
@@ -371,7 +376,7 @@ SQL> SELECT cust_id,
            </Details>
 
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL>
@@ -389,7 +394,7 @@ SQL> BEGIN EXECUTE IMMEDIATE 'DROP VIEW pca_build_partition_v';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- Create a view for building PCA models by partition in parallel
@@ -399,7 +404,7 @@ SQL> create view pca_build_partition_v as
   4  home_theater_package, bookkeeping_application, y_box_games
   5  from mining_data_build_v;
 
-View PCA_BUILD_PARTITION_Vは作成されました。
+View PCA_BUILD_PARTITION_V created.
 
 SQL>
 SQL> -- Check the customer gender distribution of the training data
@@ -411,7 +416,7 @@ G        CNT
 F        486
 M       1014
 
-2行が選択されました。
+2 rows selected.
 
 SQL>
 SQL> -- Cleanup old model with same name for repeat runs
@@ -419,7 +424,7 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('RPCA_SH_FE_SAMPLE_P');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> ----------------------------------
@@ -427,28 +432,33 @@ SQL> -- CREATE A NEW MODEL BY PARTITION
 SQL> --
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
-  5    v_setlst('RALG_BUILD_FUNCTION')   := 'RPCA_BUILD';
-  6    v_setlst('RALG_SCORE_FUNCTION')   := 'RPCA_SCORE';
-  7    v_setlst('RALG_WEIGHT_FUNCTION')  := 'RPCA_WEIGHT';
-  8    v_setlst('RALG_DETAILS_FUNCTION') := 'RPCA_DETAILS';
-  9    v_setlst('RALG_DETAILS_FORMAT')   :=
- 10      'select 1 feature, 1 sd from dual';
- 11
- 12    -- Specify the column CUST_GENDER as the partition column
- 13    v_setlst('ODMS_PARTITION_COLUMNS') := 'CUST_GENDER';
- 14
- 15    DBMS_DATA_MINING.CREATE_MODEL2(
- 16      model_name          => 'RPCA_SH_FE_SAMPLE_P',
- 17      mining_function     => 'FEATURE_EXTRACTION',
- 18      data_query          => 'select * from PCA_BUILD_PARTITION_V',
- 19      case_id_column_name => 'CUST_ID',
- 20      set_list            => v_setlst);
- 21  END;
- 22  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  7    v_setlst('RALG_BUILD_FUNCTION')   := 'RPCA_BUILD';
+  8    v_setlst('RALG_SCORE_FUNCTION')   := 'RPCA_SCORE';
+  9    v_setlst('RALG_WEIGHT_FUNCTION')  := 'RPCA_WEIGHT';
+ 10    v_setlst('RALG_DETAILS_FUNCTION') := 'RPCA_DETAILS';
+ 11    v_setlst('RALG_DETAILS_FORMAT')   :=
+ 12      q'|select 1 feature, 1 sd from dual|';
+ 13
+ 14    -- Specify the column CUST_GENDER as the partition column
+ 15    v_setlst('ODMS_PARTITION_COLUMNS') := 'CUST_GENDER';
+ 16
+ 17    v_data_query := q'|SELECT * FROM PCA_BUILD_PARTITION_V|';
+ 18
+ 19    DBMS_DATA_MINING.CREATE_MODEL2(
+ 20      model_name          => 'RPCA_SH_FE_SAMPLE_P',
+ 21      mining_function     => 'FEATURE_EXTRACTION',
+ 22      data_query          => v_data_query,
+ 23      set_list            => v_setlst,
+ 24      case_id_column_name => 'CUST_ID'
+ 25    );
+ 26  END;
+ 27  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -467,7 +477,7 @@ RALG_DETAILS_FUNCTION          RPCA_DETAILS
 RALG_SCORE_FUNCTION            RPCA_SCORE
 RALG_WEIGHT_FUNCTION           RPCA_WEIGHT
 
-7行が選択されました。
+7 rows selected.
 
 SQL>
 SQL>
@@ -481,7 +491,7 @@ MODEL_NAME           MINING_FUNCTION      ALGORITHM
 -------------------- -------------------- --------------------
 RPCA_SH_FE_SAMPLE_P  FEATURE_EXTRACTION   R_EXTENSIBLE
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL>
@@ -502,7 +512,7 @@ MODEL_NAME           PARTITION_NAME    POSITION COLUMN_NAME  COLUMN_VAL
 RPCA_SH_FE_SAMPLE_P  F                        1 CUST_GENDER  F
 RPCA_SH_FE_SAMPLE_P  M                        1 CUST_GENDER  M
 
-2行が選択されました。
+2 rows selected.
 
 SQL>
 SQL>
@@ -530,7 +540,7 @@ M                        6 .306746735
 M                        7  .23846914
 M                        8 .147462427
 
-16行が選択されました。
+16 rows selected.
 
 SQL>
 SQL>
@@ -559,7 +569,7 @@ SQL> select cust_id, cust_gender, age,
     100009 M                       18 M
     100010 M                       17 M
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL>
@@ -593,6 +603,6 @@ SQL> SELECT cust_id, round(FEATURE_VALUE(RPCA_SH_FE_SAMPLE_P, 1 USING *), 3)
     100014     12.013     -0.562
     100015      4.392      1.152
 
-15行が選択されました。
+15 rows selected.
 
 SQL> spool oml4sql-r-extensible-regression-neural-networks

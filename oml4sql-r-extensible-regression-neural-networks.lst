@@ -33,7 +33,7 @@ SQL> Begin
   5  End;
   6  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> Begin
@@ -78,14 +78,14 @@ SQL> Begin
  40  End;
  41  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('NN_RDEMO_REGRESSION');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -98,30 +98,34 @@ SQL> -- regression model NN_RDEMO_REGRESSION using dataset mining_data_build_v.
 SQL>
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- Model Settings -----------------------------------------------------------
-  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
-  6    v_setlst('RALG_BUILD_FUNCTION')   := 'NN_RDEMO_BUILD_REGRESSION';
-  7    v_setlst('RALG_SCORE_FUNCTION')   := 'NN_RDEMO_SCORE_REGRESSION';
-  8    v_setlst('RALG_DETAILS_FUNCTION') := 'NN_RDEMO_DETAILS_REGRESSION';
-  9
- 10    -- Once this setting is specified, a model view will be created. This model
- 11    -- view will be generated to display the model details, which contains the
- 12    -- weights of the built neural network regression model.
- 13
- 14    v_setlst('RALG_DETAILS_FORMAT') := 'select 1 wts from dual';
- 15
- 16    DBMS_DATA_MINING.CREATE_MODEL2(
- 17      model_name          => 'NN_RDEMO_REGRESSION',
- 18      mining_function     => 'REGRESSION',
- 19      data_query          => 'select * from mining_data_build_v',
- 20      case_id_column_name => 'CUST_ID',
- 21      target_column_name  => 'AGE',
- 22      set_list            => v_setlst);
- 23  END;
- 24  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings -----------------------------------------------------------
+  6    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  7    v_setlst('RALG_BUILD_FUNCTION')   := 'NN_RDEMO_BUILD_REGRESSION';
+  8    v_setlst('RALG_SCORE_FUNCTION')   := 'NN_RDEMO_SCORE_REGRESSION';
+  9    v_setlst('RALG_DETAILS_FUNCTION') := 'NN_RDEMO_DETAILS_REGRESSION';
+ 10
+ 11    -- Once this setting is specified, a model view will be created. This model
+ 12    -- view will be generated to display the model details, which contains the
+ 13    -- weights of the built neural network regression model.
+ 14
+ 15    v_setlst('RALG_DETAILS_FORMAT') := q'|select 1 wts from dual|';
+ 16
+ 17    v_data_query := q'|SELECT * FROM mining_data_build_v|';
+ 18
+ 19    DBMS_DATA_MINING.CREATE_MODEL2(
+ 20      model_name          => 'NN_RDEMO_REGRESSION',
+ 21      mining_function     => 'REGRESSION',
+ 22      data_query          => v_data_query,
+ 23      set_list            => v_setlst,
+ 24      case_id_column_name => 'CUST_ID',
+ 25      target_column_name  => 'AGE'
+ 26    );
+ 27  END;
+ 28  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -149,7 +153,7 @@ SQL> select round(wts, 3) as wts from DM$VDNN_RDEMO_REGRESSION where wts >= 4
     11.615
     13.493
 
-11行が選択されました。
+11 rows selected.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -181,7 +185,7 @@ SQL> SELECT CUST_ID, AGE as AGE_act,
     100009         18     16.662
     100010         17     14.355
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -199,7 +203,7 @@ SQL> Begin
   6  End;
   7  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> Begin
@@ -271,14 +275,14 @@ SQL> Begin
  67  End;
  68  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('NN_RDEMO_CLASSIFICATION');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -291,31 +295,35 @@ SQL> -- classification model NN_RDEMO_CLASSIFICATION using dataset mining_data_b
 SQL>
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- Model Settings -----------------------------------------------------------
-  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
-  6    v_setlst('RALG_BUILD_FUNCTION')   := 'NN_RDEMO_BUILD_CLASSIFICATION';
-  7    v_setlst('RALG_SCORE_FUNCTION')   := 'NN_RDEMO_SCORE_CLASSIFICATION';
-  8    v_setlst('RALG_DETAILS_FUNCTION') := 'NN_RDEMO_DETAILS_CLASSIFICATION';
-  9    v_setlst('RALG_WEIGHT_FUNCTION')  := 'NN_RDEMO_WEIGHT_CLASSIFICATION';
- 10
- 11    -- Once this setting is specified, a model view will be created. This model
- 12    -- view will be generated to display the model details, which contains the
- 13    -- weights of the built neural network classification model.
- 14
- 15    v_setlst('RALG_DETAILS_FORMAT') := 'select 1 wts from dual';
- 16
- 17    DBMS_DATA_MINING.CREATE_MODEL2(
- 18      model_name          => 'NN_RDEMO_CLASSIFICATION',
- 19      mining_function     => 'CLASSIFICATION',
- 20      data_query          => 'select * from mining_data_build_v',
- 21      case_id_column_name => 'CUST_ID',
- 22      target_column_name  => 'HOUSEHOLD_SIZE',
- 23      set_list            => v_setlst);
- 24  END;
- 25  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings -----------------------------------------------------------
+  6    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  7    v_setlst('RALG_BUILD_FUNCTION')   := 'NN_RDEMO_BUILD_CLASSIFICATION';
+  8    v_setlst('RALG_SCORE_FUNCTION')   := 'NN_RDEMO_SCORE_CLASSIFICATION';
+  9    v_setlst('RALG_DETAILS_FUNCTION') := 'NN_RDEMO_DETAILS_CLASSIFICATION';
+ 10    v_setlst('RALG_WEIGHT_FUNCTION')  := 'NN_RDEMO_WEIGHT_CLASSIFICATION';
+ 11
+ 12    -- Once this setting is specified, a model view will be created. This model
+ 13    -- view will be generated to display the model details, which contains the
+ 14    -- weights of the built neural network classification model.
+ 15
+ 16    v_setlst('RALG_DETAILS_FORMAT') := 'select 1 wts from dual';
+ 17
+ 18    v_data_query := q'|SELECT * FROM mining_data_build_v|';
+ 19
+ 20    DBMS_DATA_MINING.CREATE_MODEL2(
+ 21      model_name          => 'NN_RDEMO_CLASSIFICATION',
+ 22      mining_function     => 'CLASSIFICATION',
+ 23      data_query          => v_data_query,
+ 24      set_list            => v_setlst,
+ 25      case_id_column_name => 'CUST_ID',
+ 26      target_column_name  => 'HOUSEHOLD_SIZE'
+ 27    );
+ 28  END;
+ 29  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -419,7 +427,7 @@ SQL> select round(wts, 3) as wts from DM$VDNN_RDEMO_CLASSIFICATION where wts >= 
     86.294
    105.348
 
-88行が選択されました。
+88 rows selected.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -454,7 +462,7 @@ SQL> SELECT CUST_ID, HOUSEHOLD_SIZE as HOUSEHOLD_SIZE_act,
     100009 3                     3                                       1
     100010 3                     3                                       1
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -- PREDICTION_SET -------------------------------------------------------------
@@ -503,7 +511,7 @@ SQL> select T.CUST_ID, T.HOUSEHOLD_SIZE, S.prediction,
     100005 3                     6-8                    .000000000
     100005 3                     9+                     .000000000
 
-30行が選択されました。
+30 rows selected.
 
 SQL>
 SQL> -- PREDICTION_DETAILS ---------------------------------------------------------
@@ -647,6 +655,6 @@ SQL> SELECT CUST_ID,
            </Details>
 
 
-10行が選択されました。
+10 rows selected.
 
 SQL> spool oml4sql-r-extensible-regression-tree

@@ -39,14 +39,14 @@ SQL> BEGIN EXECUTE IMMEDIATE 'DROP VIEW svd_sh_sample_build_num';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> -- Cleanup old model with the same name
 SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('SVD_SH_sample');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- Create a build data view with only numerical columns
@@ -56,37 +56,43 @@ SQL> CREATE VIEW svd_sh_sample_build_num AS
   4      PRINTER_SUPPLIES, Y_BOX_GAMES, OS_DOC_SET_KANJI
   5    FROM MINING_DATA_BUILD_V;
 
-View SVD_SH_SAMPLE_BUILD_NUMは作成されました。
+View SVD_SH_SAMPLE_BUILD_NUM created.
 
 SQL>
 SQL> -- Build an SVD model
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- Select SVD as the Feature Extraction algorithm
-  5    v_setlst('ALGO_NAME') := 'ALGO_SINGULAR_VALUE_DECOMP';
-  6    -- Turn on automatic data preparation
-  7    v_setlst('PREP_AUTO') := 'OFF';
-  8    -- Select PCA mode of scoring
-  9    v_setlst('SVDS_SCORING_MODE') := 'SVDS_SCORING_PCA';
- 10    v_setlst('PREP_SHIFT_2DNUM')  := 'PREP_SHIFT_MEAN';
- 11    v_setlst('PREP_SCALE_2DNUM')  := 'PREP_SCALE_STDDEV';
- 12
- 13    -- Examples of possible overrides are:
- 14    -- v_setlst('FEAT_NUM_FEATURES') := '10';
- 15    -- v_setlst('SVDS_U_MATRIX_OUTPUT') := 'SVDS_U_MATRIX_ENABLE';
- 16    -- v_setlst('ODMS_APPROXIMATE_COMPUTATION') := 'ODMS_APPR_COMP_ENABLE';
- 17
- 18    DBMS_DATA_MINING.CREATE_MODEL2(
- 19      model_name          => 'SVD_SH_sample',
- 20      mining_function     => 'FEATURE_EXTRACTION',
- 21      data_query          => 'SELECT * FROM svd_sh_sample_build_num',
- 22      set_list            => v_setlst,
- 23      case_id_column_name => 'cust_id');
- 24  END;
- 25  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    --
+  7    -- Select SVD as the Feature Extraction algorithm
+  8    v_setlst('ALGO_NAME') := 'ALGO_SINGULAR_VALUE_DECOMP';
+  9    -- Turn on automatic data preparation
+ 10    v_setlst('PREP_AUTO') := 'OFF';
+ 11    -- Select PCA mode of scoring
+ 12    v_setlst('SVDS_SCORING_MODE') := 'SVDS_SCORING_PCA';
+ 13    v_setlst('PREP_SHIFT_2DNUM')  := 'PREP_SHIFT_MEAN';
+ 14    v_setlst('PREP_SCALE_2DNUM')  := 'PREP_SCALE_STDDEV';
+ 15
+ 16    -- Examples of possible overrides are:
+ 17    -- v_setlst('FEAT_NUM_FEATURES') := '10';
+ 18    -- v_setlst('SVDS_U_MATRIX_OUTPUT') := 'SVDS_U_MATRIX_ENABLE';
+ 19    -- v_setlst('ODMS_APPROXIMATE_COMPUTATION') := 'ODMS_APPR_COMP_ENABLE';
+ 20
+ 21    v_data_query := q'|SELECT * FROM svd_sh_sample_build_num|';
+ 22
+ 23    DBMS_DATA_MINING.CREATE_MODEL2(
+ 24      model_name          => 'SVD_SH_sample',
+ 25      mining_function     => 'FEATURE_EXTRACTION',
+ 26      data_query          => v_data_query,
+ 27      set_list            => v_setlst,
+ 28      case_id_column_name => 'CUST_ID'
+ 29    );
+ 30  END;
+ 31  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- Display model settings
@@ -109,7 +115,7 @@ PREP_SHIFT_2DNUM               PREP_SHIFT_MEAN
 SVDS_SCORING_MODE              SVDS_SCORING_PCA
 SVDS_U_MATRIX_OUTPUT           SVDS_U_MATRIX_DISABLE
 
-9行が選択されました。
+9 rows selected.
 
 SQL>
 SQL> -- Display model signature
@@ -134,7 +140,7 @@ PRINTER_SUPPLIES                         NUMERICAL
 YRS_RESIDENCE                            NUMERICAL
 Y_BOX_GAMES                              NUMERICAL
 
-11行が選択されました。
+11 rows selected.
 
 SQL>
 SQL> -- Display model details
@@ -173,7 +179,7 @@ DM$VWSVD_SH_SAMPLE
 Model Build Alerts
 
 
-7行が選択されました。
+7 rows selected.
 
 SQL>
 SQL> -- The model details return the SVD decomposition matrices.
@@ -201,7 +207,7 @@ FEATURE_ID       VALUE        VARIANCE PCT_CUM_VARIANCE
          8       17.59              .2             99.0
          9       11.69              .1            100.0
 
-9行が選択されました。
+9 rows selected.
 
 SQL>
 SQL> ---- V matrix
@@ -293,7 +299,7 @@ FEATURE_ID ATTRIBUTE_NAME                                 VALUE
          9 YRS_RESIDENCE                                   -.03
          9 Y_BOX_GAMES                                      .03
 
-81行が選択されました。
+81 rows selected.
 
 SQL>
 SQL> -- Display the high-level model details
@@ -310,7 +316,7 @@ NUM_COMPONENTS                                                  9
 NUM_ROWS                                                     1500
 SUGGESTED_CUTOFF                                                2
 
-3行が選択されました。
+3 rows selected.
 
 SQL>
 SQL> -- Compute the top two PCA projections that will be used for visualization
@@ -335,7 +341,7 @@ PROJ1 PROJ2
 1.0540319 1.3311114
 1.9245745 -1.3227314
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -- Identify the three input attributes that most impact the top PCA projection
@@ -353,7 +359,7 @@ PROJ1DET
 <Attribute name="AGE" actualValue="30" weight=".063" rank="3"/>
 </Details>
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -368,48 +374,54 @@ SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE svd_sh_sample_build_num_piv';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> -- Cleanup old reconstruction table
 SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE svd_sh_sample_build_num_recon';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> -- Cleanup old model with the same name
 SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('SVD_SH_sample');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- Build an SVD model
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- Select SVD as the Feature Extraction algorithm
-  5    v_setlst('ALGO_NAME') := 'ALGO_SINGULAR_VALUE_DECOMP';
-  6    -- Request the output of the U matrix values (not produced by default)
-  7    v_setlst('SVDS_U_MATRIX_OUTPUT') := 'SVDS_U_MATRIX_ENABLE';
-  8    v_setlst('PREP_AUTO') := 'OFF';
-  9    -- Examples of possible overrides are:
- 10    -- v_setlst('FEAT_NUM_FEATURES') := '10';
- 11    -- v_setlst('PREP_AUTO') := 'ON';
- 12    -- v_setlst('SVDS_SCORING_MODE') := 'SVDS_SCORING_PCA';
- 13    -- v_setlst('ODMS_APPROXIMATE_COMPUTATION') := 'ODMS_APPR_COMP_ENABLE';
- 14
- 15    DBMS_DATA_MINING.CREATE_MODEL2(
- 16      model_name          => 'SVD_SH_sample',
- 17      mining_function     => 'FEATURE_EXTRACTION',
- 18      data_query          => 'SELECT * FROM svd_sh_sample_build_num',
- 19      set_list            => v_setlst,
- 20      case_id_column_name => 'cust_id');
- 21  END;
- 22  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    --
+  7    -- Select SVD as the Feature Extraction algorithm
+  8    v_setlst('ALGO_NAME') := 'ALGO_SINGULAR_VALUE_DECOMP';
+  9    -- Request the output of the U matrix values (not produced by default)
+ 10    v_setlst('SVDS_U_MATRIX_OUTPUT') := 'SVDS_U_MATRIX_ENABLE';
+ 11    v_setlst('PREP_AUTO') := 'OFF';
+ 12    -- Examples of possible overrides are:
+ 13    -- v_setlst('FEAT_NUM_FEATURES') := '10';
+ 14    -- v_setlst('PREP_AUTO') := 'ON';
+ 15    -- v_setlst('SVDS_SCORING_MODE') := 'SVDS_SCORING_PCA';
+ 16    -- v_setlst('ODMS_APPROXIMATE_COMPUTATION') := 'ODMS_APPR_COMP_ENABLE';
+ 17
+ 18    v_data_query := q'|SELECT * FROM svd_sh_sample_build_num|';
+ 19
+ 20    DBMS_DATA_MINING.CREATE_MODEL2(
+ 21      model_name          => 'SVD_SH_sample',
+ 22      mining_function     => 'FEATURE_EXTRACTION',
+ 23      data_query          => v_data_query,
+ 24      set_list            => v_setlst,
+ 25      case_id_column_name => 'CUST_ID'
+ 26    );
+ 27  END;
+ 28  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- Display model settings
@@ -430,7 +442,7 @@ PREP_AUTO                      OFF
 SVDS_SCORING_MODE              SVDS_SCORING_SVD
 SVDS_U_MATRIX_OUTPUT           SVDS_U_MATRIX_ENABLE
 
-7行が選択されました。
+7 rows selected.
 
 SQL>
 SQL> -- Display model signature
@@ -455,7 +467,7 @@ PRINTER_SUPPLIES                         NUMERICAL
 YRS_RESIDENCE                            NUMERICAL
 Y_BOX_GAMES                              NUMERICAL
 
-11行が選択されました。
+11 rows selected.
 
 SQL>
 SQL> -- Display model details
@@ -487,7 +499,7 @@ FEATURE_ID       VALUE
          9        5.68
         10        1.72
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> ---- V matrix
@@ -600,7 +612,7 @@ FEATURE_ID ATTRIBUTE_NAME                       VALUE
          9 Y_BOX_GAMES                            .09
         10 Y_BOX_GAMES                           -.00
 
-100行が選択されました。
+100 rows selected.
 
 SQL>
 SQL> ---- U matrix
@@ -622,7 +634,7 @@ FEATURE_ID       VALUE
          9        -.00
         10        -.00
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -- To compress the data and reduce storage only a few of the projections
@@ -643,7 +655,7 @@ SQL> CREATE TABLE svd_sh_sample_build_num_piv as
   4    "BULK_PACK_DISKETTES", "FLAT_PANEL_MONITOR", "HOME_THEATER_PACKAGE",
   5    "BOOKKEEPING_APPLICATION", "PRINTER_SUPPLIES", "Y_BOX_GAMES", "OS_DOC_SET_KANJI"));
 
-Table SVD_SH_SAMPLE_BUILD_NUM_PIVは作成されました。
+Table SVD_SH_SAMPLE_BUILD_NUM_PIV created.
 
 SQL>
 SQL>
@@ -666,7 +678,7 @@ SQL> CREATE TABLE svd_sh_sample_build_num_recon as
  14    WHERE a.feature_id=b.feature_id AND a.feature_id=c.feature_id
  15    GROUP BY case_id, attribute_name;
 
-Table SVD_SH_SAMPLE_BUILD_NUM_RECONは作成されました。
+Table SVD_SH_SAMPLE_BUILD_NUM_RECON created.
 
 SQL>
 SQL> column mae format 9999999.999
@@ -679,7 +691,7 @@ SQL> SELECT avg(abs(a.value-b.value)) mae
 ------------
         .086
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> column mape format 9999999.999
@@ -693,7 +705,7 @@ SQL> SELECT avg(abs((a.value-b.value)/
 ------------
         .085
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -729,6 +741,6 @@ FEATURE_ID    VALUE
          5    -.029
          6     .008
 
-6行が選択されました。
+6 rows selected.
 
 SQL> spool oml4sql-feature-extraction-text-mining-esa

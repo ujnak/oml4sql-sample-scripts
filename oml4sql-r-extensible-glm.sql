@@ -85,6 +85,7 @@ End;
 
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
   -- Model Settings -----------------------------------------------------------
   v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
@@ -97,19 +98,22 @@ BEGIN
   -- attribute names and the corresponding coefficients.
 
   v_setlst('RALG_DETAILS_FORMAT') := 
-    'select cast(''a'' as varchar2(200)) attr, 1 coef from dual';
+    q'|select cast('a' as varchar2(200)) attr, 1 coef from dual|';
 
   -- Column YRS_RESIDENCE has row weights.
  
   v_setlst('ODMS_ROW_WEIGHT_COLUMN_NAME') := 'YRS_RESIDENCE';
 
+  v_data_query := q'|SELECT * FROM mining_data_build_v|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'GLM_RDEMO_REGRESSION',
     mining_function     => 'REGRESSION',
-    data_query          => 'select * from mining_data_build_v',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
     case_id_column_name => 'CUST_ID',
-    target_column_name  => 'AGE',
-    set_list            => v_setlst);
+    target_column_name  => 'AGE'
+  );
 END;
 /
 
@@ -261,6 +265,7 @@ End;
 
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
   -- Model Settings -----------------------------------------------------------
   v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
@@ -274,22 +279,24 @@ BEGIN
   -- attribute names and the corresponding coefficients.
 
   v_setlst('RALG_DETAILS_FORMAT') := 
-    'select cast(''a'' as varchar2(200)) attr, 1 coef from dual';
+    q'|select cast('a' as varchar2(200)) attr, 1 coef from dual|';
 
   -- In this setting, a formula is specified,  which will be passed as a parameter
   -- to the model build function to build the model.
  
   v_setlst('RALG_BUILD_PARAMETER') := 
-    'select ''AFFINITY_CARD ~ AGE + EDUCATION + HOUSEHOLD_SIZE + OCCUPATION'' ' ||
-    '"form", 0 "keep.model" from dual';
+    q'|select 'AFFINITY_CARD ~ AGE + EDUCATION + HOUSEHOLD_SIZE + OCCUPATION' "form", 0 "keep.model" from dual|';
+
+  v_data_query := q'|SELECT * FROM mining_data_build_v|';
 
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'GLM_RDEMO_CLASSIFICATION',
     mining_function     => 'CLASSIFICATION',
-    data_query          => 'select * from mining_data_build_v',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
     case_id_column_name => 'CUST_ID',
-    target_column_name  => 'AFFINITY_CARD',
-    set_list            => v_setlst);
+    target_column_name  => 'AFFINITY_CARD'
+  );
 END;
 /
 

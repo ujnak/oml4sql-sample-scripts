@@ -47,19 +47,15 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('NNC_SH_Clas_sample');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
-SQL>
-SQL> ------------------
-SQL> -- SPECIFY SETTINGS
-SQL> --
 SQL> -- Cleanup old settings table for repeat runs
 SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE nnc_sh_sample_class_wt';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- CREATE AND POPULATE A CLASS WEIGHTS TABLE
@@ -75,19 +71,19 @@ SQL> CREATE TABLE nnc_sh_sample_class_wt (
   2    target_value NUMBER,
   3    class_weight NUMBER);
 
-Table NNC_SH_SAMPLE_CLASS_WTは作成されました。
+Table NNC_SH_SAMPLE_CLASS_WT created.
 
 SQL> INSERT INTO nnc_sh_sample_class_wt VALUES (0,0.35);
 
-1行挿入しました。
+1 row inserted.
 
 SQL> INSERT INTO nnc_sh_sample_class_wt VALUES (1,0.65);
 
-1行挿入しました。
+1 row inserted.
 
-SQL> COMMIT;
+SQL> commit;
 
-コミットが完了しました。
+Commit complete.
 
 SQL>
 SQL> ---------------------
@@ -96,40 +92,45 @@ SQL> --
 SQL> -- Build a new SVM Model
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    v_setlst('ALGO_NAME')               := 'ALGO_NEURAL_NETWORK';
-  5    v_setlst('CLAS_WEIGHTS_TABLE_NAME') := 'nnc_sh_sample_class_wt';
-  6    v_setlst('PREP_AUTO')               := 'ON';
-  7
-  8    -- Examples of other possible settings are:
-  9    -- v_setlst('ODMS_RANDOM_SEED')        := '12';
- 10    -- v_setlst('NNET_HIDDEN_LAYERS')      := '2';
- 11    -- v_setlst('NNET_NODES_PER_LAYER')    := '10, 30';
- 12    -- v_setlst('NNET_ITERATIONS')         := '100';
- 13    -- v_setlst('NNET_TOLERANCE')          := '0.0001';
- 14    -- v_setlst('NNET_ACTIVATIONS')        := 'NNET_ACTIVATIONS_LOG_SIG';
- 15    -- v_setlst('NNET_REGULARIZER')        := 'NNET_REGULARIZER_HELDASIDE';
- 16    -- v_setlst('NNET_HELDASIDE_RATIO')    := '0.3';
- 17    -- v_setlst('NNET_HELDASIDE_MAX_FAIL') := '5';
- 18    -- v_setlst('NNET_REGULARIZER')        := 'NNET_REGULARIZER_L2';
- 19    -- v_setlst('NNET_REG_LAMBDA')         := '0.5';
- 20    -- v_setlst('NNET_WEIGHT_UPPER_BOUND') := '0.7';
- 21    -- v_setlst('NNET_WEIGHT_LOWER_BOUND') := '-0.6';
- 22    -- v_setlst('LBFGS_HISTORY_DEPTH')     := '20';
- 23    -- v_setlst('LBFGS_SCALE_HESSIAN')     := 'LBFGS_SCALE_HESSIAN_DISABLE';
- 24    -- v_setlst('LBFGS_GRADIENT_TOLERANCE'):= '0.0001';
- 25
- 26    DBMS_DATA_MINING.CREATE_MODEL2(
- 27      model_name          => 'NNC_SH_Clas_sample',
- 28      mining_function     => 'CLASSIFICATION',
- 29      data_query          => 'SELECT * FROM mining_data_build_v',
- 30      set_list            => v_setlst,
- 31      case_id_column_name => 'cust_id',
- 32      target_column_name  => 'affinity_card');
- 33  END;
- 34  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    v_setlst('ALGO_NAME')               := 'ALGO_NEURAL_NETWORK';
+  7    v_setlst('CLAS_WEIGHTS_TABLE_NAME') := 'nnc_sh_sample_class_wt';
+  8    v_setlst('PREP_AUTO')               := 'ON';
+  9
+ 10    -- Examples of other possible settings are:
+ 11    -- v_setlst('ODMS_RANDOM_SEED')        := '12';
+ 12    -- v_setlst('NNET_HIDDEN_LAYERS')      := '2';
+ 13    -- v_setlst('NNET_NODES_PER_LAYER')    := '10, 30';
+ 14    -- v_setlst('NNET_ITERATIONS')         := '100';
+ 15    -- v_setlst('NNET_TOLERANCE')          := '0.0001';
+ 16    -- v_setlst('NNET_ACTIVATIONS')        := 'NNET_ACTIVATIONS_LOG_SIG';
+ 17    -- v_setlst('NNET_REGULARIZER')        := 'NNET_REGULARIZER_HELDASIDE';
+ 18    -- v_setlst('NNET_HELDASIDE_RATIO')    := '0.3';
+ 19    -- v_setlst('NNET_HELDASIDE_MAX_FAIL') := '5';
+ 20    -- v_setlst('NNET_REGULARIZER')        := 'NNET_REGULARIZER_L2';
+ 21    -- v_setlst('NNET_REG_LAMBDA')         := '0.5';
+ 22    -- v_setlst('NNET_WEIGHT_UPPER_BOUND') := '0.7';
+ 23    -- v_setlst('NNET_WEIGHT_LOWER_BOUND') := '-0.6';
+ 24    -- v_setlst('LBFGS_HISTORY_DEPTH')     := '20';
+ 25    -- v_setlst('LBFGS_SCALE_HESSIAN')     := 'LBFGS_SCALE_HESSIAN_DISABLE';
+ 26    -- v_setlst('LBFGS_GRADIENT_TOLERANCE'):= '0.0001';
+ 27
+ 28    v_data_query := q'|SELECT * FROM mining_data_build_v|';
+ 29
+ 30    DBMS_DATA_MINING.CREATE_MODEL2(
+ 31      model_name          => 'NNC_SH_Clas_sample',
+ 32      mining_function     => 'CLASSIFICATION',
+ 33      data_query          => v_data_query,
+ 34      set_list            => v_setlst,
+ 35      case_id_column_name => 'CUST_ID',
+ 36      target_column_name  => 'AFFINITY_CARD'
+ 37    );
+ 38  END;
+ 39  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -156,7 +157,7 @@ ODMS_RANDOM_SEED               0
 ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
 PREP_AUTO                      ON
 
-11行が選択されました。
+11 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -189,7 +190,7 @@ PRINTER_SUPPLIES                         NUMERICAL
 YRS_RESIDENCE                            NUMERICAL
 Y_BOX_GAMES                              NUMERICAL
 
-17行が選択されました。
+17 rows selected.
 
 SQL>
 SQL> ------------------------
@@ -212,7 +213,7 @@ DM$VSNNC_SH_CLAS_SAMPLE        Computed Settings
 DM$VTNNC_SH_CLAS_SAMPLE        Classification Targets
 DM$VWNNC_SH_CLAS_SAMPLE        Model Build Alerts
 
-7行が選択されました。
+7 rows selected.
 
 SQL>
 SQL>
@@ -346,7 +347,7 @@ SQL> WITH
 1.487E-002         90 99.7109827 1.10789981
 2.689E-003        100        100          1
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -- Compute ROC CURVE
@@ -601,7 +602,7 @@ PROB TPF FPF    TP    FN    FP    TN
 .0125 1.0000 .9029   346     0  1042   112
 .0027 1.0000 1.0000   346     0  1154     0
 
-178行が選択されました。
+178 rows selected.
 
 SQL>
 SQL>
@@ -675,7 +676,7 @@ SQL> SELECT cust_id FROM
     100733
     100898
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> ------------------
@@ -739,7 +740,7 @@ SQL> SELECT T.cust_id, S.prediction, S.probability
     100010          0  .815929541
     100010          1  .184070459
 
-20行が選択されました。
+20 rows selected.
 
 SQL>
 SQL> ------------------

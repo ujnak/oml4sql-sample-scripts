@@ -32,7 +32,10 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 -- Build a CUR model
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
+  --
   -- Select CUR Decomposition as the Attribute Importance algorithm
   v_setlst('ALGO_NAME')            := 'ALGO_CUR_DECOMPOSITION';
   -- Set row importance to be enabled (disabled by default)
@@ -46,12 +49,15 @@ BEGIN
   -- Examples of possible overrides are:
   -- v_setlst('ODMS_RANDOM_SEED') := '1';
 
+  v_data_query := q'|SELECT * FROM MINING_DATA_BUILD_V|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'CUR_SH_SAMPLE',
     mining_function     => 'ATTRIBUTE_IMPORTANCE',
-    data_query          => 'SELECT * FROM MINING_DATA_BUILD_V',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id');
+    case_id_column_name => 'CUST_ID'
+  );
 END;
 /
 

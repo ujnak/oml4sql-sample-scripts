@@ -14,7 +14,7 @@ SET trimspool ON
 SET pages 10000
 SET linesize 420
 SET echo ON
-SET long 2000000000
+SET long 200000000
 
 -----------------------------------------------------------------------
 --                            SAMPLE PROBLEM
@@ -75,23 +75,14 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 -- will be performed.
 --
 
--------------------
--- SPECIFY SETTINGS
---
--- Cleanup old settings table objects for repeat runs
-BEGIN EXECUTE IMMEDIATE 'DROP TABLE dt_sh_sample_cost';  
-EXCEPTION WHEN OTHERS THEN NULL; END;
-/
- 
 --------------------------
--- CREATE A SETTINGS TABLE
---
--- The default classification algorithm is Naive Bayes. In order to override
--- this, create and populate a settings table to be used as input for
--- CREATE_MODEL.
--- 
 -- CREATE AND POPULATE A COST MATRIX TABLE
 --
+-- Cleanup old settings table objects for repeat runs
+BEGIN EXECUTE IMMEDIATE 'DROP TABLE dt_sh_sample_cost';
+EXCEPTION WHEN OTHERS THEN NULL; END;
+/
+
 -- A cost matrix is used to influence the weighting of misclassification
 -- during model creation (and scoring).
 -- See Oracle Data Mining Concepts Guide for more details.
@@ -104,6 +95,7 @@ INSERT INTO dt_sh_sample_cost VALUES (0,0,0);
 INSERT INTO dt_sh_sample_cost VALUES (0,1,1);
 INSERT INTO dt_sh_sample_cost VALUES (1,0,8);
 INSERT INTO dt_sh_sample_cost VALUES (1,1,0);
+commit;
 
 ---------------------
 -- CREATE A NEW MODEL
@@ -111,8 +103,14 @@ INSERT INTO dt_sh_sample_cost VALUES (1,1,0);
 -- Build a DT model
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
-  -- Populate settings table
+  -- Model Settings ---------------------------------------------------
+  --
+  -- The default classification algorithm is Naive Bayes. In order to override
+  -- this, create and populate a settings to be used as input for
+  -- CREATE_MODEL2.
+  --
   v_setlst('ALGO_NAME')            := 'ALGO_DECISION_TREE';
   v_setlst('CLAS_COST_TABLE_NAME') := 'dt_sh_sample_cost';
 
@@ -124,13 +122,16 @@ BEGIN
   --v_setlst('TREE_TERM_MINREC_NODE')  := '5';
   --v_setlst('TREE_TERM_MINPCT_NODE')  := '0.05';
 
+  v_data_query := q'|SELECT * FROM mining_data_build_parallel_v|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'DT_SH_Clas_sample',
     mining_function     => 'CLASSIFICATION',
-    data_query          => 'SELECT * FROM mining_data_build_parallel_v',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id',
-    target_column_name  => 'affinity_card');
+    case_id_column_name => 'CUST_ID',
+    target_column_name  => 'AFFINITY_CARD'
+  );
 END;
 /
 

@@ -32,7 +32,7 @@ SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE ai_explain_output';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------
@@ -45,7 +45,7 @@ SQL> BEGIN
   6  END;
   7  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> ------------------------
@@ -81,6 +81,6 @@ FLAT_PANEL_MONITOR                                    .000         11
 OS_DOC_SET_KANJI                                      .000         11
 PRINTER_SUPPLIES                                      .000         11
 
-17行が選択されました。
+17 rows selected.
 
 SQL> spool oml4sql-classification-decision-tree

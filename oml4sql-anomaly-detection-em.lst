@@ -48,7 +48,7 @@ SQL> CREATE OR REPLACE VIEW DEMOGRAPHICS_V AS
   5           OS_DOC_SET_KANJI, PRINTER_SUPPLIES, Y_BOX_GAMES
   6    FROM SH.SUPPLEMENTARY_DEMOGRAPHICS;
 
-View DEMOGRAPHICS_Vは作成されました。
+View DEMOGRAPHICS_V created.
 
 SQL>
 SQL> -------------------------
@@ -62,41 +62,44 @@ SQL> CREATE OR REPLACE VIEW CUSTOMERS360_V AS
   5     FROM SH.CUSTOMERS a, DEMOGRAPHICS_V b
   6     WHERE a.CUST_ID = b.CUST_ID;
 
-View CUSTOMERS360_Vは作成されました。
+View CUSTOMERS360_V created.
 
 SQL>
 SQL> -----------------------------------------------------------------------
 SQL> --                            BUILD THE MODEL
 SQL> -----------------------------------------------------------------------
 SQL>
-SQL> -------------------------
-SQL> -- SET OUTLIER RATE IN SETTINGS TABLE - DEFAULT IS 0.05
-SQL> --
-SQL>
 SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('CUSTOMERS360MODEL_AD');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
+SQL>
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    v_setlst('ALGO_NAME')         := 'ALGO_EXPECTATION_MAXIMIZATION';
-  5    v_setlst('PREP_AUTO')         := 'ON';
-  6    v_setlst('EMCS_OUTLIER_RATE') := '0.1';
-  7
-  8    DBMS_DATA_MINING.CREATE_MODEL2(
-  9          MODEL_NAME          => 'CUSTOMERS360MODEL_AD',
- 10          MINING_FUNCTION     => 'CLASSIFICATION',
- 11          DATA_QUERY          => 'SELECT * FROM CUSTOMERS360_V',
- 12          CASE_ID_COLUMN_NAME => 'CUST_ID',
- 13          SET_LIST            => v_setlst,
- 14          TARGET_COLUMN_NAME  => NULL); -- NULL target indicates anomaly detection
- 15  END;
- 16  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    v_setlst('ALGO_NAME')         := 'ALGO_EXPECTATION_MAXIMIZATION';
+  7    v_setlst('PREP_AUTO')         := 'ON';
+  8    -- SET OUTLIER RATE - DEFAULT IS 0.05
+  9    v_setlst('EMCS_OUTLIER_RATE') := '0.1';
+ 10
+ 11    v_data_query := q'|SELECT * FROM CUSTOMERS360_V|';
+ 12
+ 13    DBMS_DATA_MINING.CREATE_MODEL2(
+ 14      model_name          => 'CUSTOMERS360MODEL_AD',
+ 15      mining_function     => 'CLASSIFICATION',
+ 16      data_query          => v_data_query,
+ 17      set_list            => v_setlst,
+ 18      case_id_column_name => 'CUST_ID',
+ 19      target_column_name  => NULL -- NULL target indicates anomaly detection
+ 20    );
+ 21  END;
+ 22  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -119,7 +122,7 @@ NUM_ROWS                               4500
 RANDOM_SEED                               0
 REMOVED_COMPONENTS                        0
 
-6行が選択されました。
+6 rows selected.
 
 SQL>
 SQL> ---------------------------------------------
@@ -160,7 +163,7 @@ SQL> CREATE OR REPLACE VIEW EM_ANOMALOUS_RESULTS AS
  11              FROM CUSTOMERS360_V))
  12  ORDER BY prob_anomalous DESC;
 
-View EM_ANOMALOUS_RESULTSは作成されました。
+View EM_ANOMALOUS_RESULTS created.
 
 SQL>
 SQL> SELECT *
@@ -180,7 +183,7 @@ __________ ____________ _________________ ________________ _________________ ___
     102363            0                 1                3 1                 F              married                     9
     102201            0                 1                7 1                 F              divorced                   10
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> --------------------------------------------------------------------
@@ -219,7 +222,7 @@ __________ _____________ _______________________________________________________
     103341             0 "CUST_YEAR_OF_BIRTH" actualValue="1970" weight=".531"      "Y_BOX_GAMES" actualValue="0" weight="-.049"                    "YRS_RESIDENCE" actualValue="4" weight="-.049"
     103441             0 "CUST_YEAR_OF_BIRTH" actualValue="1952" weight=".415"      "Y_BOX_GAMES" actualValue="0" weight="-.009"                    "YRS_RESIDENCE" actualValue="2" weight="-.009"
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL>

@@ -46,10 +46,6 @@ BEGIN DBMS_DATA_MINING.DROP_MODEL('NNC_SH_Clas_sample');
 EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 
-
-------------------
--- SPECIFY SETTINGS
---
 -- Cleanup old settings table for repeat runs
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE nnc_sh_sample_class_wt';  
 EXCEPTION WHEN OTHERS THEN NULL; END;
@@ -69,7 +65,7 @@ CREATE TABLE nnc_sh_sample_class_wt (
   class_weight NUMBER);
 INSERT INTO nnc_sh_sample_class_wt VALUES (0,0.35);
 INSERT INTO nnc_sh_sample_class_wt VALUES (1,0.65);
-COMMIT;
+commit;
 
 ---------------------
 -- CREATE A NEW MODEL
@@ -77,7 +73,9 @@ COMMIT;
 -- Build a new SVM Model
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
   v_setlst('ALGO_NAME')               := 'ALGO_NEURAL_NETWORK';
   v_setlst('CLAS_WEIGHTS_TABLE_NAME') := 'nnc_sh_sample_class_wt';
   v_setlst('PREP_AUTO')               := 'ON';
@@ -100,13 +98,16 @@ BEGIN
   -- v_setlst('LBFGS_SCALE_HESSIAN')     := 'LBFGS_SCALE_HESSIAN_DISABLE';
   -- v_setlst('LBFGS_GRADIENT_TOLERANCE'):= '0.0001';
 
+  v_data_query := q'|SELECT * FROM mining_data_build_v|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'NNC_SH_Clas_sample',
     mining_function     => 'CLASSIFICATION',
-    data_query          => 'SELECT * FROM mining_data_build_v',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id',
-    target_column_name  => 'affinity_card');
+    case_id_column_name => 'CUST_ID',
+    target_column_name  => 'AFFINITY_CARD'
+  );
 END;
 /
 

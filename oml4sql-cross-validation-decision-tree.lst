@@ -12,9 +12,8 @@ SQL> --  https://oss.oracle.com/licenses/upl/
 SQL> -----------------------------------------------------------------------
 SQL> SET SERVEROUTPUT ON
 SQL> SET ECHO OFF
-警告: このLONG設定によってJavaメモリーの問題が発生する可能性があります。この設定を引き下げるか、Javaが使用できるメモリーを増やす(あるいはその両方)ことをお薦めします。
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 
       ITER ACCURACY
@@ -31,7 +30,7 @@ PL/SQLプロシージャが正常に完了しました。
          9      .85
                 .82
 
-11行が選択されました。
+11 rows selected.
 
 
       ITER     ACTUAL PREDICTED    COUNT
@@ -81,5 +80,5 @@ PL/SQLプロシージャが正常に完了しました。
                     1         0   182.00
                     1         1   198.00
 
-44行が選択されました。
+44 rows selected.
 

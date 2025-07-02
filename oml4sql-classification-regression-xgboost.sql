@@ -50,7 +50,9 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 -- CREATE MODEL
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
   v_setlst('ALGO_NAME')   := 'ALGO_XGBOOST';
   -- for 0/1 target, choose binary:logistic as objective
   v_setlst('objective')   := 'binary:logistic';
@@ -60,13 +62,16 @@ BEGIN
   v_setlst('eval_metric') := 'error,auc';
   v_setlst('num_round')   := '10';
 
+  v_data_query := q'|SELECT * FROM mining_data_build_v|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'XGC_SH_MODEL',
     mining_function     => 'CLASSIFICATION',
-    data_query          => 'select * from mining_data_build_v',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id',
-    target_column_name  => 'affinity_card');
+    case_id_column_name => 'CUST_ID',
+    target_column_name  => 'AFFINITY_CARD'
+  );
 END;
 /
 
@@ -214,21 +219,26 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 -- CREATE MODEL
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
-  v_setlst('ALGO_NAME')               := 'ALGO_XGBOOST';
+  -- Model Settings ---------------------------------------------------
+  v_setlst('ALGO_NAME') := 'ALGO_XGBOOST';
   -- for 0/1 target, choose binary:logistic as objective
-  v_setlst('booster')            := 'gblinear';
-  v_setlst('alpha')              := '0.0001';
-  v_setlst('lambda')             := '1';
-  v_setlst('num_round')          := '100';
+  v_setlst('booster')   := 'gblinear';
+  v_setlst('alpha')     := '0.0001';
+  v_setlst('lambda')    := '1';
+  v_setlst('num_round') := '100';
+
+  v_data_query := q'|SELECT * FROM mining_data_build_v|';
 
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'XGR_SH_MODEL',
     mining_function     => 'REGRESSION',
-    data_query          => 'select * from mining_data_build_v',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id',
-    target_column_name  => 'age');
+    case_id_column_name => 'CUST_ID',
+    target_column_name  => 'AGE'
+  );
 END;
 /
 

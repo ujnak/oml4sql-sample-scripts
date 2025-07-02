@@ -26,7 +26,7 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('ESM_SH_SAMPLE');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- Create input time series
@@ -34,35 +34,41 @@ SQL> create or replace view esm_sh_data
   2         as select time_id, amount_sold
   3         from sh.sales;
 
-View ESM_SH_DATAは作成されました。
+View ESM_SH_DATA created.
 
 SQL>
 SQL> -- Build the ESM model
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- Select ESM as the algorithm
-  5    v_setlst('ALGO_NAME') := 'ALGO_EXPONENTIAL_SMOOTHING';
-  6    -- Set accumulation interval to be quarter
-  7    v_setlst('EXSM_INTERVAL') := 'EXSM_INTERVAL_QTR';
-  8    -- Set prediction step to be 4 quarters (one year)
-  9    v_setlst('EXSM_PREDICTION_STEP') := '4';
- 10    -- Set ESM model to be Holt-Winters
- 11    v_setlst('EXSM_MODEL') := 'EXSM_WINTERS';
- 12    -- Set seasonal cycle to be 4 quarters
- 13    v_setlst('EXSM_SEASONALITY') := '4';
- 14
- 15    dbms_data_mining.create_model2(
- 16      model_name          => 'ESM_SH_SAMPLE',
- 17      mining_function     => 'TIME_SERIES',
- 18      data_query          => 'select * from esm_sh_data',
- 19      case_id_column_name => 'time_id',
- 20      target_column_name  => 'amount_sold',
- 21      set_list            => v_setlst);
- 22  END;
- 23  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    --
+  7    -- Select ESM as the algorithm
+  8    v_setlst('ALGO_NAME') := 'ALGO_EXPONENTIAL_SMOOTHING';
+  9    -- Set accumulation interval to be quarter
+ 10    v_setlst('EXSM_INTERVAL') := 'EXSM_INTERVAL_QTR';
+ 11    -- Set prediction step to be 4 quarters (one year)
+ 12    v_setlst('EXSM_PREDICTION_STEP') := '4';
+ 13    -- Set ESM model to be Holt-Winters
+ 14    v_setlst('EXSM_MODEL') := 'EXSM_WINTERS';
+ 15    -- Set seasonal cycle to be 4 quarters
+ 16    v_setlst('EXSM_SEASONALITY') := '4';
+ 17
+ 18    v_data_query := q'|SELECT * FROM ESM_SH_DATA|';
+ 19
+ 20    DBMS_DATA_MINING.CREATE_MODEL2(
+ 21      model_name          => 'ESM_SH_SAMPLE',
+ 22      mining_function     => 'TIME_SERIES',
+ 23      data_query          => v_data_query,
+ 24      set_list            => v_setlst,
+ 25      case_id_column_name => 'TIME_ID',
+ 26      target_column_name  => 'AMOUNT_SOLD'
+ 27    );
+ 28  END;
+ 29  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- output setting table
@@ -93,7 +99,7 @@ ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
 ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
 PREP_AUTO                      ON
 
-17行が選択されました。
+17 rows selected.
 
 SQL>
 SQL> -- get signature
@@ -108,7 +114,7 @@ ATTRIBUTE_NAME                           ATTRIBUTE_TYPE
 ---------------------------------------- --------------------
 AMOUNT_SOLD                              NUMERICAL
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL>
@@ -144,7 +150,7 @@ NUM_ROWS               9.19E+05
 SIGMA                  8.71E-02
 STD                    8.71E-02
 
-20行が選択されました。
+20 rows selected.
 
 SQL>
 SQL> -- get predictions
@@ -162,27 +168,27 @@ SQL> select case_id, value, prediction, lower, upper
 
 CASE_ID                           VALUE PREDICTION     LOWER     UPPER
 ------------------------------ -------- ---------- --------- ---------
-19-01-01                        6480684    6402751
-19-04-01                        5593994    5868258
-19-07-01                        6071823    6205873
-19-10-01                        5937414    5978511
-20-01-01                        6093747    6223665
-20-04-01                        4925472    5535877
-20-07-01                        5827050    5515472
-20-10-01                        5373679    5601171
-21-01-01                        5984889    5644292
-21-04-01                        5371731    5317402
-21-07-01                        6121239    5845169
-21-10-01                        6287647    5920688
-22-01-01                        6547097    6500126
-22-04-01                        6922468    5930069
-22-07-01                        7195999    7376867
-22-10-01                        7470898    7154088
-23-01-01                                   7819637   6484414   9154860
-23-04-01                                   7151013   5591487   8710540
-23-07-01                                   7907806   5843738   9971875
-23-10-01                                   7821557   5462865  10180250
+01-JAN-19                       6480684    6402751
+01-APR-19                       5593994    5868258
+01-JUL-19                       6071823    6205873
+01-OCT-19                       5937414    5978511
+01-JAN-20                       6093747    6223665
+01-APR-20                       4925472    5535877
+01-JUL-20                       5827050    5515472
+01-OCT-20                       5373679    5601171
+01-JAN-21                       5984889    5644292
+01-APR-21                       5371731    5317402
+01-JUL-21                       6121239    5845169
+01-OCT-21                       6287647    5920688
+01-JAN-22                       6547097    6500126
+01-APR-22                       6922468    5930069
+01-JUL-22                       7195999    7376867
+01-OCT-22                       7470898    7154088
+01-JAN-23                                  7819637   6484414   9154860
+01-APR-23                                  7151013   5591487   8710540
+01-JUL-23                                  7907806   5843738   9971875
+01-OCT-23                                  7821557   5462865  10180250
 
-20行が選択されました。
+20 rows selected.
 
 SQL> spool oml4sql-time-series-mset

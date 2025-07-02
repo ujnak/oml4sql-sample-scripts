@@ -31,7 +31,7 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('NMF_SH_sample');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> ---------------------
@@ -40,27 +40,34 @@ SQL> --
 SQL> -- Build NMF model
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- NMF is the default Feature Extraction algorithm. For this sample,
-  5    -- we use Data Auto Preparation.
-  6    v_setlst('PREP_AUTO') := 'ON';
-  7
-  8    -- Other examples of possible overrides are:
-  9    -- v_setlst('FEAT_NUM_FEATURES')   := '10';
- 10    -- v_setlst('NMFS_CONV_TOLERANCE') := '0.05';
- 11    -- v_setlst('NMFS_NUM_ITERATIONS') := '50';
- 12    -- v_setlst('NMFS_RANDOM_SEED')    := '-1';
- 13
- 14    DBMS_DATA_MINING.CREATE_MODEL2(
- 15      model_name          => 'NMF_SH_sample',
- 16      mining_function     => 'FEATURE_EXTRACTION',
- 17      data_query          => 'SELECT * FROM mining_data_build_v',
- 18      set_list            => v_setlst,
- 19      case_id_column_name => 'cust_id');
- 20  END;
- 21  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    --
+  7    -- NMF is the default Feature Extraction algorithm. For this sample,
+  8    -- we use Data Auto Preparation.
+  9    --
+ 10    v_setlst('PREP_AUTO') := 'ON';
+ 11
+ 12    -- Other examples of possible overrides are:
+ 13    -- v_setlst('FEAT_NUM_FEATURES')   := '10';
+ 14    -- v_setlst('NMFS_CONV_TOLERANCE') := '0.05';
+ 15    -- v_setlst('NMFS_NUM_ITERATIONS') := '50';
+ 16    -- v_setlst('NMFS_RANDOM_SEED')    := '-1';
+ 17
+ 18    v_data_query := q'|SELECT * FROM mining_data_build_v|';
+ 19
+ 20    DBMS_DATA_MINING.CREATE_MODEL2(
+ 21      model_name          => 'NMF_SH_sample',
+ 22      mining_function     => 'FEATURE_EXTRACTION',
+ 23      data_query          => v_data_query,
+ 24      set_list            => v_setlst,
+ 25      case_id_column_name => 'CUST_ID'
+ 26    );
+ 27  END;
+ 28  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -85,7 +92,7 @@ ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
 ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
 PREP_AUTO                      ON
 
-9行が選択されました。
+9 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -119,7 +126,7 @@ PRINTER_SUPPLIES                         NUMERICAL
 YRS_RESIDENCE                            NUMERICAL
 Y_BOX_GAMES                              NUMERICAL
 
-18行が選択されました。
+18 rows selected.
 
 SQL>
 SQL> ------------------------
@@ -142,7 +149,7 @@ DM$VNNMF_SH_SAMPLE             Normalization and Missing Value Handling
 DM$VSNMF_SH_SAMPLE             Computed Settings
 DM$VWNMF_SH_SAMPLE             Model Build Alerts
 
-6行が選択されました。
+6 rows selected.
 
 SQL>
 SQL> -- Each feature is a linear combination of the original attribute set;
@@ -233,7 +240,7 @@ COEFFICIENT
      .21979
 
 
-21行が選択されました。
+21 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -280,7 +287,7 @@ SQL> SELECT FEATURE_ID(nmf_sh_sample USING *) AS feat, COUNT(*) AS cnt
          5         79
          3         56
 
-8行が選択されました。
+8 rows selected.
 
 SQL>
 SQL> ------------------
@@ -334,6 +341,6 @@ SQL> SELECT S.feature_id fid, value val,
               </Details>
 
 
-3行が選択されました。
+3 rows selected.
 
 SQL> spool oml4sql-feature-extraction-svd

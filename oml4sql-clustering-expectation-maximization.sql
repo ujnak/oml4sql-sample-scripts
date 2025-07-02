@@ -48,21 +48,21 @@ BEGIN DBMS_DATA_MINING.DROP_MODEL('EM_SH_Clus_sample');
 EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 
--------------------
--- SPECIFY SETTINGS
---
--- K-Means is the default Clustering algorithm. For this sample,
--- we skip specification of any overrides to defaults
---
--- Uncomment the appropriate sections of the code below for
--- changing settings values.
--- 
 ---------------------
 -- CREATE A NEW MODEL
 --
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
+  --
+  -- K-Means is the default Clustering algorithm. For this sample,
+  -- we skip specification of any overrides to defaults
+  --
+  -- Uncomment the appropriate sections of the code below for
+  -- changing settings values.
+  --
   v_setlst('ALGO_NAME') := 'ALGO_EXPECTATION_MAXIMIZATION';
   v_setlst('PREP_AUTO') := 'ON';
   -- Other examples of overrides are:
@@ -74,12 +74,15 @@ BEGIN
   -- v_setlst('EMCS_NUM_ITERATIONS')      := '200';
   -- v_setlst('EMCS_LOGLIKE_IMPROVEMENT') := '1e-10';
 
+  v_data_query := q'|SELECT * FROM mining_data_build_parallel_v|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'EM_SH_Clus_sample',
     mining_function     => 'CLUSTERING',
-    data_query          => 'select * from mining_data_build_parallel_v',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id');
+    case_id_column_name => 'CUST_ID'
+  );
 END;
 /
 

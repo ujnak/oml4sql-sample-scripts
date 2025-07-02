@@ -51,12 +51,6 @@ BEGIN DBMS_DATA_MINING.DROP_MODEL('OC_SH_Clus_sample');
 EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 
--------------------
--- SPECIFY SETTINGS
---
--- K-Means is the default clustering algorithm. Override the
--- default to set the algorithm to O-Cluster.
--- 
 ---------------------
 -- CREATE A NEW MODEL
 --
@@ -65,41 +59,50 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 -- categorical attributes since numeric datatypes 
 -- are treated as numeric attributes.
 DECLARE
-  xformlist dbms_data_mining_transform.TRANSFORM_LIST;
+   v_xlst  dbms_data_mining_transform.TRANSFORM_LIST;
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
   dbms_data_mining_transform.SET_TRANSFORM(
-    xformlist, 'AFFINITY_CARD', null, 'TO_CHAR(AFFINITY_CARD)', null);
+    v_xlst, 'AFFINITY_CARD', null, 'TO_CHAR(AFFINITY_CARD)', null);
   dbms_data_mining_transform.SET_TRANSFORM(
-    xformlist, 'BOOKKEEPING_APPLICATION', null, 'TO_CHAR(BOOKKEEPING_APPLICATION)', null);
+    v_xlst, 'BOOKKEEPING_APPLICATION', null, 'TO_CHAR(BOOKKEEPING_APPLICATION)', null);
   dbms_data_mining_transform.SET_TRANSFORM(
-    xformlist, 'BULK_PACK_DISKETTES', null, 'TO_CHAR(BULK_PACK_DISKETTES)', null);
+    v_xlst, 'BULK_PACK_DISKETTES', null, 'TO_CHAR(BULK_PACK_DISKETTES)', null);
   dbms_data_mining_transform.SET_TRANSFORM(
-    xformlist, 'FLAT_PANEL_MONITOR', null, 'TO_CHAR(FLAT_PANEL_MONITOR)', null);
+    v_xlst, 'FLAT_PANEL_MONITOR', null, 'TO_CHAR(FLAT_PANEL_MONITOR)', null);
   dbms_data_mining_transform.SET_TRANSFORM(
-    xformlist, 'HOME_THEATER_PACKAGE', null, 'TO_CHAR(HOME_THEATER_PACKAGE)', null);
+    v_xlst, 'HOME_THEATER_PACKAGE', null, 'TO_CHAR(HOME_THEATER_PACKAGE)', null);
   dbms_data_mining_transform.SET_TRANSFORM(
-    xformlist, 'OS_DOC_SET_KANJI', null, 'TO_CHAR(OS_DOC_SET_KANJI)', null);
+    v_xlst, 'OS_DOC_SET_KANJI', null, 'TO_CHAR(OS_DOC_SET_KANJI)', null);
   dbms_data_mining_transform.SET_TRANSFORM(
-    xformlist, 'PRINTER_SUPPLIES', null, 'TO_CHAR(PRINTER_SUPPLIES)', null);
+    v_xlst, 'PRINTER_SUPPLIES', null, 'TO_CHAR(PRINTER_SUPPLIES)', null);
   dbms_data_mining_transform.SET_TRANSFORM(
-    xformlist, 'Y_BOX_GAMES', null, 'TO_CHAR(Y_BOX_GAMES)', null);
+    v_xlst, 'Y_BOX_GAMES', null, 'TO_CHAR(Y_BOX_GAMES)', null);
 
+  -- Model Settings ---------------------------------------------------
+  --
+  -- K-Means is the default clustering algorithm. Override the
+  -- default to set the algorithm to O-Cluster.
+  --
   v_setlst('ALGO_NAME')         := 'ALGO_O_CLUSTER';
   v_setlst('CLUS_NUM_CLUSTERS') := '10';
   v_setlst('PREP_AUTO')         := 'ON';
   -- Other possible settings are:
   -- v_setlst('OCLT_SENSITIVITY') := '0.5';
 
+  v_data_query := q'|SELECT * FROM mining_data_build_parallel_v|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'OC_SH_Clus_sample',
     mining_function     => 'CLUSTERING',
-    data_query          => 'select * from mining_data_build_parallel_v',
-    case_id_column_name => 'cust_id',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    xform_list          => xformlist);
+    case_id_column_name => 'CUST_ID',
+    xform_list          => v_xlst
+  );
 END;
-/ 
+/
 
 -------------------------
 -- DISPLAY MODEL SETTINGS

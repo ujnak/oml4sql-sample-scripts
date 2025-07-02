@@ -49,45 +49,48 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('EM_SH_Clus_sample');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
-SQL> -------------------
-SQL> -- SPECIFY SETTINGS
-SQL> --
-SQL> -- K-Means is the default Clustering algorithm. For this sample,
-SQL> -- we skip specification of any overrides to defaults
-SQL> --
-SQL> -- Uncomment the appropriate sections of the code below for
-SQL> -- changing settings values.
-SQL> --
 SQL> ---------------------
 SQL> -- CREATE A NEW MODEL
 SQL> --
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    v_setlst('ALGO_NAME') := 'ALGO_EXPECTATION_MAXIMIZATION';
-  5    v_setlst('PREP_AUTO') := 'ON';
-  6    -- Other examples of overrides are:
-  7    -- v_setlst('EMCS_NUM_COMPONENTS')      := '15';
-  8    -- v_setlst('CLUS_NUM_CLUSTERS')        := '5';
-  9    -- v_setlst('EMCS_CLUSTER_COMP_ENABLE') := 'EMCS_CLUSTER_COMP_DISABLE';
- 10    -- v_setlst('EMCS_ATTRIBUTE_FILTER')    := 'EMCS_ATTR_FILTER_DISABLE';
- 11    -- v_setlst('EMCS_LINKAGE_FUNCTION')    := 'EMCS_LINKAGE_AVERAGE';
- 12    -- v_setlst('EMCS_NUM_ITERATIONS')      := '200';
- 13    -- v_setlst('EMCS_LOGLIKE_IMPROVEMENT') := '1e-10';
- 14
- 15    DBMS_DATA_MINING.CREATE_MODEL2(
- 16      model_name          => 'EM_SH_Clus_sample',
- 17      mining_function     => 'CLUSTERING',
- 18      data_query          => 'select * from mining_data_build_parallel_v',
- 19      set_list            => v_setlst,
- 20      case_id_column_name => 'cust_id');
- 21  END;
- 22  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    --
+  7    -- K-Means is the default Clustering algorithm. For this sample,
+  8    -- we skip specification of any overrides to defaults
+  9    --
+ 10    -- Uncomment the appropriate sections of the code below for
+ 11    -- changing settings values.
+ 12    --
+ 13    v_setlst('ALGO_NAME') := 'ALGO_EXPECTATION_MAXIMIZATION';
+ 14    v_setlst('PREP_AUTO') := 'ON';
+ 15    -- Other examples of overrides are:
+ 16    -- v_setlst('EMCS_NUM_COMPONENTS')      := '15';
+ 17    -- v_setlst('CLUS_NUM_CLUSTERS')        := '5';
+ 18    -- v_setlst('EMCS_CLUSTER_COMP_ENABLE') := 'EMCS_CLUSTER_COMP_DISABLE';
+ 19    -- v_setlst('EMCS_ATTRIBUTE_FILTER')    := 'EMCS_ATTR_FILTER_DISABLE';
+ 20    -- v_setlst('EMCS_LINKAGE_FUNCTION')    := 'EMCS_LINKAGE_AVERAGE';
+ 21    -- v_setlst('EMCS_NUM_ITERATIONS')      := '200';
+ 22    -- v_setlst('EMCS_LOGLIKE_IMPROVEMENT') := '1e-10';
+ 23
+ 24    v_data_query := q'|SELECT * FROM mining_data_build_parallel_v|';
+ 25
+ 26    DBMS_DATA_MINING.CREATE_MODEL2(
+ 27      model_name          => 'EM_SH_Clus_sample',
+ 28      mining_function     => 'CLUSTERING',
+ 29      data_query          => v_data_query,
+ 30      set_list            => v_setlst,
+ 31      case_id_column_name => 'CUST_ID'
+ 32    );
+ 33  END;
+ 34  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -124,7 +127,7 @@ ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
 ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
 PREP_AUTO                      ON
 
-21行が選択されました。
+21 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -154,7 +157,7 @@ OCCUPATION                               CATEGORICAL
 YRS_RESIDENCE                            NUMERICAL
 Y_BOX_GAMES                              NUMERICAL
 
-14行が選択されました。
+14 rows selected.
 
 SQL>
 SQL> -------------------------
@@ -170,7 +173,7 @@ MINING_FUNCTION      ALGORITHM
 -------------------- ------------------------------
 CLUSTERING           EXPECTATION_MAXIMIZATION
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> ------------------------
@@ -201,7 +204,7 @@ DM$VREM_SH_CLUS_SAMPLE         Clustering Rules
 DM$VSEM_SH_CLUS_SAMPLE         Computed Settings
 DM$VWEM_SH_CLUS_SAMPLE         Model Build Alerts
 
-14行が選択されました。
+14 rows selected.
 
 SQL>
 SQL> -- Attribute importance
@@ -236,7 +239,7 @@ COUNTRY_NAME                                   .0160             15
 OS_DOC_SET_KANJI                               .0031             16
 PRINTER_SUPPLIES                               .0000             17
 
-17行が選択されました。
+17 rows selected.
 
 SQL>
 SQL> SELECT * FROM (
@@ -258,7 +261,7 @@ CUST_GENDER               HOUSEHOLD_SIZE                 .4183
 CUST_MARITAL_STATUS       HOUSEHOLD_SIZE                 .4176
 BOOKKEEPING_APPLICATION   EDUCATION                      .4128
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -- Cluster details are best seen in pieces - based on the kind of
@@ -296,7 +299,7 @@ SQL> SELECT cluster_id clu_id, record_count rec_cnt, parent, tree_level
         18        141         13          7
         19        291         13          7
 
-19行が選択されました。
+19 rows selected.
 
 SQL>
 SQL> -- TAXONOMY
@@ -327,7 +330,7 @@ CLUSTER_ID LEFT_CHILD_ID RIGHT_CHILD_ID
         18
         19
 
-19行が選択されました。
+19 rows selected.
 
 SQL>
 SQL> -- CENTROIDS FOR LEAF CLUSTERS
@@ -369,7 +372,7 @@ CLUSTER_ID ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME            MEAN     VARIANCE M
         17 YRS_RESIDENCE                                    4.877        2.442
         17 Y_BOX_GAMES                                       .000         .000
 
-14行が選択されました。
+14 rows selected.
 
 SQL>
 SQL> -- HISTOGRAM FOR ATTRIBUTE OF A LEAF CLUSTER
@@ -395,7 +398,7 @@ CLUSTER_ID ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME        BIN_ID LOWER_BIN_BOUNDA
         17 AGE                                               10             71.700             79.000                                0
         17 AGE                                               11                                                                      0
 
-11行が選択されました。
+11 rows selected.
 
 SQL>
 SQL> -- RULES FOR LEAF CLUSTERS
@@ -441,7 +444,7 @@ CLUSTER_ID RULE_SUPPORT RULE_CONFIDENCE
         18          123            .872
         19          251            .863
 
-19行が選択されました。
+19 rows selected.
 
 SQL>
 SQL> -- RULE DETAILS FOR LEAF CLUSTERS
@@ -564,7 +567,7 @@ CLUSTER_ID ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME    OP NUMERIC_VALUE ATTRIBUTE_
          2 Y_BOX_GAMES                               <=          .000                          918        .004
          2 Y_BOX_GAMES                               >=          .000                          918        .004
 
-90行が選択されました。
+90 rows selected.
 
 SQL>
 SQL> -- Global EM model statistics
@@ -585,7 +588,7 @@ NUM_ROWS                            1500.000
 RANDOM_SEED                             .000
 REMOVED_COMPONENTS                     2.000
 
-7行が選択されました。
+7 rows selected.
 
 SQL>
 SQL> -- EM component details
@@ -616,7 +619,7 @@ COMPONENT_ID CLUSTER_ID PRIOR_PROBABILITY
           17         19              .018
           18          7              .009
 
-18行が選択されました。
+18 rows selected.
 
 SQL>
 SQL> -- Means and variances for attributes modeled with Gaussian distributions
@@ -631,7 +634,7 @@ COMPONENT_ID ATTRIBUTE_NAME                    MEAN     VARIANCE
           11 AGE                             10.098        5.987
           11 YRS_RESIDENCE                    1.642         .359
 
-2行が選択されました。
+2 rows selected.
 
 SQL>
 SQL> -- Frequences for attributes modeled with multivalued Bernoulli
@@ -719,7 +722,7 @@ COMPONENT_ID ATTRIBUTE_NAME            ATTRIBUTE_VALUE    FREQUENCY
           11 Y_BOX_GAMES               (0 : 1]                 .999
           11 Y_BOX_GAMES                                       .001
 
-59行が選択されました。
+59 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -763,7 +766,7 @@ SQL> SELECT CLUSTER_ID(em_sh_clus_sample USING *) AS clus, COUNT(*) AS cnt
         11         25
          7          5
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> ------------------
@@ -791,7 +794,7 @@ SQL> SELECT cust_id
     101271
     101188
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> ------------------
@@ -831,6 +834,6 @@ CLUSTER_ID PROB DET
                 </Details>
 
 
-2行が選択されました。
+2 rows selected.
 
 SQL> spool oml4sql-clustering-kmeans-star-schema

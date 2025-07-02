@@ -34,7 +34,7 @@ SQL> BEGIN
   6  END;
   7  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> BEGIN
@@ -89,14 +89,14 @@ SQL> BEGIN
  50  END;
  51  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('RF_RDEMO_REGRESSION');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -109,32 +109,37 @@ SQL> -- regression model RF_RDEMO_REGRESSION using dataset mining_data_build_v.
 SQL>
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
-  5    v_setlst('RALG_BUILD_FUNCTION')   := 'RF_RDEMO_BUILD_REGRESSION';
-  6    v_setlst('RALG_SCORE_FUNCTION')   := 'RF_RDEMO_SCORE_REGRESSION';
-  7    v_setlst('RALG_DETAILS_FUNCTION') := 'RF_RDEMO_DETAILS_REGRESSION';
-  8
-  9    -- Once this setting is specified, a model view will be created. This model
- 10    -- view will be generated to display the model details, which contains the
- 11    -- attribute names and the corresponding importance.
- 12    v_setlst('RALG_DETAILS_FORMAT') := 'select cast(''a'' as varchar2(100)) name, 1 importance from dual';
- 13
- 14    -- In this setting, a formula is specified,  which will be passed as a parameter
- 15    -- to the model build function to build the model.
- 16    v_setlst('RALG_BUILD_PARAMETER') := 'select ''AGE ~ .'' "form" from dual';
- 17
- 18    dbms_data_mining.create_model2(
- 19      model_name          => 'RF_RDEMO_REGRESSION',
- 20      mining_function     => 'REGRESSION',
- 21      data_query          => 'select * from mining_data_build_v',
- 22      case_id_column_name => 'CUST_ID',
- 23      target_column_name  => 'AGE',
- 24      set_list            => v_setlst);
- 25  END;
- 26  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  7    v_setlst('RALG_BUILD_FUNCTION')   := 'RF_RDEMO_BUILD_REGRESSION';
+  8    v_setlst('RALG_SCORE_FUNCTION')   := 'RF_RDEMO_SCORE_REGRESSION';
+  9    v_setlst('RALG_DETAILS_FUNCTION') := 'RF_RDEMO_DETAILS_REGRESSION';
+ 10
+ 11    -- Once this setting is specified, a model view will be created. This model
+ 12    -- view will be generated to display the model details, which contains the
+ 13    -- attribute names and the corresponding importance.
+ 14    v_setlst('RALG_DETAILS_FORMAT') := 'select cast(''a'' as varchar2(100)) name, 1 importance from dual';
+ 15
+ 16    -- In this setting, a formula is specified,  which will be passed as a parameter
+ 17    -- to the model build function to build the model.
+ 18    v_setlst('RALG_BUILD_PARAMETER') := 'select ''AGE ~ .'' "form" from dual';
+ 19
+ 20    v_data_query := q'|SELECT * FROM mining_data_build_v|';
+ 21
+ 22    DBMS_DATA_MINING.CREATE_MODEL2(
+ 23      model_name          => 'RF_RDEMO_REGRESSION',
+ 24      mining_function     => 'REGRESSION',
+ 25      data_query          => v_data_query,
+ 26      set_list            => v_setlst,
+ 27      case_id_column_name => 'CUST_ID',
+ 28      target_column_name  => 'AGE'
+ 29    );
+ 30  END;
+ 31  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -169,7 +174,7 @@ BULK_PACK_DISKETTES               835.992         14
 OS_DOC_SET_KANJI                   11.984         15
 PRINTER_SUPPLIES                        0         16
 
-16行が選択されました。
+16 rows selected.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -201,7 +206,7 @@ SQL> SELECT CUST_ID, AGE as AGE_act,
     100009         18     16.412
     100010         17     16.807
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -219,7 +224,7 @@ SQL> BEGIN
   6  END;
   7  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> BEGIN
@@ -311,14 +316,14 @@ SQL> BEGIN
  87  END;
  88  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('RF_RDEMO_CLASSIFICATION');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -331,29 +336,34 @@ SQL> -- classification model RF_RDEMO_CLASSIFICATION using dataset mining_data_b
 SQL>
 SQL> declare
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  begin
-  4    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
-  5    v_setlst('RALG_BUILD_FUNCTION')   := 'RF_RDEMO_BUILD_CLASSIFICATION';
-  6    v_setlst('RALG_SCORE_FUNCTION')   := 'RF_RDEMO_SCORE_CLASSIFICATION';
-  7    v_setlst('RALG_DETAILS_FUNCTION') := 'RF_RDEMO_DETAILS_CLASSIFICATION';
-  8    v_setlst('RALG_WEIGHT_FUNCTION')  := 'RF_RDEMO_WEIGHT_CLASSIFICATION';
-  9
- 10    -- Once this setting is specified, a model view will be created. This model
- 11    -- view will be generated to display the model details, which contains the
- 12    -- attribute names and the corresponding importance.
- 13    v_setlst('RALG_DETAILS_FORMAT') := 'select cast(''a'' as varchar2(100)) name, 1 importance from dual';
- 14
- 15    dbms_data_mining.create_model2(
- 16      model_name          => 'RF_RDEMO_CLASSIFICATION',
- 17      mining_function     => 'CLASSIFICATION',
- 18      data_query          => 'select * from mining_data_build_v',
- 19      case_id_column_name => 'CUST_ID',
- 20      target_column_name  => 'AFFINITY_CARD',
- 21      set_list            => v_setlst);
- 22  end;
- 23  /
+  3    v_data_query VARCHAR2(32767);
+  4  begin
+  5    -- Model Settings ---------------------------------------------------
+  6    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  7    v_setlst('RALG_BUILD_FUNCTION')   := 'RF_RDEMO_BUILD_CLASSIFICATION';
+  8    v_setlst('RALG_SCORE_FUNCTION')   := 'RF_RDEMO_SCORE_CLASSIFICATION';
+  9    v_setlst('RALG_DETAILS_FUNCTION') := 'RF_RDEMO_DETAILS_CLASSIFICATION';
+ 10    v_setlst('RALG_WEIGHT_FUNCTION')  := 'RF_RDEMO_WEIGHT_CLASSIFICATION';
+ 11
+ 12    -- Once this setting is specified, a model view will be created. This model
+ 13    -- view will be generated to display the model details, which contains the
+ 14    -- attribute names and the corresponding importance.
+ 15    v_setlst('RALG_DETAILS_FORMAT') := 'select cast(''a'' as varchar2(100)) name, 1 importance from dual';
+ 16
+ 17    v_data_query := q'|SELECT * FROM mining_data_build_v|';
+ 18
+ 19    DBMS_DATA_MINING.CREATE_MODEL2(
+ 20      model_name          => 'RF_RDEMO_CLASSIFICATION',
+ 21      mining_function     => 'CLASSIFICATION',
+ 22      data_query          => v_data_query,
+ 23      set_list            => v_setlst,
+ 24      case_id_column_name => 'CUST_ID',
+ 25      target_column_name  => 'AFFINITY_CARD'
+ 26    );
+ 27  end;
+ 28  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -387,7 +397,7 @@ BOOKKEEPING_APPLICATION             5.666         14
 OS_DOC_SET_KANJI                     .095         15
 PRINTER_SUPPLIES                        0         16
 
-16行が選択されました。
+16 rows selected.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -422,7 +432,7 @@ SQL> SELECT cust_id, affinity_card as affinity_card_act,
     100009                 1                  1               .608
     100010                 0                  0               .882
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -- PREDICTION_SET -------------------------------------------------------------
@@ -461,7 +471,7 @@ SQL> select T.CUST_ID, T.affinity_card, S.prediction,
     100010             0      .0000  .882000000
     100010             0     1.0000  .118000000
 
-20行が選択されました。
+20 rows selected.
 
 SQL>
 SQL> -- PREDICTION_DETAILS ---------------------------------------------------------
@@ -604,6 +614,6 @@ SQL> SELECT CUST_ID, PREDICTION_DETAILS(RF_RDEMO_CLASSIFICATION, '1' USING *) pr
            </Details>
 
 
-10行が選択されました。
+10 rows selected.
 
 SQL> spool oml4sql-regression-svm

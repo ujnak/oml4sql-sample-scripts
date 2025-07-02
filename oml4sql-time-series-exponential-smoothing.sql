@@ -33,7 +33,10 @@ create or replace view esm_sh_data
 -- Build the ESM model
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
+  --
   -- Select ESM as the algorithm
   v_setlst('ALGO_NAME') := 'ALGO_EXPONENTIAL_SMOOTHING';
   -- Set accumulation interval to be quarter
@@ -45,13 +48,16 @@ BEGIN
   -- Set seasonal cycle to be 4 quarters
   v_setlst('EXSM_SEASONALITY') := '4';
 
-  dbms_data_mining.create_model2(
+  v_data_query := q'|SELECT * FROM ESM_SH_DATA|';
+
+  DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'ESM_SH_SAMPLE',
     mining_function     => 'TIME_SERIES',
-    data_query          => 'select * from esm_sh_data',
-    case_id_column_name => 'time_id',
-    target_column_name  => 'amount_sold',
-    set_list            => v_setlst);
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => 'TIME_ID',
+    target_column_name  => 'AMOUNT_SOLD'
+  );
 END;
 /
 

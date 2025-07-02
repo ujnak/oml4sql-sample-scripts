@@ -47,19 +47,15 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('SVMC_SH_Clas_sample');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
-SQL>
-SQL> ------------------
-SQL> -- SPECIFY SETTINGS
-SQL> --
 SQL> -- Cleanup old settings table for repeat runs
 SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE svmc_sh_sample_class_wt';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- CREATE AND POPULATE A CLASS WEIGHTS TABLE
@@ -75,55 +71,61 @@ SQL> CREATE TABLE svmc_sh_sample_class_wt (
   2    target_value NUMBER,
   3    class_weight NUMBER);
 
-Table SVMC_SH_SAMPLE_CLASS_WTは作成されました。
+Table SVMC_SH_SAMPLE_CLASS_WT created.
 
 SQL> INSERT INTO svmc_sh_sample_class_wt VALUES (0,0.35);
 
-1行挿入しました。
+1 row inserted.
 
 SQL> INSERT INTO svmc_sh_sample_class_wt VALUES (1,0.65);
 
-1行挿入しました。
+1 row inserted.
 
-SQL> COMMIT;
+SQL> commit;
 
-コミットが完了しました。
+Commit complete.
 
 SQL>
-SQL> -- The default classification algorithm is Naive Bayes. So override
-SQL> -- this choice to SVM using a settings table.
-SQL> -- SVM chooses a kernel type automatically. This choice can be overriden
-SQL> -- by the user. Linear kernel is preferred for high dimensional data, and
-SQL> -- Gaussian kernel for low dimensional data. Here we use linear kernel
-SQL> -- to demonstrate the coefficient model view, which applies only for
-SQL> -- linear kernel models.
-SQL> --
 SQL> ---------------------
 SQL> -- CREATE A NEW MODEL
 SQL> --
 SQL> -- Build a new SVM Model
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    v_setlst('ALGO_NAME')               := 'ALGO_SUPPORT_VECTOR_MACHINES';
-  5    v_setlst('SVMS_KERNEL_FUNCTION')    := 'SVMS_LINEAR';
-  6    v_setlst('CLAS_WEIGHTS_TABLE_NAME') := 'svmc_sh_sample_class_wt';
-  7    v_setlst('PREP_AUTO')               := 'ON';
-  8    -- Examples of other possible overrides are:
-  9    --v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_GAUSSIAN';
- 10    --v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_COMPLEXITY_FACTOR';
- 11
- 12    DBMS_DATA_MINING.CREATE_MODEL2(
- 13      model_name          => 'SVMC_SH_Clas_sample',
- 14      mining_function     => 'CLASSIFICATION',
- 15      data_query          => 'SELECT * FROM mining_data_build_v',
- 16      set_list            => v_setlst,
- 17      case_id_column_name => 'cust_id',
- 18      target_column_name  => 'affinity_card');
- 19  END;
- 20  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    --
+  7    -- The default classification algorithm is Naive Bayes. So override
+  8    -- this choice to SVM using a settings.
+  9    -- SVM chooses a kernel type automatically. This choice can be overriden
+ 10    -- by the user. Linear kernel is preferred for high dimensional data, and
+ 11    -- Gaussian kernel for low dimensional data. Here we use linear kernel
+ 12    -- to demonstrate the coefficient model view, which applies only for
+ 13    -- linear kernel models.
+ 14    --
+ 15    v_setlst('ALGO_NAME')               := 'ALGO_SUPPORT_VECTOR_MACHINES';
+ 16    v_setlst('SVMS_KERNEL_FUNCTION')    := 'SVMS_LINEAR';
+ 17    v_setlst('CLAS_WEIGHTS_TABLE_NAME') := 'svmc_sh_sample_class_wt';
+ 18    v_setlst('PREP_AUTO')               := 'ON';
+ 19    -- Examples of other possible overrides are:
+ 20    --v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_GAUSSIAN';
+ 21    --v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_COMPLEXITY_FACTOR';
+ 22
+ 23    v_data_query := q'|SELECT * FROM mining_data_build_v|';
+ 24
+ 25    DBMS_DATA_MINING.CREATE_MODEL2(
+ 26      model_name          => 'SVMC_SH_Clas_sample',
+ 27      mining_function     => 'CLASSIFICATION',
+ 28      data_query          => v_data_query,
+ 29      set_list            => v_setlst,
+ 30      case_id_column_name => 'CUST_ID',
+ 31      target_column_name  => 'AFFINITY_CARD'
+ 32    );
+ 33  END;
+ 34  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -148,7 +150,7 @@ PREP_AUTO                      ON
 SVMS_CONV_TOLERANCE            .0001
 SVMS_KERNEL_FUNCTION           SVMS_LINEAR
 
-9行が選択されました。
+9 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -181,7 +183,7 @@ PRINTER_SUPPLIES                         NUMERICAL
 YRS_RESIDENCE                            NUMERICAL
 Y_BOX_GAMES                              NUMERICAL
 
-17行が選択されました。
+17 rows selected.
 
 SQL>
 SQL> ------------------------
@@ -220,7 +222,7 @@ DM$VWSVMC_SH_CLAS_SAMPLE
 Model Build Alerts
 
 
-7行が選択されました。
+7 rows selected.
 
 SQL>
 SQL> -- The coefficient indicates the relative influence of a given
@@ -316,7 +318,7 @@ SQL> SELECT target_value, attribute_name aname, attribute_value aval,
           1.0000000000 OS_DOC_SET_KANJI                                               -.02
           1.0000000000 CUST_MARITAL_STATUS            divorced                        -.01
 
-73行が選択されました。
+73 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -357,7 +359,7 @@ ACTUAL_TARGET_VALUE PREDICTED_TARGET_VALUE      VALUE
                   1                      0         87
                   1                      1        259
 
-4行が選択されました。
+4 rows selected.
 
 SQL>
 SQL> -- Compute ACCURACY
@@ -373,7 +375,7 @@ ACCURACY
 --------
      .81
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> -- Compute CUMULATIVE LIFT, GAIN Charts.
@@ -453,7 +455,7 @@ SQL> WITH
 5.416E-006         90  99.132948  1.1014772
  1.23E-012        100        100          1
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -- Compute ROC CURVE
@@ -705,7 +707,7 @@ PROB TPF FPF    TP    FN    FP    TN
 .0000 1.0000 .9783   346     0  1129    25
 .0000 1.0000 1.0000   346     0  1154     0
 
-175行が選択されました。
+175 rows selected.
 
 SQL>
 SQL> -- Compute AUC (Area Under the roc Curve)
@@ -742,7 +744,7 @@ AUC
 ---
 .86
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -780,7 +782,7 @@ SQL> SELECT cust_id FROM
     100185
     101345
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> ------------------
@@ -802,7 +804,7 @@ CUST_GENDER         CNT    AVG_AGE
 F                    66         30
 M                   392         34
 
-2行が選択されました。
+2 rows selected.
 
 SQL>
 SQL> ------------------
@@ -846,7 +848,7 @@ SQL> SELECT T.cust_id, S.prediction, S.probability
     100010          0  .891614990
     100010          1  .108385010
 
-20行が選択されました。
+20 rows selected.
 
 SQL>
 SQL>
@@ -1029,7 +1031,7 @@ SQL> SELECT cust_id, PREDICTION_DETAILS(svmc_sh_clas_sample, 1 USING *) PD
            </Details>
 
 
-18行が選択されました。
+18 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -1451,6 +1453,6 @@ SQL> select cust_id, round(pred_prob,2) pred_prob from
     102931         .5
     102983         .5
 
-390行が選択されました。
+390 rows selected.
 
 SQL> spool oml4sql-classification-text-mining-svm

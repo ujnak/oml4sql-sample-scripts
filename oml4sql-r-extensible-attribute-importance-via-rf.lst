@@ -31,14 +31,14 @@ SQL> BEGIN
   4  END;
   5  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('AI_RDEMO');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> BEGIN
@@ -70,7 +70,7 @@ SQL> BEGIN
  27  END;
  28  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -81,31 +81,36 @@ SQL> -- Build the model using the R script user defined. Here R script
 SQL> -- AI_RDEMO_BUILD_FUNCTION will be used to create the model AI_RDEMO, using
 SQL> -- dataset mining_data_build_v.
 SQL>
-SQL> declare
+SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  begin
-  4    -- specify settings
-  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
-  6    v_setlst('RALG_BUILD_FUNCTION')   := 'AI_RDEMO_BUILD_FUNCTION';
-  7    v_setlst('RALG_DETAILS_FUNCTION') := 'AI_RDEMO_DETAILS_FUNCTION';
-  8
-  9    -- Once this setting is specified, a model view will be created. This model
- 10    -- view will be generated to display the model details, which contains the
- 11    -- attribute names and the corresponding importance.
- 12
- 13    v_setlst('RALG_DETAILS_FORMAT') := 'select cast(''a'' as varchar2(100)) name, 1 importance from dual';
- 14
- 15    dbms_data_mining.create_model2(
- 16      model_name          => 'AI_RDEMO',
- 17      mining_function     => 'REGRESSION',
- 18      data_query          => 'select * from mining_data_build_v',
- 19      case_id_column_name => 'CUST_ID',
- 20      target_column_name  => 'AFFINITY_CARD',
- 21      set_list            => v_setlst);
- 22  end;
- 23  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  7    v_setlst('RALG_BUILD_FUNCTION')   := 'AI_RDEMO_BUILD_FUNCTION';
+  8    v_setlst('RALG_DETAILS_FUNCTION') := 'AI_RDEMO_DETAILS_FUNCTION';
+  9
+ 10    -- Once this setting is specified, a model view will be created. This model
+ 11    -- view will be generated to display the model details, which contains the
+ 12    -- attribute names and the corresponding importance.
+ 13
+ 14    v_setlst('RALG_DETAILS_FORMAT') :=
+ 15      q'|select cast('a' as varchar2(100)) name, 1 importance from dual|';
+ 16
+ 17    v_data_query := q'|SELECT * FROM mining_data_build_v|';
+ 18
+ 19    DBMS_DATA_MINING.CREATE_MODEL2(
+ 20      model_name          => 'AI_RDEMO',
+ 21      mining_function     => 'REGRESSION',
+ 22      data_query          => v_data_query,
+ 23      set_list            => v_setlst,
+ 24      case_id_column_name => 'CUST_ID',
+ 25      target_column_name  => 'AFFINITY_CARD'
+ 26    );
+ 27  END;
+ 28  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -141,6 +146,6 @@ BULK_PACK_DISKETTES                 2.111         14
 OS_DOC_SET_KANJI                     .035         15
 PRINTER_SUPPLIES                        0         16
 
-16行が選択されました。
+16 rows selected.
 
 SQL> spool oml4sql-r-extensible-glm

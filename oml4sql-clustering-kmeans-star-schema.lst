@@ -42,7 +42,7 @@ SQL> create or replace view cust_with_sales as
  13   group by v.cust_id) v2
  14  where c.cust_id = v2.cust_id;
 
-View CUST_WITH_SALESは作成されました。
+View CUST_WITH_SALES created.
 
 SQL>
 SQL> ---------------------
@@ -53,67 +53,72 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('DM_STAR_CLUSTER');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
-SQL> declare
-  2    xform_list dbms_data_mining_transform.TRANSFORM_LIST;
-  3    v_setlst   DBMS_DATA_MINING.SETTING_LIST;
-  4  begin
-  5    -- Transform the purchase dates to a numeric period
-  6    dbms_data_mining_transform.set_transform(xform_list,
-  7      'SALES_PERIOD', NULL, 'SALES_TO - SALES_FROM', NULL);
-  8
-  9    -- Transform the country to a categorical attribute since
- 10    -- numeric datatypes are treated as numeric attributes.
- 11    dbms_data_mining_transform.set_transform(xform_list,
- 12      'COUNTRY_ID', NULL, 'TO_CHAR(COUNTRY_ID)', NULL);
- 13
- 14    -- Eliminate columns known to be uninteresting,
- 15    -- which will speed up the process.
- 16    -- Alternatively, you can do this when creating the view.
- 17    dbms_data_mining_transform.set_transform(xform_list,
- 18      'CUST_EFF_TO', NULL, NULL, NULL);
- 19    dbms_data_mining_transform.set_transform(xform_list,
- 20      'CUST_EFF_FROM', NULL, NULL, NULL);
- 21    dbms_data_mining_transform.set_transform(xform_list,
- 22      'CUST_CITY_ID', NULL, NULL, NULL);
- 23    dbms_data_mining_transform.set_transform(xform_list,
- 24      'CUST_STATE_PROVINCE_ID', NULL, NULL, NULL);
- 25    dbms_data_mining_transform.set_transform(xform_list,
- 26      'CUST_STREET_ADDRESS', NULL, NULL, NULL);
- 27    dbms_data_mining_transform.set_transform(xform_list,
- 28      'CUST_FIRST_NAME', NULL, NULL, NULL);
- 29    dbms_data_mining_transform.set_transform(xform_list,
- 30      'CUST_LAST_NAME', NULL, NULL, NULL);
- 31    dbms_data_mining_transform.set_transform(xform_list,
- 32      'CUST_MAIN_PHONE_NUMBER', NULL, NULL, NULL);
- 33    dbms_data_mining_transform.set_transform(xform_list,
- 34      'CUST_EMAIL', NULL, NULL, NULL);
- 35    dbms_data_mining_transform.set_transform(xform_list,
- 36      'CUST_TOTAL_ID', NULL, NULL, NULL);
- 37    dbms_data_mining_transform.set_transform(xform_list,
- 38      'CUST_SRC_ID', NULL, NULL, NULL);
- 39    dbms_data_mining_transform.set_transform(xform_list,
- 40      'SALES_TO', NULL, NULL, NULL);
- 41    dbms_data_mining_transform.set_transform(xform_list,
- 42      'SALES_FROM', NULL, NULL, NULL);
- 43
- 44    -- specify settings
- 45    v_setlst('PREP_AUTO')    := 'ON';
- 46    v_setlst('KMNS_DETAILS') := 'KMNS_DETAILS_ALL';
- 47
- 48    -- perform the build
- 49    DBMS_DATA_MINING.CREATE_MODEL2(
- 50      model_name          => 'DM_STAR_CLUSTER',
- 51      mining_function     => 'CLUSTERING',
- 52      data_query          => 'SELECT * FROM cust_with_sales',
- 53      set_list            => v_setlst,
- 54      case_id_column_name => 'cust_id',
- 55      xform_list          => xform_list);
- 56  end;
- 57  /
+SQL>
+SQL> DECLARE
+  2    v_xlst   dbms_data_mining_transform.TRANSFORM_LIST;
+  3    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  4    v_data_query VARCHAR2(32767);
+  5  BEGIN
+  6    -- Transform the purchase dates to a numeric period
+  7    dbms_data_mining_transform.set_transform(v_xlst,
+  8      'SALES_PERIOD', NULL, 'SALES_TO - SALES_FROM', NULL);
+  9
+ 10    -- Transform the country to a categorical attribute since
+ 11    -- numeric datatypes are treated as numeric attributes.
+ 12    dbms_data_mining_transform.set_transform(v_xlst,
+ 13      'COUNTRY_ID', NULL, 'TO_CHAR(COUNTRY_ID)', NULL);
+ 14
+ 15    -- Eliminate columns known to be uninteresting,
+ 16    -- which will speed up the process.
+ 17    -- Alternatively, you can do this when creating the view.
+ 18    dbms_data_mining_transform.set_transform(v_xlst,
+ 19      'CUST_EFF_TO', NULL, NULL, NULL);
+ 20    dbms_data_mining_transform.set_transform(v_xlst,
+ 21      'CUST_EFF_FROM', NULL, NULL, NULL);
+ 22    dbms_data_mining_transform.set_transform(v_xlst,
+ 23      'CUST_CITY_ID', NULL, NULL, NULL);
+ 24    dbms_data_mining_transform.set_transform(v_xlst,
+ 25      'CUST_STATE_PROVINCE_ID', NULL, NULL, NULL);
+ 26    dbms_data_mining_transform.set_transform(v_xlst,
+ 27      'CUST_STREET_ADDRESS', NULL, NULL, NULL);
+ 28    dbms_data_mining_transform.set_transform(v_xlst,
+ 29      'CUST_FIRST_NAME', NULL, NULL, NULL);
+ 30    dbms_data_mining_transform.set_transform(v_xlst,
+ 31      'CUST_LAST_NAME', NULL, NULL, NULL);
+ 32    dbms_data_mining_transform.set_transform(v_xlst,
+ 33      'CUST_MAIN_PHONE_NUMBER', NULL, NULL, NULL);
+ 34    dbms_data_mining_transform.set_transform(v_xlst,
+ 35      'CUST_EMAIL', NULL, NULL, NULL);
+ 36    dbms_data_mining_transform.set_transform(v_xlst,
+ 37      'CUST_TOTAL_ID', NULL, NULL, NULL);
+ 38    dbms_data_mining_transform.set_transform(v_xlst,
+ 39      'CUST_SRC_ID', NULL, NULL, NULL);
+ 40    dbms_data_mining_transform.set_transform(v_xlst,
+ 41      'SALES_TO', NULL, NULL, NULL);
+ 42    dbms_data_mining_transform.set_transform(v_xlst,
+ 43      'SALES_FROM', NULL, NULL, NULL);
+ 44
+ 45    -- Model Settings ---------------------------------------------------
+ 46    v_setlst('PREP_AUTO')    := 'ON';
+ 47    v_setlst('KMNS_DETAILS') := 'KMNS_DETAILS_ALL';
+ 48
+ 49    v_data_query := q'|SELECT * FROM cust_with_sales|';
+ 50
+ 51    -- perform the build
+ 52    DBMS_DATA_MINING.CREATE_MODEL2(
+ 53      model_name          => 'DM_STAR_CLUSTER',
+ 54      mining_function     => 'CLUSTERING',
+ 55      data_query          => v_data_query,
+ 56      set_list            => v_setlst,
+ 57      case_id_column_name => 'CUST_ID',
+ 58      xform_list          => v_xlst
+ 59    );
+ 60  END;
+ 61  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -144,7 +149,7 @@ ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
 ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
 PREP_AUTO                      ON
 
-15行が選択されました。
+15 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -175,7 +180,7 @@ PER_SUBCAT_SALES               NUMERICAL            DM_NESTED_NUMERICALS
 SALES_FROM                     NUMERICAL            DATE
 SALES_TO                       NUMERICAL            DATE
 
-14行が選択されました。
+14 rows selected.
 
 SQL>
 SQL>
@@ -222,7 +227,7 @@ DM$VWDM_STAR_CLUSTER
 Model Build Alerts
 
 
-9行が選択されました。
+9 rows selected.
 
 SQL>
 SQL> -- Cluster details are best seen in pieces - based on the kind of
@@ -261,7 +266,7 @@ SQL> SELECT cluster_id clu_id, record_count rec_cnt, parent, tree_level,
         18        411         16          9  5.7266616
         19        606         16          9 5.38896042
 
-19行が選択されました。
+19 rows selected.
 
 SQL>
 SQL> -- TAXONOMY
@@ -292,7 +297,7 @@ CLUSTER_ID LEFT_CHILD_ID RIGHT_CHILD_ID
         18
         19
 
-19行が選択されました。
+19 rows selected.
 
 SQL>
 SQL> -- CENTROIDS FOR LEAF CLUSTERS
@@ -412,7 +417,7 @@ SALES_PERIOD                                                     1128
 
 
 
-31行が選択されました。
+31 rows selected.
 
 SQL>
 SQL> -------------------------------------------------
@@ -441,7 +446,7 @@ SQL> SELECT CLUSTER_ID(DM_STAR_CLUSTER USING *) AS clus, COUNT(*) AS cnt
         18        411
         13        358
 
-10行が選択されました。
+10 rows selected.
 
 SQL> --
 SQL> ------------------
@@ -460,5 +465,5 @@ SQL> SELECT S.cluster_id, probability prob,
   6     WHERE cust_id = 100949) T,
   7    TABLE(T.pset) S
   8  order by 2 desc;
-行が選択されていません
+no rows selected
 SQL> spool oml4sql-clustering-kmeans

@@ -35,6 +35,7 @@ EXECUTE ctx_ddl.create_policy('dmdemo_svm_policy');
 BEGIN DBMS_DATA_MINING.DROP_MODEL('T_SVM_Clas_sample');
 EXCEPTION WHEN OTHERS THEN NULL; END;
 /
+
 ---------------
 -- CREATE MODEL
 
@@ -42,11 +43,12 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 -- Note the transform makes the 'comments' attribute 
 -- to be treated as unstructured text data
 DECLARE
-  xformlist dbms_data_mining_transform.TRANSFORM_LIST;
+  v_xlst   dbms_data_mining_transform.TRANSFORM_LIST;
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
   dbms_data_mining_transform.SET_TRANSFORM(
-    xformlist, 'comments', null, 'comments', null, 'TEXT');
+    v_xlst, 'comments', null, 'comments', null, 'TEXT');
 
   -- choose linear kernel
   v_setlst('ALGO_NAME')              := 'ALGO_SUPPORT_VECTOR_MACHINES';
@@ -56,14 +58,17 @@ BEGIN
   v_setlst('ODMS_TEXT_POLICY_NAME')  := 'DMDEMO_SVM_POLICY';
   v_setlst('SVMS_SOLVER')            := 'SVMS_SOLVER_SGD';
 
+  v_data_query := q'|SELECT * FROM mining_build_text|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'T_SVM_Clas_sample',
     mining_function     => 'CLASSIFICATION',
-    data_query          => 'select * from mining_build_text',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id',
-    target_column_name  => 'affinity_card',
-    xform_list          => xformlist);
+    case_id_column_name => 'CUST_ID',
+    target_column_name  => 'AFFINITY_CARD',
+    xform_list          => v_xlst
+  );
 END;
 / 
  

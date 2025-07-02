@@ -17,36 +17,42 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('CUR_SH_SAMPLE');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- Build a CUR model
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- Select CUR Decomposition as the Attribute Importance algorithm
-  5    v_setlst('ALGO_NAME')            := 'ALGO_CUR_DECOMPOSITION';
-  6    -- Set row importance to be enabled (disabled by default)
-  7    v_setlst('CURS_ROW_IMPORTANCE')  := 'CURS_ROW_IMP_ENABLE';
-  8    -- Set approximate number of attributes to be selected
-  9    v_setlst('CURS_APPROX_ATTR_NUM') := '10';
- 10    -- Set approximate number of rows to be selected
- 11    v_setlst('CURS_APPROX_ROW_NUM')  := '50';
- 12    -- Set SVD rank parameter
- 13    v_setlst('CURS_SVD_RANK')        := '5';
- 14    -- Examples of possible overrides are:
- 15    -- v_setlst('ODMS_RANDOM_SEED') := '1';
- 16
- 17    DBMS_DATA_MINING.CREATE_MODEL2(
- 18      model_name          => 'CUR_SH_SAMPLE',
- 19      mining_function     => 'ATTRIBUTE_IMPORTANCE',
- 20      data_query          => 'SELECT * FROM MINING_DATA_BUILD_V',
- 21      set_list            => v_setlst,
- 22      case_id_column_name => 'cust_id');
- 23  END;
- 24  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    --
+  7    -- Select CUR Decomposition as the Attribute Importance algorithm
+  8    v_setlst('ALGO_NAME')            := 'ALGO_CUR_DECOMPOSITION';
+  9    -- Set row importance to be enabled (disabled by default)
+ 10    v_setlst('CURS_ROW_IMPORTANCE')  := 'CURS_ROW_IMP_ENABLE';
+ 11    -- Set approximate number of attributes to be selected
+ 12    v_setlst('CURS_APPROX_ATTR_NUM') := '10';
+ 13    -- Set approximate number of rows to be selected
+ 14    v_setlst('CURS_APPROX_ROW_NUM')  := '50';
+ 15    -- Set SVD rank parameter
+ 16    v_setlst('CURS_SVD_RANK')        := '5';
+ 17    -- Examples of possible overrides are:
+ 18    -- v_setlst('ODMS_RANDOM_SEED') := '1';
+ 19
+ 20    v_data_query := q'|SELECT * FROM MINING_DATA_BUILD_V|';
+ 21
+ 22    DBMS_DATA_MINING.CREATE_MODEL2(
+ 23      model_name          => 'CUR_SH_SAMPLE',
+ 24      mining_function     => 'ATTRIBUTE_IMPORTANCE',
+ 25      data_query          => v_data_query,
+ 26      set_list            => v_setlst,
+ 27      case_id_column_name => 'CUST_ID'
+ 28    );
+ 29  END;
+ 30  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- Display model settings
@@ -70,7 +76,7 @@ ODMS_RANDOM_SEED               0
 ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
 PREP_AUTO                      ON
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -- Display model signature
@@ -101,7 +107,7 @@ PRINTER_SUPPLIES                         NUMERICAL
 YRS_RESIDENCE                            NUMERICAL
 Y_BOX_GAMES                              NUMERICAL
 
-17行が選択されました。
+17 rows selected.
 
 SQL>
 SQL> -- Get a list of model views
@@ -131,7 +137,7 @@ DM$VWCUR_SH_SAMPLE
 Model Build Alerts
 
 
-5行が選択されました。
+5 rows selected.
 
 SQL>
 SQL> -- Display global model details
@@ -146,7 +152,7 @@ NAME                           NUMERIC_VALUE
 NUM_COMPONENTS                             5
 NUM_ROWS                                1500
 
-2行が選択されました。
+2 rows selected.
 
 SQL>
 SQL> -- Attribute importance and ranks
@@ -188,7 +194,7 @@ COUNTRY_NAME                       United States o            .02900677
                                    f America              7
 
 
-7行が選択されました。
+7 rows selected.
 
 SQL>
 SQL> -- Row importance and ranks
@@ -244,6 +250,6 @@ SQL> SELECT case_id, row_importance, row_rank
     101809      .00034904         40
     102244      .00029724         41
 
-41行が選択されました。
+41 rows selected.
 
 SQL> spool oml4sql-feature-extraction-nmf

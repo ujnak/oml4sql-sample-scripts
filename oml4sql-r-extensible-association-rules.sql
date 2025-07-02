@@ -93,19 +93,24 @@ END;
 -- identified in the R BUILD script
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN 
-  -- specify settings
+  -- Model Settings ---------------------------------------------------
   v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
   v_setlst('RALG_BUILD_FUNCTION')   := 'RAR_BUILD';
   v_setlst('RALG_DETAILS_FUNCTION') := 'RAR_DETAILS';
-  v_setlst('RALG_DETAILS_FORMAT')   := 'select cast(''a'' as varchar2(100)) rules, 1 support, 1 confidence, 1 coverage, 1 lift, 1 count from dual';
+  v_setlst('RALG_DETAILS_FORMAT')   := 
+    q'|select cast('a' as varchar2(100)) rules, 1 support, 1 confidence, 1 coverage, 1 lift, 1 count from dual|';
+
+  v_data_query := q'|SELECT * FROM AR_BUILD_V|';
 
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'RAR_SH_AR_SAMPLE',
     mining_function     => 'ASSOCIATION',
-    data_query          => 'select * from AR_BUILD_V',
-    case_id_column_name => NULL,
-    set_list            => v_setlst);
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => NULL
+  );
 END;
 /
 
@@ -166,19 +171,24 @@ END;
 --
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
-  -- specify settings
+  -- Model Settings ---------------------------------------------------
   v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
   v_setlst('RALG_BUILD_FUNCTION')   := 'RAR_BUILD';
   v_setlst('RALG_DETAILS_FUNCTION') := 'RAR_DETAILS';
-  v_setlst('RALG_DETAILS_FORMAT')   := 'select cast(''a'' as varchar2(100)) items, 1 support from dual';
+  v_setlst('RALG_DETAILS_FORMAT')   :=
+    q'|select cast('a' as varchar2(100)) items, 1 support from dual|';
+
+  v_data_query := q'|SELECT * FROM AR_BUILD_V|';
 
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'RAR_SH_FI_SAMPLE',
     mining_function     => 'ASSOCIATION',
-    data_query          => 'select * from AR_BUILD_V',
-    case_id_column_name => NULL,
-    set_list            => v_setlst);
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => NULL
+  );
 END;
 /
 

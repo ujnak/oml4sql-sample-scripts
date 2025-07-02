@@ -99,7 +99,9 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
   v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
   v_setlst('RALG_BUILD_FUNCTION')   := 'RF_RDEMO_BUILD_REGRESSION';
   v_setlst('RALG_SCORE_FUNCTION')   := 'RF_RDEMO_SCORE_REGRESSION';
@@ -114,13 +116,16 @@ BEGIN
   -- to the model build function to build the model.
   v_setlst('RALG_BUILD_PARAMETER') := 'select ''AGE ~ .'' "form" from dual';
 
-  dbms_data_mining.create_model2(
+  v_data_query := q'|SELECT * FROM mining_data_build_v|';
+
+  DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'RF_RDEMO_REGRESSION',
     mining_function     => 'REGRESSION',
-    data_query          => 'select * from mining_data_build_v',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
     case_id_column_name => 'CUST_ID',
-    target_column_name  => 'AGE',
-    set_list            => v_setlst);
+    target_column_name  => 'AGE'
+  );
 END;
 /
 
@@ -271,7 +276,9 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 
 declare
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 begin
+  -- Model Settings ---------------------------------------------------
   v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
   v_setlst('RALG_BUILD_FUNCTION')   := 'RF_RDEMO_BUILD_CLASSIFICATION';
   v_setlst('RALG_SCORE_FUNCTION')   := 'RF_RDEMO_SCORE_CLASSIFICATION';
@@ -283,13 +290,16 @@ begin
   -- attribute names and the corresponding importance.
   v_setlst('RALG_DETAILS_FORMAT') := 'select cast(''a'' as varchar2(100)) name, 1 importance from dual';
 
-  dbms_data_mining.create_model2(
+  v_data_query := q'|SELECT * FROM mining_data_build_v|';
+
+  DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'RF_RDEMO_CLASSIFICATION',
     mining_function     => 'CLASSIFICATION',
-    data_query          => 'select * from mining_data_build_v',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
     case_id_column_name => 'CUST_ID',
-    target_column_name  => 'AFFINITY_CARD',
-    set_list            => v_setlst);
+    target_column_name  => 'AFFINITY_CARD'
+  );
 end;
 /
 

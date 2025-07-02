@@ -62,13 +62,13 @@ SQL> BEGIN ctx_ddl.drop_policy('dmdemo_esa_policy');
   2  EXCEPTION when others then null; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> BEGIN ctx_ddl.drop_preference('dmdemo_esa_lexer');
   2  EXCEPTION when others then null; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> BEGIN
   2    ctx_ddl.create_preference('dmdemo_esa_lexer', 'BASIC_LEXER');
@@ -77,14 +77,14 @@ SQL> BEGIN
   5  END;
   6  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> BEGIN
   2    ctx_ddl.create_policy('dmdemo_esa_policy', lexer=>'dmdemo_esa_lexer');
   3  END;
   4  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -96,7 +96,7 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('ESA_text_sample');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> -- Create a build data view with case ID and text column
 SQL> CREATE OR REPLACE VIEW mining_build_text_parallel AS
@@ -105,7 +105,7 @@ SQL> CREATE OR REPLACE VIEW mining_build_text_parallel AS
   4    WHERE  length(comments) >= 70
   5    GROUP BY comments;
 
-View MINING_BUILD_TEXT_PARALLELは作成されました。
+View MINING_BUILD_TEXT_PARALLEL created.
 
 SQL>
 SQL> ---------------------
@@ -114,37 +114,41 @@ SQL> -- Note that the transform makes the column 'comments'
 SQL> -- to be treated as unstructured text data
 SQL> --
 SQL> DECLARE
-  2    xformlist dbms_data_mining_transform.TRANSFORM_LIST;
-  3    v_setlst  DBMS_DATA_MINING.SETTING_LIST;
-  4  BEGIN
-  5    dbms_data_mining_transform.SET_TRANSFORM(
-  6      xformlist, 'comments', null, 'comments', 'comments',
-  7       -- 'TEXT(POLICY_NAME:DMDEMO_ESA_POLICY)(TOKEN_TYPE:STEM)');
-  8      'TEXT(POLICY_NAME:DMDEMO_ESA_POLICY)(TOKEN_TYPE:THEME)');
-  9
- 10    -- specify settings
- 11    v_setlst('ALGO_NAME')               := 'ALGO_EXPLICIT_SEMANTIC_ANALYS';
- 12    v_setlst('PREP_AUTO')               := 'ON';
- 13    v_setlst('ODMS_TEXT_POLICY_NAME')   := 'DMDEMO_ESA_POLICY';
- 14    -- lower than the default value of 100 due to the small size of data
- 15    v_setlst('ESAS_MIN_ITEMS')          := '5';
- 16    -- lower than the default value of 3 due to the small size of data
- 17    v_setlst('ODMS_TEXT_MIN_DOCUMENTS') := '2';
- 18    --v_setlst('ODMS_TEXT_MAX_FEATURES') := '10000';
- 19    --v_setlst('ESAS_TOPN_FEATURES')     := '500';
- 20    --v_setlst('ESAS_VALUE_THRESHOLD')   := '0.0001';
- 21
- 22    DBMS_DATA_MINING.CREATE_MODEL2(
- 23      model_name          => 'ESA_text_sample',
- 24      mining_function     => 'FEATURE_EXTRACTION',
- 25      data_query          => 'SELECT * FROM mining_build_text_parallel',
- 26      case_id_column_name => 'cust_id',
- 27      set_list            => v_setlst,
- 28      xform_list          => xformlist);
- 29  END;
- 30  /
+  2    v_xlst   dbms_data_mining_transform.TRANSFORM_LIST;
+  3    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  4    v_data_query VARCHAR2(32767);
+  5  BEGIN
+  6    dbms_data_mining_transform.SET_TRANSFORM(
+  7      v_xlst, 'comments', null, 'comments', 'comments',
+  8      -- 'TEXT(POLICY_NAME:DMDEMO_ESA_POLICY)(TOKEN_TYPE:STEM)');
+  9      'TEXT(POLICY_NAME:DMDEMO_ESA_POLICY)(TOKEN_TYPE:THEME)');
+ 10
+ 11    -- Model Settings ---------------------------------------------------
+ 12    v_setlst('ALGO_NAME')               := 'ALGO_EXPLICIT_SEMANTIC_ANALYS';
+ 13    v_setlst('PREP_AUTO')               := 'ON';
+ 14    v_setlst('ODMS_TEXT_POLICY_NAME')   := 'DMDEMO_ESA_POLICY';
+ 15    -- lower than the default value of 100 due to the small size of data
+ 16    v_setlst('ESAS_MIN_ITEMS')          := '5';
+ 17    -- lower than the default value of 3 due to the small size of data
+ 18    v_setlst('ODMS_TEXT_MIN_DOCUMENTS') := '2';
+ 19    --v_setlst('ODMS_TEXT_MAX_FEATURES') := '10000';
+ 20    --v_setlst('ESAS_TOPN_FEATURES')     := '500';
+ 21    --v_setlst('ESAS_VALUE_THRESHOLD')   := '0.0001';
+ 22
+ 23    v_data_query := q'|SELECT * FROM mining_build_text_parallel|';
+ 24
+ 25    DBMS_DATA_MINING.CREATE_MODEL2(
+ 26      model_name          => 'ESA_text_sample',
+ 27      mining_function     => 'FEATURE_EXTRACTION',
+ 28      data_query          => v_data_query,
+ 29      set_list            => v_setlst,
+ 30      case_id_column_name => 'CUST_ID',
+ 31      xform_list          => v_xlst
+ 32    );
+ 33  END;
+ 34  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -173,7 +177,7 @@ ODMS_TEXT_MIN_DOCUMENTS        2                              INPUT
 ODMS_TEXT_POLICY_NAME          DMDEMO_ESA_POLICY              INPUT
 PREP_AUTO                      ON                             INPUT
 
-11行が選択されました。
+11 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -187,7 +191,7 @@ SQL> SELECT attribute_name, attribute_type, data_type
   2  FROM   user_mining_model_attributes
   3  WHERE  model_name='ESA_TEXT_SAMPLE'
   4  ORDER BY attribute_name;
-行が選択されていません
+no rows selected
 SQL>
 SQL>
 SQL> -- Get a list of model views
@@ -225,7 +229,7 @@ DM$VXESA_TEXT_SAMPLE
 Text Features
 
 
-7行が選択されました。
+7 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -416,7 +420,7 @@ It is a good way to attract new shoppers. After shopping at your store for more
 than a month, I am ready to move on though. Not enough variety
 
 
-38行が選択されました。
+38 rows selected.
 
 SQL>
 SQL> -- Another similar example
@@ -438,7 +442,7 @@ COMMENTS
 --------------------------------------------------------------------------------
 Great program.  Love the discount. Signed happy customer.
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> -- the most relevant comments from build data
@@ -450,7 +454,7 @@ SQL> SELECT s.value, m.comments
   6         mining_build_text_parallel m
   7  WHERE  s.feature_id = m.cust_id
   8  ORDER BY s.value desc;
-行が選択されていません
+no rows selected
 SQL>
 SQL> ------------------
 SQL> -- BUSINESS CASE 2
@@ -471,7 +475,7 @@ I just purchased a computer from your store last month.  Why didn't you offer th
 is discount then?
 
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> -- attributes representing the comments in the model
@@ -479,7 +483,7 @@ SQL> SELECT attribute_subname, coefficient
   2  FROM   dm$vaESA_TEXT_SAMPLE
   3  WHERE  feature_id = 101613
   4  ORDER BY coefficient desc;
-行が選択されていません
+no rows selected
 SQL>
 SQL> ------------------
 SQL> -- BUSINESS CASE 3
@@ -491,7 +495,7 @@ SQL> CREATE OR REPLACE VIEW mining_test_text_only AS
   3  FROM   mining_test_text_parallel
   4  WHERE  cust_id < 103005;
 
-View MINING_TEST_TEXT_ONLYは作成されました。
+View MINING_TEST_TEXT_ONLY created.
 
 SQL>
 SQL> column comments format a50
@@ -521,7 +525,7 @@ SQL> SELECT cust_id, comments
            ing discounts for my past purchases?
 
 
-4行が選択されました。
+4 rows selected.
 
 SQL>
 SQL> -- test data relatedness based on the model
@@ -544,7 +548,7 @@ SQL> SELECT a.cust_id id1, b.cust_id id2,
     103001     103003
     103001     103004
 
-6行が選択されました。
+6 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -560,35 +564,39 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('ESA_text_sample2');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> DECLARE
-  2    xformlist dbms_data_mining_transform.TRANSFORM_LIST;
-  3    v_setlst  DBMS_DATA_MINING.SETTING_LIST;
-  4
+  2    v_xlst   dbms_data_mining_transform.TRANSFORM_LIST;
+  3    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  4    v_data_query VARCHAR2(32767);
   5  BEGIN
-  6    v_setlst('PREP_AUTO')               := 'ON';
-  7    v_setlst('ALGO_NAME')               := 'ALGO_EXPLICIT_SEMANTIC_ANALYS';
-  8    v_setlst('ODMS_TEXT_POLICY_NAME')   := 'DMDEMO_ESA_POLICY';
-  9    v_setlst('ESAS_MIN_ITEMS')          := '5';
- 10    v_setlst('ODMS_TEXT_MIN_DOCUMENTS') := '2';
- 11
- 12    dbms_data_mining_transform.SET_TRANSFORM(
- 13      xformlist, 'comments', null, 'comments', 'comments',
- 14        'TEXT(POLICY_NAME:DMDEMO_ESA_POLICY)(TOKEN_TYPE:STEM)');
- 15
- 16    DBMS_DATA_MINING.CREATE_MODEL2(
- 17      model_name          => 'ESA_text_sample2',
- 18      mining_function     => 'FEATURE_EXTRACTION',
- 19      data_query          => 'SELECT * FROM mining_build_text_parallel',
- 20      case_id_column_name => 'cust_id',
- 21      set_list            => v_setlst,
- 22      xform_list          => xformlist);
- 23  END;
- 24  /
+  6    dbms_data_mining_transform.SET_TRANSFORM(
+  7      v_xlst, 'comments', null, 'comments', 'comments',
+  8      'TEXT(POLICY_NAME:DMDEMO_ESA_POLICY)(TOKEN_TYPE:STEM)');
+  9
+ 10    -- Model Settings ---------------------------------------------------
+ 11    v_setlst('PREP_AUTO')               := 'ON';
+ 12    v_setlst('ALGO_NAME')               := 'ALGO_EXPLICIT_SEMANTIC_ANALYS';
+ 13    v_setlst('ODMS_TEXT_POLICY_NAME')   := 'DMDEMO_ESA_POLICY';
+ 14    v_setlst('ESAS_MIN_ITEMS')          := '5';
+ 15    v_setlst('ODMS_TEXT_MIN_DOCUMENTS') := '2';
+ 16
+ 17    v_data_query := q'|SELECT * FROM mining_build_text_parallel|';
+ 18
+ 19    DBMS_DATA_MINING.CREATE_MODEL2(
+ 20      model_name          => 'ESA_text_sample2',
+ 21      mining_function     => 'FEATURE_EXTRACTION',
+ 22      data_query          => v_data_query,
+ 23      set_list            => v_setlst,
+ 24      case_id_column_name => 'CUST_ID',
+ 25      xform_list          => v_xlst
+ 26    );
+ 27  END;
+ 28  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -797,7 +805,7 @@ FEATURE_ID VALUE
 ####       .06993
 ####       .06659
 
-190行が選択されました。
+190 rows selected.
 
 SQL>
 SQL>
@@ -813,12 +821,12 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('ESA_text_sample_dense');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> DECLARE
-  2    xformlist dbms_data_mining_transform.TRANSFORM_LIST;
+  2    v_xlst    dbms_data_mining_transform.TRANSFORM_LIST;
   3    v_setlst  DBMS_DATA_MINING.SETTING_LIST;
-  4
+  4    v_data_query VARCHAR2(32767);
   5  BEGIN
   6    v_setlst('PREP_AUTO')               := 'ON';
   7    v_setlst('ALGO_NAME')               := 'ALGO_EXPLICIT_SEMANTIC_ANALYS';
@@ -829,20 +837,23 @@ SQL> DECLARE
  12    v_setlst('ESAS_EMBEDDING_SIZE')     := '1024';
  13
  14    dbms_data_mining_transform.SET_TRANSFORM(
- 15      xformlist, 'comments', null, 'comments', 'comments',
+ 15      v_xlst, 'comments', null, 'comments', 'comments',
  16        'TEXT(POLICY_NAME:DMDEMO_ESA_POLICY)(TOKEN_TYPE:STEM)');
  17
- 18    DBMS_DATA_MINING.CREATE_MODEL2(
- 19      model_name          => 'ESA_text_sample_dense',
- 20      mining_function     => 'FEATURE_EXTRACTION',
- 21      data_query          => 'SELECT * FROM mining_build_text_parallel',
- 22      case_id_column_name => 'cust_id',
- 23      set_list            => v_setlst,
- 24      xform_list          => xformlist);
- 25  END;
- 26  /
+ 18    v_data_query := q'|SELECT * FROM mining_build_text_parallel|';
+ 19
+ 20    DBMS_DATA_MINING.CREATE_MODEL2(
+ 21      model_name          => 'ESA_text_sample_dense',
+ 22      mining_function     => 'FEATURE_EXTRACTION',
+ 23      data_query          => v_data_query,
+ 24      set_list            => v_setlst,
+ 25      case_id_column_name => 'CUST_ID',
+ 26      xform_list          => v_xlst
+ 27    );
+ 28  END;
+ 29  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL>
@@ -875,7 +886,7 @@ ODMS_TEXT_MIN_DOCUMENTS        2                              INPUT
 ODMS_TEXT_POLICY_NAME          DMDEMO_ESA_POLICY              INPUT
 PREP_AUTO                      ON                             INPUT
 
-13行が選択されました。
+13 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -895,7 +906,7 @@ ATTRIBUTE_NAME                 ATTRIBUTE_TYPE       DATA_TYPE
 COMMENTS                       TEXT                 VARCHAR2
 ORA$VECTOR                     VECTOR               VECTOR
 
-2行が選択されました。
+2 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -929,7 +940,7 @@ DM$VXESA_TEXT_SAMPLE_DENSE
 Text Features
 
 
-5行が選択されました。
+5 rows selected.
 
 SQL>
 SQL> -------------------------
@@ -940,7 +951,7 @@ SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE esa_dense_results';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> column value format 9.99999
 SQL> column comments format a200
@@ -952,7 +963,7 @@ SQL> CREATE TABLE esa_dense_results AS
   5          FROM   mining_build_text_parallel) t,
   6         TABLE(t.fset) s;
 
-Table ESA_DENSE_RESULTSは作成されました。
+Table ESA_DENSE_RESULTS created.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -976,7 +987,7 @@ SQL> CREATE OR REPLACE VIEW esa_dense_results_v AS
   6    FROM esa_dense_results
   7    GROUP BY cust_id, comments;
 
-View ESA_DENSE_RESULTS_Vは作成されました。
+View ESA_DENSE_RESULTS_V created.
 
 SQL>
 SQL> ---------------------------
@@ -988,28 +999,31 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('CLUSTERING_EXAMPLE');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> DECLARE
-  2    xformlist DBMS_DATA_MINING_TRANSFORM.TRANSFORM_LIST;
-  3    v_setlst  DBMS_DATA_MINING.SETTING_LIST;
-  4
-  5  BEGIN
-  6    v_setlst('PREP_AUTO')    := 'ON';
-  7    v_setlst('ALGO_NAME')    := 'ALGO_KMEANS';
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    v_setlst('ALGO_NAME')    := 'ALGO_KMEANS';
+  7    v_setlst('PREP_AUTO')    := 'ON';
   8    v_setlst('KMNS_DETAILS') := 'KMNS_DETAILS_HIERARCHY';
   9
- 10    DBMS_DATA_MINING.CREATE_MODEL2(
- 11      model_name          => 'CLUSTERING_EXAMPLE',
- 12      mining_function     => 'CLUSTERING',
- 13      data_query          => 'SELECT * FROM esa_dense_results_v',
- 14      case_id_column_name => 'cust_id',
- 15      set_list =>v_setlst);
- 16  END;
- 17  /
+ 10    v_data_query := q'|SELECT * FROM esa_dense_results_v|';
+ 11
+ 12    DBMS_DATA_MINING.CREATE_MODEL2(
+ 13      model_name          => 'CLUSTERING_EXAMPLE',
+ 14      mining_function     => 'CLUSTERING',
+ 15      data_query          => v_data_query,
+ 16      set_list            => v_setlst,
+ 17      case_id_column_name => 'CUST_ID'
+ 18    );
+ 19  END;
+ 20  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -1041,7 +1055,7 @@ ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
 ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
 PREP_AUTO                      ON
 
-15行が選択されました。
+15 rows selected.
 
 SQL>
 SQL> -- Get a list of model views
@@ -1085,7 +1099,7 @@ DM$VWCLUSTERING_EXAMPLE
 Model Build Alerts
 
 
-9行が選択されました。
+9 rows selected.
 
 SQL>
 SQL> -- CLUSTERS
@@ -1121,7 +1135,7 @@ SQL> SELECT cluster_id CLU_ID, RECORD_COUNT REC_CNT, parent, TREE_LEVEL,
         18          8         17         10       2.72
         19          8         17         10      3.455
 
-19行が選択されました。
+19 rows selected.
 
 SQL>
 SQL> SELECT CLUSTER_ID CLU_ID, RECORD_COUNT REC_CNT, ROUND(TO_NUMBER(dispersion),3) DISPERSION
@@ -1142,7 +1156,7 @@ SQL> SELECT CLUSTER_ID CLU_ID, RECORD_COUNT REC_CNT, ROUND(TO_NUMBER(dispersion)
         18          8       2.72
         19          8      3.455
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------

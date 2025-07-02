@@ -21,12 +21,12 @@ SQL> BEGIN
   3  EXCEPTION WHEN OTHERS THEN NULL; END;
   4  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> EXECUTE ctx_ddl.create_policy('dmdemo_svm_policy')
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -43,8 +43,9 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('T_SVM_Clas_sample');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
+SQL>
 SQL> ---------------
 SQL> -- CREATE MODEL
 SQL>
@@ -52,32 +53,36 @@ SQL> -- Create SVM model
 SQL> -- Note the transform makes the 'comments' attribute
 SQL> -- to be treated as unstructured text data
 SQL> DECLARE
-  2    xformlist dbms_data_mining_transform.TRANSFORM_LIST;
+  2    v_xlst   dbms_data_mining_transform.TRANSFORM_LIST;
   3    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  4  BEGIN
-  5    dbms_data_mining_transform.SET_TRANSFORM(
-  6      xformlist, 'comments', null, 'comments', null, 'TEXT');
-  7
-  8    -- choose linear kernel
-  9    v_setlst('ALGO_NAME')              := 'ALGO_SUPPORT_VECTOR_MACHINES';
- 10    v_setlst('PREP_AUTO')              := 'ON';
- 11    v_setlst('SVMS_KERNEL_FUNCTION')   := 'SVMS_LINEAR';
- 12    v_setlst('SVMS_COMPLEXITY_FACTOR') := '100';
- 13    v_setlst('ODMS_TEXT_POLICY_NAME')  := 'DMDEMO_SVM_POLICY';
- 14    v_setlst('SVMS_SOLVER')            := 'SVMS_SOLVER_SGD';
- 15
- 16    DBMS_DATA_MINING.CREATE_MODEL2(
- 17      model_name          => 'T_SVM_Clas_sample',
- 18      mining_function     => 'CLASSIFICATION',
- 19      data_query          => 'select * from mining_build_text',
- 20      set_list            => v_setlst,
- 21      case_id_column_name => 'cust_id',
- 22      target_column_name  => 'affinity_card',
- 23      xform_list          => xformlist);
- 24  END;
- 25  /
+  4    v_data_query VARCHAR2(32767);
+  5  BEGIN
+  6    dbms_data_mining_transform.SET_TRANSFORM(
+  7      v_xlst, 'comments', null, 'comments', null, 'TEXT');
+  8
+  9    -- choose linear kernel
+ 10    v_setlst('ALGO_NAME')              := 'ALGO_SUPPORT_VECTOR_MACHINES';
+ 11    v_setlst('PREP_AUTO')              := 'ON';
+ 12    v_setlst('SVMS_KERNEL_FUNCTION')   := 'SVMS_LINEAR';
+ 13    v_setlst('SVMS_COMPLEXITY_FACTOR') := '100';
+ 14    v_setlst('ODMS_TEXT_POLICY_NAME')  := 'DMDEMO_SVM_POLICY';
+ 15    v_setlst('SVMS_SOLVER')            := 'SVMS_SOLVER_SGD';
+ 16
+ 17    v_data_query := q'|SELECT * FROM mining_build_text|';
+ 18
+ 19    DBMS_DATA_MINING.CREATE_MODEL2(
+ 20      model_name          => 'T_SVM_Clas_sample',
+ 21      mining_function     => 'CLASSIFICATION',
+ 22      data_query          => v_data_query,
+ 23      set_list            => v_setlst,
+ 24      case_id_column_name => 'CUST_ID',
+ 25      target_column_name  => 'AFFINITY_CARD',
+ 26      xform_list          => v_xlst
+ 27    );
+ 28  END;
+ 29  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- Display the model settings
@@ -104,7 +109,7 @@ SVMS_CONV_TOLERANCE            .0001
 SVMS_KERNEL_FUNCTION           SVMS_LINEAR
 SVMS_SOLVER                    SVMS_SOLVER_SGD
 
-13行が選択されました。
+13 rows selected.
 
 SQL>
 SQL> -- Display the model signature
@@ -136,7 +141,7 @@ PRINTER_SUPPLIES                         NUMERICAL
 YRS_RESIDENCE                            NUMERICAL
 Y_BOX_GAMES                              NUMERICAL
 
-18行が選択されました。
+18 rows selected.
 
 SQL>
 SQL> -- Display model details
@@ -158,7 +163,7 @@ DM$VTT_SVM_CLAS_SAMPLE         Classification Targets
 DM$VWT_SVM_CLAS_SAMPLE         Model Build Alerts
 DM$VXT_SVM_CLAS_SAMPLE         Text Features
 
-8行が選択されました。
+8 rows selected.
 
 SQL>
 SQL> -- Note how several text terms extracted from the COMMENTs documents
@@ -212,7 +217,7 @@ SQL> SELECT * from
         10
 
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -285,7 +290,7 @@ SQL> SELECT cust_id, pd FROM
            </Details>
 
 
-5行が選択されました。
+5 rows selected.
 
 SQL>
 SQL> ------------------
@@ -307,6 +312,6 @@ CUST_GENDER         CNT    AVG_AGE
 F                    36         29
 M                   267         35
 
-2行が選択されました。
+2 rows selected.
 
 SQL> spool oml4sql-clustering-expectation-maximization

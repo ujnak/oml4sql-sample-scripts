@@ -55,7 +55,10 @@ CREATE OR replace VIEW mset_test_sh_data
 -----------------------------------------------------------------
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
+  --
   -- Select MSET-SPRT as the algorithm
   v_setlst('ALGO_NAME') := 'ALGO_MSET_SPRT';
   -- Turn on automatic data preparation
@@ -74,13 +77,15 @@ BEGIN
   -- v_setlst('MSET_STD_TOLERANCE') := '3';
   -- v_setlst('MSET_HELDASIDE')     := '500';
 
-  dbms_data_mining.create_model2(
+  v_data_query := q'|SELECT * FROM mset_build_sh_data|';
+
+  DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'MSET_SH_MODEL',
     mining_function     => 'CLASSIFICATION',
-    data_query          => 'select * from mset_build_sh_data',
-    case_id_column_name => 'time_id',
-    target_column_name  => '',
-    set_list            => v_setlst);
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => 'TIME_ID'
+  );
 END;
 /
 

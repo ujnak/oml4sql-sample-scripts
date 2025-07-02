@@ -50,21 +50,21 @@ BEGIN DBMS_DATA_MINING.DROP_MODEL('KM_SH_Clus_sample');
 EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 
--------------------
--- SPECIFY SETTINGS
---
--- K-Means is the default Clustering algorithm. For this sample,
--- we skip specification of any overrides to defaults
---
--- Uncomment the appropriate sections of the code below for
--- changing settings values.
---
 ---------------------
 -- CREATE A NEW MODEL
 --
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
+  --
+  -- K-Means is the default Clustering algorithm. For this sample,
+  -- we skip specification of any overrides to defaults
+  --
+  -- Uncomment the appropriate sections of the code below for
+  -- changing settings values.
+  --
   v_setlst('KMNS_DISTANCE')           := 'KMNS_EUCLIDEAN';
   v_setlst('PREP_AUTO')               := 'ON';
   v_setlst('KMNS_DETAILS')            := 'KMNS_DETAILS_ALL';
@@ -77,12 +77,15 @@ BEGIN
   -- v_setlst('KMNS_MIN_PCT_ATTR_SUPPORT') := '0.1';
   -- v_setlst('KMNS_NUM_BINS')        := '10';
 
+  v_data_query := q'|SELECT * FROM mining_data_build_v|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'KM_SH_Clus_sample',
     mining_function     => 'CLUSTERING',
-    data_query          => 'select * from mining_data_build_v',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id');
+    case_id_column_name => 'CUST_ID'
+  );
 END;
 /
 

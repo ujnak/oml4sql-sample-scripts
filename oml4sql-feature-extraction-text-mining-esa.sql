@@ -95,15 +95,16 @@ CREATE OR REPLACE VIEW mining_build_text_parallel AS
 -- to be treated as unstructured text data
 --
 DECLARE
-  xformlist dbms_data_mining_transform.TRANSFORM_LIST;
-  v_setlst  DBMS_DATA_MINING.SETTING_LIST;
+  v_xlst   dbms_data_mining_transform.TRANSFORM_LIST;
+  v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
   dbms_data_mining_transform.SET_TRANSFORM(
-    xformlist, 'comments', null, 'comments', 'comments',
-     -- 'TEXT(POLICY_NAME:DMDEMO_ESA_POLICY)(TOKEN_TYPE:STEM)');
+    v_xlst, 'comments', null, 'comments', 'comments',
+    -- 'TEXT(POLICY_NAME:DMDEMO_ESA_POLICY)(TOKEN_TYPE:STEM)');
     'TEXT(POLICY_NAME:DMDEMO_ESA_POLICY)(TOKEN_TYPE:THEME)');
 
-  -- specify settings
+  -- Model Settings ---------------------------------------------------
   v_setlst('ALGO_NAME')               := 'ALGO_EXPLICIT_SEMANTIC_ANALYS';
   v_setlst('PREP_AUTO')               := 'ON';
   v_setlst('ODMS_TEXT_POLICY_NAME')   := 'DMDEMO_ESA_POLICY';
@@ -115,13 +116,16 @@ BEGIN
   --v_setlst('ESAS_TOPN_FEATURES')     := '500';
   --v_setlst('ESAS_VALUE_THRESHOLD')   := '0.0001';
 
+  v_data_query := q'|SELECT * FROM mining_build_text_parallel|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'ESA_text_sample',
     mining_function     => 'FEATURE_EXTRACTION',
-    data_query          => 'SELECT * FROM mining_build_text_parallel',
-    case_id_column_name => 'cust_id',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    xform_list          => xformlist);
+    case_id_column_name => 'CUST_ID',
+    xform_list          => v_xlst
+  );
 END;
 /
 
@@ -273,27 +277,31 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 
 DECLARE
-  xformlist dbms_data_mining_transform.TRANSFORM_LIST;
-  v_setlst  DBMS_DATA_MINING.SETTING_LIST;
-
+  v_xlst   dbms_data_mining_transform.TRANSFORM_LIST;
+  v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  dbms_data_mining_transform.SET_TRANSFORM(
+    v_xlst, 'comments', null, 'comments', 'comments',
+    'TEXT(POLICY_NAME:DMDEMO_ESA_POLICY)(TOKEN_TYPE:STEM)');
+
+  -- Model Settings ---------------------------------------------------
   v_setlst('PREP_AUTO')               := 'ON';
   v_setlst('ALGO_NAME')               := 'ALGO_EXPLICIT_SEMANTIC_ANALYS';
   v_setlst('ODMS_TEXT_POLICY_NAME')   := 'DMDEMO_ESA_POLICY';
   v_setlst('ESAS_MIN_ITEMS')          := '5';
   v_setlst('ODMS_TEXT_MIN_DOCUMENTS') := '2';
 
-  dbms_data_mining_transform.SET_TRANSFORM(
-    xformlist, 'comments', null, 'comments', 'comments',
-      'TEXT(POLICY_NAME:DMDEMO_ESA_POLICY)(TOKEN_TYPE:STEM)');
+  v_data_query := q'|SELECT * FROM mining_build_text_parallel|';
 
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'ESA_text_sample2',
     mining_function     => 'FEATURE_EXTRACTION',
-    data_query          => 'SELECT * FROM mining_build_text_parallel',
-    case_id_column_name => 'cust_id',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    xform_list          => xformlist);
+    case_id_column_name => 'CUST_ID',
+    xform_list          => v_xlst
+  );
 END;
 /
 
@@ -323,9 +331,9 @@ BEGIN DBMS_DATA_MINING.DROP_MODEL('ESA_text_sample_dense');
 EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 DECLARE
-  xformlist dbms_data_mining_transform.TRANSFORM_LIST;
+  v_xlst    dbms_data_mining_transform.TRANSFORM_LIST;
   v_setlst  DBMS_DATA_MINING.SETTING_LIST;
-
+  v_data_query VARCHAR2(32767);
 BEGIN
   v_setlst('PREP_AUTO')               := 'ON';
   v_setlst('ALGO_NAME')               := 'ALGO_EXPLICIT_SEMANTIC_ANALYS';
@@ -336,16 +344,19 @@ BEGIN
   v_setlst('ESAS_EMBEDDING_SIZE')     := '1024';
 
   dbms_data_mining_transform.SET_TRANSFORM(
-    xformlist, 'comments', null, 'comments', 'comments',
+    v_xlst, 'comments', null, 'comments', 'comments',
       'TEXT(POLICY_NAME:DMDEMO_ESA_POLICY)(TOKEN_TYPE:STEM)');
+
+  v_data_query := q'|SELECT * FROM mining_build_text_parallel|';
 
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'ESA_text_sample_dense',
     mining_function     => 'FEATURE_EXTRACTION',
-    data_query          => 'SELECT * FROM mining_build_text_parallel',
-    case_id_column_name => 'cust_id',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    xform_list          => xformlist);
+    case_id_column_name => 'CUST_ID',
+    xform_list          => v_xlst
+  );
 END;
 /
 
@@ -434,20 +445,23 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 
 DECLARE
-  xformlist DBMS_DATA_MINING_TRANSFORM.TRANSFORM_LIST;
-  v_setlst  DBMS_DATA_MINING.SETTING_LIST;
-
+  v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
-  v_setlst('PREP_AUTO')    := 'ON';
+  -- Model Settings ---------------------------------------------------
   v_setlst('ALGO_NAME')    := 'ALGO_KMEANS';
+  v_setlst('PREP_AUTO')    := 'ON';
   v_setlst('KMNS_DETAILS') := 'KMNS_DETAILS_HIERARCHY';
+
+  v_data_query := q'|SELECT * FROM esa_dense_results_v|';
 
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'CLUSTERING_EXAMPLE',
     mining_function     => 'CLUSTERING',
-    data_query          => 'SELECT * FROM esa_dense_results_v',
-    case_id_column_name => 'cust_id',
-    set_list =>v_setlst);
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => 'CUST_ID'
+  );
 END;
 /
 

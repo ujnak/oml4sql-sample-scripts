@@ -54,36 +54,40 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 --
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
-  -- specify settings
+  -- Model Settings ---------------------------------------------------
   v_setlst('ALGO_NAME')        := 'ALGO_NEURAL_NETWORK';
   v_setlst('PREP_AUTO')        := 'ON';
   v_setlst('ODMS_RANDOM_SEED') := '12';
 
   -- Examples of other possible settings are:
-  --v_setlst('NNET_HIDDEN_LAYERS')       := '2';
-  --v_setlst('NNET_NODES_PER_LAYER')     := '10, 30';
-  --v_setlst('NNET_ITERATIONS')          := '100';
-  --v_setlst('NNET_TOLERANCE')           := '0.0001';
-  --v_setlst('NNET_ACTIVATIONS')         := 'NNET_ACTIVATIONS_LOG_SIG';
-  --v_setlst('NNET_REGULARIZER')         := 'NNET_REGULARIZER_HELDASIDE';
-  --v_setlst('NNET_HELDASIDE_RATIO')     := '0.3';
-  --v_setlst('NNET_HELDASIDE_MAX_FAIL')  := '5';
-  --v_setlst('NNET_REGULARIZER')         := 'NNET_REGULARIZER_L2';
-  --v_setlst('NNET_REG_LAMBDA')          := '0.5';
-  --v_setlst('NNET_WEIGHT_UPPER_BOUND')  := '0.7';
-  --v_setlst('NNET_WEIGHT_LOWER_BOUND')  := '-0.6';
-  --v_setlst('LBFGS_HISTORY_DEPTH')      := '20';
-  --v_setlst('LBFGS_SCALE_HESSIAN')      := 'LBFGS_SCALE_HESSIAN_DISABLE';
-  --v_setlst('LBFGS_GRADIENT_TOLERANCE') := '0.0001';
+  -- v_setlst('NNET_HIDDEN_LAYERS')       := '2';
+  -- v_setlst('NNET_NODES_PER_LAYER')     := '10, 30';
+  -- v_setlst('NNET_ITERATIONS')          := '100';
+  -- v_setlst('NNET_TOLERANCE')           := '0.0001';
+  -- v_setlst('NNET_ACTIVATIONS')         := 'NNET_ACTIVATIONS_LOG_SIG';
+  -- v_setlst('NNET_REGULARIZER')         := 'NNET_REGULARIZER_HELDASIDE';
+  -- v_setlst('NNET_HELDASIDE_RATIO')     := '0.3';
+  -- v_setlst('NNET_HELDASIDE_MAX_FAIL')  := '5';
+  -- v_setlst('NNET_REGULARIZER')         := 'NNET_REGULARIZER_L2';
+  -- v_setlst('NNET_REG_LAMBDA')          := '0.5';
+  -- v_setlst('NNET_WEIGHT_UPPER_BOUND')  := '0.7';
+  -- v_setlst('NNET_WEIGHT_LOWER_BOUND')  := '-0.6';
+  -- v_setlst('LBFGS_HISTORY_DEPTH')      := '20';
+  -- v_setlst('LBFGS_SCALE_HESSIAN')      := 'LBFGS_SCALE_HESSIAN_DISABLE';
+  -- v_setlst('LBFGS_GRADIENT_TOLERANCE') := '0.0001';
+
+  v_data_query := q'|SELECT * FROM mining_data_build_v|';
 
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'NNR_SH_Regr_sample',
     mining_function     => 'REGRESSION',
-    data_query          => 'SELECT * FROM mining_data_build_v',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id',
-    target_column_name  => 'age');
+    case_id_column_name => 'CUST_ID',
+    target_column_name  => 'AGE'
+  );
 END;
 /
 

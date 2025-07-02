@@ -52,7 +52,10 @@ CREATE VIEW svd_sh_sample_build_num AS
 -- Build an SVD model
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
+  --
   -- Select SVD as the Feature Extraction algorithm
   v_setlst('ALGO_NAME') := 'ALGO_SINGULAR_VALUE_DECOMP';
   -- Turn on automatic data preparation
@@ -66,12 +69,15 @@ BEGIN
   -- v_setlst('SVDS_U_MATRIX_OUTPUT') := 'SVDS_U_MATRIX_ENABLE';
   -- v_setlst('ODMS_APPROXIMATE_COMPUTATION') := 'ODMS_APPR_COMP_ENABLE';
 
+  v_data_query := q'|SELECT * FROM svd_sh_sample_build_num|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'SVD_SH_sample',
     mining_function     => 'FEATURE_EXTRACTION',
-    data_query          => 'SELECT * FROM svd_sh_sample_build_num',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id');
+    case_id_column_name => 'CUST_ID'
+  );
 END;
 /
 
@@ -166,7 +172,10 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 -- Build an SVD model
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
+  --
   -- Select SVD as the Feature Extraction algorithm
   v_setlst('ALGO_NAME')            := 'ALGO_SINGULAR_VALUE_DECOMP';
   -- Request the output of the U matrix values (not produced by default)
@@ -178,12 +187,15 @@ BEGIN
   -- v_setlst('SVDS_SCORING_MODE') := 'SVDS_SCORING_PCA';
   -- v_setlst('ODMS_APPROXIMATE_COMPUTATION') := 'ODMS_APPR_COMP_ENABLE';
 
+  v_data_query := q'|SELECT * FROM svd_sh_sample_build_num|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'SVD_SH_sample',
     mining_function     => 'FEATURE_EXTRACTION',
-    data_query          => 'SELECT * FROM svd_sh_sample_build_num',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id');
+    case_id_column_name => 'CUST_ID'
+  );
 END;
 /
 

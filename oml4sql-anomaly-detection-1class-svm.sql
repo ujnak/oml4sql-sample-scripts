@@ -49,10 +49,10 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 -- Note the NULL sprecification for target column name
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
-  -- Set algorithm to Support Vector Machines
+  -- Model Settings ---------------------------------------------------
   v_setlst('ALGO_NAME') := 'ALGO_SUPPORT_VECTOR_MACHINES';
-  -- Enable automatic data preparation
   v_setlst('PREP_AUTO') := 'ON';
 
   -- Examples of other possible overrides:
@@ -62,13 +62,16 @@ BEGIN
   -- v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_LINEAR';
   -- v_setlst('SVMS_KERNEL_FUNCTION') := 'SVMS_GAUSSIAN';
 
+  v_data_query := q'|SELECT * FROM mining_data_one_class_pv|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'SVMO_SH_Clas_sample',
     mining_function     => 'CLASSIFICATION',
-    data_query          => 'SELECT * FROM mining_data_one_class_pv',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id',
-    target_column_name  => NULL);
+    case_id_column_name => 'CUST_ID',
+    target_column_name  => NULL
+  );
 END;
 /
 

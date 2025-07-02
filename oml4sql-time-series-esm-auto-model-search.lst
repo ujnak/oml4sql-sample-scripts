@@ -36,7 +36,7 @@ SQL> CREATE OR REPLACE VIEW ESM_SH_DATA AS
   2  SELECT TIME_ID, AMOUNT_SOLD
   3  FROM   SH.SALES;
 
-View ESM_SH_DATAは作成されました。
+View ESM_SH_DATA created.
 
 SQL>
 SQL>
@@ -48,25 +48,30 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('ESM_SALES_FORECAST_1');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> DECLARE
-  2      v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4      v_setlst('ALGO_NAME')            := 'ALGO_EXPONENTIAL_SMOOTHING';
-  5      v_setlst('EXSM_INTERVAL')       := 'EXSM_INTERVAL_DAY';
-  6
-  7      DBMS_DATA_MINING.CREATE_MODEL2(
-  8          MODEL_NAME          => 'ESM_SALES_FORECAST_1',
-  9          MINING_FUNCTION     => 'TIME_SERIES',
- 10          DATA_QUERY          => 'select * from ESM_SH_DATA',
- 11          SET_LIST            => v_setlst,
- 12          CASE_ID_COLUMN_NAME => 'TIME_ID',
- 13          TARGET_COLUMN_NAME  => 'AMOUNT_SOLD');
- 14  END;
- 15  /
+  2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    v_setlst('ALGO_NAME')            := 'ALGO_EXPONENTIAL_SMOOTHING';
+  7    v_setlst('EXSM_INTERVAL')       := 'EXSM_INTERVAL_DAY';
+  8
+  9    v_data_query := q'|SELECT * FROM ESM_SH_DATA|';
+ 10
+ 11    DBMS_DATA_MINING.CREATE_MODEL2(
+ 12      model_name          => 'ESM_SALES_FORECAST_1',
+ 13      mining_function     => 'TIME_SERIES',
+ 14      data_query          => v_data_query,
+ 15      set_list            => v_setlst,
+ 16      case_id_column_name => 'TIME_ID',
+ 17      target_column_name  => 'AMOUNT_SOLD'
+ 18    );
+ 19  END;
+ 20  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -95,7 +100,7 @@ EXSM_OPTIMIZATION_CRIT         EXSM_OPT_CRIT_LIK              DEFAULT
 EXSM_PREDICTION_STEP           1                              DEFAULT
 EXSM_SETMISSING                EXSM_MISS_AUTO                 DEFAULT
 
-10行が選択されました。
+10 rows selected.
 
 SQL> /
 
@@ -112,7 +117,7 @@ EXSM_OPTIMIZATION_CRIT         EXSM_OPT_CRIT_LIK              DEFAULT
 EXSM_PREDICTION_STEP           1                              DEFAULT
 EXSM_SETMISSING                EXSM_MISS_AUTO                 DEFAULT
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL>
@@ -157,7 +162,7 @@ NUM_ROWS                          918843.000
 SIGMA                                  3.244
 STD                                    3.244
 
-30行が選択されました。
+30 rows selected.
 
 SQL> /
 
@@ -194,7 +199,7 @@ NUM_ROWS                          918843.000
 SIGMA                                  3.244
 STD                                    3.244
 
-30行が選択されました。
+30 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------

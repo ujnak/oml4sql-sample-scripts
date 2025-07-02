@@ -110,6 +110,7 @@ INSERT INTO SURVIVAL_DATA VALUES(32, 135, 60, 1, 1,  90,  70, 1275,  0,   135);
 INSERT INTO SURVIVAL_DATA VALUES(21, 237, 69, 1, 1,  80,  70, NULL, NULL, NULL);
 INSERT INTO SURVIVAL_DATA VALUES(26, 356, 53, 2, 1,  90,  90, NULL,   2,  NULL);
 INSERT INTO SURVIVAL_DATA VALUES(13, 387, 56, 1, 2,  80,  60, 1075, NULL, 387);
+commit;
 
 -----------------------------------------------------------------------------
 --             Build an XGBoost survival model with survival:aft
@@ -119,28 +120,33 @@ BEGIN DBMS_DATA_MINING.DROP_MODEL('XGB_SURVIVAL_MODEL');
 EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 DECLARE
-    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
-    v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
-    v_setlst('max_depth')                    := '6';
-    v_setlst('eval_metric')                  := 'aft-nloglik';
-    v_setlst('num_round')                    := '100';
-    v_setlst('objective')                    := 'survival:aft';
-    v_setlst('aft_right_bound_column_name')  := 'rbound';
-    v_setlst('aft_loss_distribution')        := 'normal';
-    v_setlst('aft_loss_distribution_scale')  := '1.20';
-    v_setlst('eta')                          := '0.05';
-    v_setlst('lambda')                       := '0.01';
-    v_setlst('alpha')                        := '0.02';
-    v_setlst('tree_method')                  := 'hist';
+  -- Model Settings ---------------------------------------------------
+  v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
+  v_setlst('max_depth')                    := '6';
+  v_setlst('eval_metric')                  := 'aft-nloglik';
+  v_setlst('num_round')                    := '100';
+  v_setlst('objective')                    := 'survival:aft';
+  v_setlst('aft_right_bound_column_name')  := 'rbound';
+  v_setlst('aft_loss_distribution')        := 'normal';
+  v_setlst('aft_loss_distribution_scale')  := '1.20';
+  v_setlst('eta')                          := '0.05';
+  v_setlst('lambda')                       := '0.01';
+  v_setlst('alpha')                        := '0.02';
+  v_setlst('tree_method')                  := 'hist';
 
-    DBMS_DATA_MINING.CREATE_MODEL2(
-        MODEL_NAME          => 'XGB_SURVIVAL_MODEL',
-        MINING_FUNCTION     => 'REGRESSION',
-        DATA_QUERY          => 'SELECT * FROM SURVIVAL_DATA',
-        TARGET_COLUMN_NAME  => 'LBOUND',
-        CASE_ID_COLUMN_NAME =>  NULL,
-        SET_LIST            =>  v_setlst);
+  v_data_query := q'|SELECT * FROM SURVIVAL_DATA|';
+
+  DBMS_DATA_MINING.CREATE_MODEL2(
+    model_name          => 'XGB_SURVIVAL_MODEL',
+    mining_function     => 'REGRESSION',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => NULL,
+    target_column_name  => 'LBOUND'
+  );
 END;
 /
 
@@ -183,28 +189,33 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 
 DECLARE
-    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
-    v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
-    v_setlst('max_depth')                    := '6';
-    v_setlst('eval_metric')                  := 'aft-nloglik';
-    v_setlst('num_round')                    := '100';
-    v_setlst('objective')                    := 'survival:aft';
-    v_setlst('aft_right_bound_column_name')  := 'rbound';
-    v_setlst('aft_loss_distribution')        := 'normal';
-    v_setlst('aft_loss_distribution_scale')  := '1.20';
-    v_setlst('eta')                          := '0.05';
-    v_setlst('lambda')                       := '0.01';
-    v_setlst('alpha')                        := '0.02';
-    v_setlst('tree_method')                  := 'hist';
+  -- Model Settings ---------------------------------------------------
+  v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
+  v_setlst('max_depth')                    := '6';
+  v_setlst('eval_metric')                  := 'aft-nloglik';
+  v_setlst('num_round')                    := '100';
+  v_setlst('objective')                    := 'survival:aft';
+  v_setlst('aft_right_bound_column_name')  := 'rbound';
+  v_setlst('aft_loss_distribution')        := 'normal';
+  v_setlst('aft_loss_distribution_scale')  := '1.20';
+  v_setlst('eta')                          := '0.05';
+  v_setlst('lambda')                       := '0.01';
+  v_setlst('alpha')                        := '0.02';
+  v_setlst('tree_method')                  := 'hist';
 
-    DBMS_DATA_MINING.CREATE_MODEL2(
-        MODEL_NAME          => 'XGB_SURVIVAL_MODEL',
-        MINING_FUNCTION     => 'REGRESSION',
-        DATA_QUERY          => 'SELECT * FROM SURVIVAL_NUMERIC',
-        TARGET_COLUMN_NAME  => 'LBOUND',
-        CASE_ID_COLUMN_NAME =>  NULL,
-        SET_LIST            =>  v_setlst);
+  v_data_query := q'|SELECT * FROM SURVIVAL_NUMERIC|';
+
+  DBMS_DATA_MINING.CREATE_MODEL2(
+    model_name          => 'XGB_SURVIVAL_MODEL',
+    mining_function     => 'REGRESSION',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => NULL,
+    target_column_name  => 'LBOUND'
+  );
 END;
 /
 
@@ -230,27 +241,32 @@ BEGIN DBMS_DATA_MINING.DROP_MODEL('XGB_SURVIVAL_MODEL');
 EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 DECLARE
-    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 begin
-    v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
-    v_setlst('max_depth')                    := '6';
-    v_setlst('num_round')                    := '100';
-    v_setlst('objective')                    := 'survival:aft';
-    v_setlst('aft_right_bound_column_name')  := 'rbound';
-    v_setlst('aft_loss_distribution')        := 'normal';
-    v_setlst('aft_loss_distribution_scale')  := '1.20';
-    v_setlst('eta')                          := '0.05';
-    v_setlst('lambda')                       := '0.01';
-    v_setlst('alpha')                        := '0.02';
-    v_setlst('tree_method')                  := 'hist';
+  -- Model Settings ---------------------------------------------------
+  v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
+  v_setlst('max_depth')                    := '6';
+  v_setlst('num_round')                    := '100';
+  v_setlst('objective')                    := 'survival:aft';
+  v_setlst('aft_right_bound_column_name')  := 'rbound';
+  v_setlst('aft_loss_distribution')        := 'normal';
+  v_setlst('aft_loss_distribution_scale')  := '1.20';
+  v_setlst('eta')                          := '0.05';
+  v_setlst('lambda')                       := '0.01';
+  v_setlst('alpha')                        := '0.02';
+  v_setlst('tree_method')                  := 'hist';
 
-    DBMS_DATA_MINING.CREATE_MODEL2(
-        MODEL_NAME          => 'XGB_SURVIVAL_MODEL',
-        MINING_FUNCTION     => 'REGRESSION',
-        DATA_QUERY          => 'SELECT * FROM SURVIVAL_DATA',
-        TARGET_COLUMN_NAME  => 'LBOUND',
-        CASE_ID_COLUMN_NAME =>  NULL,
-        SET_LIST            =>  v_setlst);
+  v_data_query := q'|SELECT * FROM SURVIVAL_DATA|';
+
+  DBMS_DATA_MINING.CREATE_MODEL2(
+    model_name          => 'XGB_SURVIVAL_MODEL',
+    mining_function     => 'REGRESSION',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => NULL,
+    target_column_name  => 'LBOUND'
+  );
 END;
 /
 
@@ -271,28 +287,33 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 
 DECLARE
-    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
-    v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
-    v_setlst('max_depth')                    := '6';
-    v_setlst('eval_metric')                  := 'aft-nloglik';
-    v_setlst('num_round')                    := '100';
-    v_setlst('objective')                    := 'survival:aft';
-    v_setlst('aft_right_bound_column_name')  := 'rbound';
-    v_setlst('aft_loss_distribution')        := 'logistic';
-    v_setlst('aft_loss_distribution_scale')  := '1.20';
-    v_setlst('eta')                          := '0.05';
-    v_setlst('lambda')                       := '0.01';
-    v_setlst('alpha')                        := '0.02';
-    v_setlst('tree_method')                  := 'hist';
+  -- Model Settings ---------------------------------------------------
+  v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
+  v_setlst('max_depth')                    := '6';
+  v_setlst('eval_metric')                  := 'aft-nloglik';
+  v_setlst('num_round')                    := '100';
+  v_setlst('objective')                    := 'survival:aft';
+  v_setlst('aft_right_bound_column_name')  := 'rbound';
+  v_setlst('aft_loss_distribution')        := 'logistic';
+  v_setlst('aft_loss_distribution_scale')  := '1.20';
+  v_setlst('eta')                          := '0.05';
+  v_setlst('lambda')                       := '0.01';
+  v_setlst('alpha')                        := '0.02';
+  v_setlst('tree_method')                  := 'hist';
 
-    DBMS_DATA_MINING.CREATE_MODEL2(
-        MODEL_NAME          => 'XGB_SURVIVAL_MODEL',
-        MINING_FUNCTION     => 'REGRESSION',
-        DATA_QUERY          => 'SELECT * FROM SURVIVAL_DATA',
-        TARGET_COLUMN_NAME  => 'LBOUND',
-        CASE_ID_COLUMN_NAME =>  NULL,
-        SET_LIST            =>  v_setlst);
+  v_data_query := q'|SELECT * FROM SURVIVAL_DATA|';
+
+  DBMS_DATA_MINING.CREATE_MODEL2(
+    model_name          => 'XGB_SURVIVAL_MODEL',
+    mining_function     => 'REGRESSION',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => NULL,
+    target_column_name  => 'LBOUND'
+  );
 END;
 /
 
@@ -313,28 +334,33 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 
 DECLARE
-    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
-    v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
-    v_setlst('max_depth')                    := '6';
-    v_setlst('eval_metric')                  := 'aft-nloglik';
-    v_setlst('num_round')                    := '100';
-    v_setlst('objective')                    := 'survival:aft';
-    v_setlst('aft_right_bound_column_name')  := 'rbound';
-    v_setlst('aft_loss_distribution')        := 'extreme';
-    v_setlst('aft_loss_distribution_scale')  := '1.20';
-    v_setlst('eta')                          := '0.05';
-    v_setlst('lambda')                       := '0.01';
-    v_setlst('alpha')                        := '0.02';
-    v_setlst('tree_method')                  := 'hist';
+  -- Model Settings ---------------------------------------------------
+  v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
+  v_setlst('max_depth')                    := '6';
+  v_setlst('eval_metric')                  := 'aft-nloglik';
+  v_setlst('num_round')                    := '100';
+  v_setlst('objective')                    := 'survival:aft';
+  v_setlst('aft_right_bound_column_name')  := 'rbound';
+  v_setlst('aft_loss_distribution')        := 'extreme';
+  v_setlst('aft_loss_distribution_scale')  := '1.20';
+  v_setlst('eta')                          := '0.05';
+  v_setlst('lambda')                       := '0.01';
+  v_setlst('alpha')                        := '0.02';
+  v_setlst('tree_method')                  := 'hist';
 
-    DBMS_DATA_MINING.CREATE_MODEL2(
-        MODEL_NAME          => 'XGB_SURVIVAL_MODEL',
-        MINING_FUNCTION     => 'REGRESSION',
-        DATA_QUERY          => 'SELECT * FROM SURVIVAL_DATA',
-        TARGET_COLUMN_NAME  => 'LBOUND',
-        CASE_ID_COLUMN_NAME =>  NULL,
-        SET_LIST            =>  v_setlst);
+  v_data_query := q'|SELECT * FROM SURVIVAL_DATA|';
+
+  DBMS_DATA_MINING.CREATE_MODEL2(
+    model_name          => 'XGB_SURVIVAL_MODEL',
+    mining_function     => 'REGRESSION',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => NULL,
+    target_column_name  => 'LBOUND'
+  );
 END;
 /
 
@@ -354,28 +380,33 @@ BEGIN DBMS_DATA_MINING.DROP_MODEL('XGB_SURVIVAL_MODEL');
 EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 DECLARE
-    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
-    v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
-    v_setlst('max_depth')                    := '6';
-    v_setlst('eval_metric')                  := 'aft-nloglik';
-    v_setlst('num_round')                    := '100';
-    v_setlst('objective')                    := 'survival:aft';
-    v_setlst('aft_right_bound_column_name')  := 'rbound';
-    v_setlst('aft_loss_distribution')        := 'extreme';
-    v_setlst('aft_loss_distribution_scale')  := '0';
-    v_setlst('eta')                          := '0.05';
-    v_setlst('lambda')                       := '0.01';
-    v_setlst('alpha')                        := '0.02';
-    v_setlst('tree_method')                  := 'hist';
+  -- Model Settings ---------------------------------------------------
+  v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
+  v_setlst('max_depth')                    := '6';
+  v_setlst('eval_metric')                  := 'aft-nloglik';
+  v_setlst('num_round')                    := '100';
+  v_setlst('objective')                    := 'survival:aft';
+  v_setlst('aft_right_bound_column_name')  := 'rbound';
+  v_setlst('aft_loss_distribution')        := 'extreme';
+  v_setlst('aft_loss_distribution_scale')  := '0';
+  v_setlst('eta')                          := '0.05';
+  v_setlst('lambda')                       := '0.01';
+  v_setlst('alpha')                        := '0.02';
+  v_setlst('tree_method')                  := 'hist';
+
+  v_data_query := q'|SELECT * FROM SURVIVAL_DATA|';
     
-    DBMS_DATA_MINING.CREATE_MODEL2(
-        MODEL_NAME          => 'XGB_SURVIVAL_MODEL',
-        MINING_FUNCTION     => 'REGRESSION',
-        DATA_QUERY          => 'SELECT * FROM SURVIVAL_DATA',
-        TARGET_COLUMN_NAME  => 'LBOUND',
-        CASE_ID_COLUMN_NAME =>  NULL,
-        SET_LIST            =>  v_setlst);
+  DBMS_DATA_MINING.CREATE_MODEL2(
+    model_name          => 'XGB_SURVIVAL_MODEL',
+    mining_function     => 'REGRESSION',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => NULL,
+    target_column_name  => 'LBOUND'
+  );
 END;
 /
 
@@ -403,6 +434,7 @@ INSERT INTO SURVIVAL_DATA VALUES(135, 135);
 INSERT INTO SURVIVAL_DATA VALUES(237, NULL);
 INSERT INTO SURVIVAL_DATA VALUES(356, NULL);
 INSERT INTO SURVIVAL_DATA VALUES(387, 387);
+commit;
 
 -----------------------------------------------------------------------------
 --        Build an XGBoost model using numerical table  
@@ -413,28 +445,33 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 
 DECLARE
-    v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
-    v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
-    v_setlst('max_depth')                    := '6';
-    v_setlst('eval_metric')                  := 'aft-nloglik';
-    v_setlst('num_round')                    := '100';
-    v_setlst('objective')                    := 'survival:aft';
-    v_setlst('aft_right_bound_column_name')  := 'rbound';
-    v_setlst('aft_loss_distribution')        := 'normal';
-    v_setlst('aft_loss_distribution_scale')  := '1.20';
-    v_setlst('eta')                          := '0.05';
-    v_setlst('lambda')                       := '0.01';
-    v_setlst('alpha')                        := '0.02';
-    v_setlst('tree_method')                  := 'hist';
+  -- Model Settings ---------------------------------------------------
+  v_setlst('ALGO_NAME')                    := 'ALGO_XGBOOST';
+  v_setlst('max_depth')                    := '6';
+  v_setlst('eval_metric')                  := 'aft-nloglik';
+  v_setlst('num_round')                    := '100';
+  v_setlst('objective')                    := 'survival:aft';
+  v_setlst('aft_right_bound_column_name')  := 'rbound';
+  v_setlst('aft_loss_distribution')        := 'normal';
+  v_setlst('aft_loss_distribution_scale')  := '1.20';
+  v_setlst('eta')                          := '0.05';
+  v_setlst('lambda')                       := '0.01';
+  v_setlst('alpha')                        := '0.02';
+  v_setlst('tree_method')                  := 'hist';
 
-    DBMS_DATA_MINING.CREATE_MODEL2(
-        MODEL_NAME          => 'XGB_SURVIVAL_MODEL',
-        MINING_FUNCTION     => 'REGRESSION',
-        DATA_QUERY          => 'SELECT * FROM SURVIVAL_DATA',
-        TARGET_COLUMN_NAME  => 'LBOUND',
-        CASE_ID_COLUMN_NAME =>  NULL,
-        SET_LIST            =>  v_setlst);
+  v_data_query := q'|SELECT * FROM SURVIVAL_DATA|';
+
+  DBMS_DATA_MINING.CREATE_MODEL2(
+    model_name          => 'XGB_SURVIVAL_MODEL',
+    mining_function     => 'REGRESSION',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => NULL,
+    target_column_name  => 'LBOUND'
+  );
 END;
 /
 

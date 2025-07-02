@@ -25,12 +25,6 @@ SQL> column algorithm_type format a15
 SQL> column description format a11
 SQL> column algorithm_metadata format a20
 SQL>
-SQL> /*
-SQL>connect sys/knl_test7 as sysdba;
-SQL>GRANT rqadmin TO dmuser;
-SQL>connect dmuser/dmuser
-SQL>*/
-SQL>
 SQL> -------------------------------------------------------------------------------
 SQL> --                        R Algorithm Registration DEMO 1
 SQL> -------------------------------------------------------------------------------
@@ -43,7 +37,7 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('GLM_RDEMO_CLASSIFICATION');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> BEGIN
@@ -53,7 +47,7 @@ SQL> BEGIN
   5  EXCEPTION WHEN OTHERS THEN NULL; END;
   6  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- Algorithm Registration -----------------------------------------------------
@@ -75,7 +69,7 @@ SQL> BEGIN
  15  END;
  16  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -85,24 +79,28 @@ SQL> -- Explanation:
 SQL> -- Build the model using the R build function script user has already registered.
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- Model Settings -----------------------------------------------------------
-  5    v_setlst('ALGO_EXTENSIBLE_LANG') := 'R';
-  6    v_setlst('ALGO_NAME') := 't1';
-  7    v_setlst('R_FORMULA') := 'AGE + EDUCATION + HOUSEHOLD_SIZE + OCCUPATION';
-  8    v_setlst('ralg_parameter_keep.model') := '1';
-  9
- 10    DBMS_DATA_MINING.CREATE_MODEL2(
- 11      model_name          => 'GLM_RDEMO_CLASSIFICATION',
- 12      mining_function     => 'CLASSIFICATION',
- 13      data_query          => 'select * from mining_data_build_v',
- 14      case_id_column_name => 'CUST_ID',
- 15      target_column_name  => 'AFFINITY_CARD',
- 16      set_list            => v_setlst);
- 17  END;
- 18  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings -----------------------------------------------------------
+  6    v_setlst('ALGO_EXTENSIBLE_LANG') := 'R';
+  7    v_setlst('ALGO_NAME') := 't1';
+  8    v_setlst('R_FORMULA') := 'AGE + EDUCATION + HOUSEHOLD_SIZE + OCCUPATION';
+  9    v_setlst('ralg_parameter_keep.model') := '1';
+ 10
+ 11    v_data_query := q'|SELECT * FROM mining_data_build_v|';
+ 12
+ 13    DBMS_DATA_MINING.CREATE_MODEL2(
+ 14      model_name          => 'GLM_RDEMO_CLASSIFICATION',
+ 15      mining_function     => 'CLASSIFICATION',
+ 16      data_query          => v_data_query,
+ 17      set_list            => v_setlst,
+ 18      case_id_column_name => 'CUST_ID',
+ 19      target_column_name  => 'AFFINITY_CARD'
+ 20    );
+ 21  END;
+ 22  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -131,7 +129,7 @@ SQL> SELECT CUST_ID, AFFINITY_CARD as AFFINITY_CARD_act,
     100009                 1                  1               .575
     100010                 0                  0               .785
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL>
@@ -144,7 +142,7 @@ SQL> BEGIN
   5  EXCEPTION WHEN OTHERS THEN NULL; END;
   6  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -159,7 +157,7 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('DT_RDEMO_CLASSIFICATION');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> BEGIN
@@ -168,7 +166,7 @@ SQL> BEGIN
   4  EXCEPTION WHEN OTHERS THEN NULL; END;
   5  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- Algorithm Registration -----------------------------------------------------
@@ -195,7 +193,7 @@ SQL> BEGIN
  20  END;
  21  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -206,23 +204,27 @@ SQL> -- Build the model using the R build script user has already registered.
 SQL>
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- Model Settings -----------------------------------------------------------
-  5    v_setlst('ALGO_EXTENSIBLE_LANG') := 'R';
-  6    v_setlst('ALGO_NAME') := 't1';
-  7    v_setlst('R_FORMULA') := 'AGE + EDUCATION + HOUSEHOLD_SIZE + OCCUPATION';
-  8
-  9    DBMS_DATA_MINING.CREATE_MODEL2(
- 10      model_name          => 'DT_RDEMO_CLASSIFICATION',
- 11      mining_function     => 'CLASSIFICATION',
- 12      data_query          => 'select * from mining_data_build_v',
- 13      case_id_column_name => 'CUST_ID',
- 14      target_column_name  => 'AFFINITY_CARD',
- 15      set_list            => v_setlst);
- 16  END;
- 17  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings -----------------------------------------------------------
+  6    v_setlst('ALGO_EXTENSIBLE_LANG') := 'R';
+  7    v_setlst('ALGO_NAME') := 't1';
+  8    v_setlst('R_FORMULA') := 'AGE + EDUCATION + HOUSEHOLD_SIZE + OCCUPATION';
+  9
+ 10    v_data_query := q'|SELECT * FROM mining_data_build_v|';
+ 11
+ 12    DBMS_DATA_MINING.CREATE_MODEL2(
+ 13      model_name          => 'DT_RDEMO_CLASSIFICATION',
+ 14      mining_function     => 'CLASSIFICATION',
+ 15      data_query          => v_data_query,
+ 16      set_list            => v_setlst,
+ 17      case_id_column_name => 'CUST_ID',
+ 18      target_column_name  => 'AFFINITY_CARD'
+ 19    );
+ 20  END;
+ 21  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -250,7 +252,7 @@ SQL> select to_number(node) as node, split, nodecnt, leftnodecnt, rightnodecnt
         26 <leaf>               28          21            7
         27 <leaf>               89          32           57
 
-9行が選択されました。
+9 rows selected.
 
 SQL>
 SQL> column SPLIT format a12
@@ -272,7 +274,7 @@ SQL> select to_number(node) as node, split, nodecnt, leftnodecnt, rightnodecnt
         26 <leaf>               28          21            7
         27 <leaf>               89          32           57
 
-9行が選択されました。
+9 rows selected.
 
 SQL>
 SQL> -------------------------------------------------------------------------------
@@ -396,7 +398,7 @@ SQL> SELECT CUST_ID, PREDICTION_DETAILS(DT_RDEMO_CLASSIFICATION, '1' USING *) pr
            </Details>
 
 
-8行が選択されました。
+8 rows selected.
 
 SQL>
 SQL> ------------------------ Drop Models and Algorithms ---------------------------
@@ -408,6 +410,6 @@ SQL> BEGIN
   5  EXCEPTION WHEN OTHERS THEN NULL; END;
   6  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL> spool oml4sql-r-extensible-association-rules

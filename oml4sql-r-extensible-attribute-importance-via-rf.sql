@@ -71,10 +71,11 @@ END;
 -- AI_RDEMO_BUILD_FUNCTION will be used to create the model AI_RDEMO, using 
 -- dataset mining_data_build_v.
 
-declare
+DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
-begin
-  -- specify settings
+  v_data_query VARCHAR2(32767);
+BEGIN
+  -- Model Settings ---------------------------------------------------
   v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
   v_setlst('RALG_BUILD_FUNCTION')   := 'AI_RDEMO_BUILD_FUNCTION';
   v_setlst('RALG_DETAILS_FUNCTION') := 'AI_RDEMO_DETAILS_FUNCTION';
@@ -83,16 +84,20 @@ begin
   -- view will be generated to display the model details, which contains the
   -- attribute names and the corresponding importance.
 
-  v_setlst('RALG_DETAILS_FORMAT') := 'select cast(''a'' as varchar2(100)) name, 1 importance from dual';
+  v_setlst('RALG_DETAILS_FORMAT') :=
+    q'|select cast('a' as varchar2(100)) name, 1 importance from dual|';
 
-  dbms_data_mining.create_model2(
+  v_data_query := q'|SELECT * FROM mining_data_build_v|';
+
+  DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'AI_RDEMO',
     mining_function     => 'REGRESSION',
-    data_query          => 'select * from mining_data_build_v',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
     case_id_column_name => 'CUST_ID',
-    target_column_name  => 'AFFINITY_CARD',
-    set_list            => v_setlst);
-end;
+    target_column_name  => 'AFFINITY_CARD'
+  );
+END;
 /
 
 -------------------------------------------------------------------------------

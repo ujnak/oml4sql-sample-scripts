@@ -27,7 +27,7 @@ SQL> BEGIN EXECUTE IMMEDIATE 'DROP VIEW ar_build_v';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- Create a view for building association rules model
@@ -44,7 +44,7 @@ SQL> CREATE VIEW ar_build_v AS
   6         WHERE a.prod_id = b.prod_id AND
   7               a.cust_id between 100001 AND 104500);
 
-View AR_BUILD_Vは作成されました。
+View AR_BUILD_V created.
 
 SQL>
 SQL>
@@ -60,7 +60,7 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('RAR_SH_AR_SAMPLE');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> BEGIN
@@ -69,7 +69,7 @@ SQL> BEGIN
   4  EXCEPTION WHEN OTHERS THEN NULL; END;
   5  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> ------------
@@ -99,7 +99,7 @@ SQL> BEGIN
  18  END;
  19  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> ---------------
@@ -109,23 +109,28 @@ SQL> -- let case_id_column_name be NULL, as the case_id_column_name should be
 SQL> -- identified in the R BUILD script
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- specify settings
-  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
-  6    v_setlst('RALG_BUILD_FUNCTION')   := 'RAR_BUILD';
-  7    v_setlst('RALG_DETAILS_FUNCTION') := 'RAR_DETAILS';
-  8    v_setlst('RALG_DETAILS_FORMAT')   := 'select cast(''a'' as varchar2(100)) rules, 1 support, 1 confidence, 1 coverage, 1 lift, 1 count from dual';
-  9
- 10    DBMS_DATA_MINING.CREATE_MODEL2(
- 11      model_name          => 'RAR_SH_AR_SAMPLE',
- 12      mining_function     => 'ASSOCIATION',
- 13      data_query          => 'select * from AR_BUILD_V',
- 14      case_id_column_name => NULL,
- 15      set_list            => v_setlst);
- 16  END;
- 17  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  7    v_setlst('RALG_BUILD_FUNCTION')   := 'RAR_BUILD';
+  8    v_setlst('RALG_DETAILS_FUNCTION') := 'RAR_DETAILS';
+  9    v_setlst('RALG_DETAILS_FORMAT')   :=
+ 10      q'|select cast('a' as varchar2(100)) rules, 1 support, 1 confidence, 1 coverage, 1 lift, 1 count from dual|';
+ 11
+ 12    v_data_query := q'|SELECT * FROM AR_BUILD_V|';
+ 13
+ 14    DBMS_DATA_MINING.CREATE_MODEL2(
+ 15      model_name          => 'RAR_SH_AR_SAMPLE',
+ 16      mining_function     => 'ASSOCIATION',
+ 17      data_query          => v_data_query,
+ 18      set_list            => v_setlst,
+ 19      case_id_column_name => NULL
+ 20    );
+ 21  END;
+ 22  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -145,7 +150,7 @@ RALG_DETAILS_FORMAT            select cast('a' as varchar2(100)) items,
 
 RALG_DETAILS_FUNCTION          RAR_DETAILS
 
-4行が選択されました。
+4 rows selected.
 
 SQL>
 SQL> -------------------------
@@ -161,7 +166,7 @@ MODEL_NAME           MINING_FUNCTION      ALGORITHM
 -------------------- -------------------- --------------------
 RAR_SH_AR_SAMPLE     ASSOCIATION_RULES    R_EXTENSIBLE
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> ------------------------------------
@@ -213,7 +218,7 @@ PARTI RULES                          SUPPORT  CONFIDENCE   COVERAGE       LIFT  
       ckets}
 
 
-11行が選択されました。
+11 rows selected.
 
 SQL>
 SQL>
@@ -227,7 +232,7 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('RAR_SH_FI_SAMPLE');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> BEGIN
@@ -246,7 +251,7 @@ SQL> BEGIN
  14  END;
  15  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> ---------------
@@ -254,23 +259,28 @@ SQL> -- CREATE MODEL
 SQL> --
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- specify settings
-  5    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
-  6    v_setlst('RALG_BUILD_FUNCTION')   := 'RAR_BUILD';
-  7    v_setlst('RALG_DETAILS_FUNCTION') := 'RAR_DETAILS';
-  8    v_setlst('RALG_DETAILS_FORMAT')   := 'select cast(''a'' as varchar2(100)) items, 1 support from dual';
-  9
- 10    DBMS_DATA_MINING.CREATE_MODEL2(
- 11      model_name          => 'RAR_SH_FI_SAMPLE',
- 12      mining_function     => 'ASSOCIATION',
- 13      data_query          => 'select * from AR_BUILD_V',
- 14      case_id_column_name => NULL,
- 15      set_list            => v_setlst);
- 16  END;
- 17  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
+  7    v_setlst('RALG_BUILD_FUNCTION')   := 'RAR_BUILD';
+  8    v_setlst('RALG_DETAILS_FUNCTION') := 'RAR_DETAILS';
+  9    v_setlst('RALG_DETAILS_FORMAT')   :=
+ 10      q'|select cast('a' as varchar2(100)) items, 1 support from dual|';
+ 11
+ 12    v_data_query := q'|SELECT * FROM AR_BUILD_V|';
+ 13
+ 14    DBMS_DATA_MINING.CREATE_MODEL2(
+ 15      model_name          => 'RAR_SH_FI_SAMPLE',
+ 16      mining_function     => 'ASSOCIATION',
+ 17      data_query          => v_data_query,
+ 18      set_list            => v_setlst,
+ 19      case_id_column_name => NULL
+ 20    );
+ 21  END;
+ 22  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -290,7 +300,7 @@ RALG_DETAILS_FORMAT            select cast('a' as varchar2(100)) items,
 
 RALG_DETAILS_FUNCTION          RAR_DETAILS
 
-4行が選択されました。
+4 rows selected.
 
 SQL>
 SQL> -------------------------
@@ -306,7 +316,7 @@ MODEL_NAME           MINING_FUNCTION      ALGORITHM
 -------------------- -------------------- --------------------
 RAR_SH_FI_SAMPLE     ASSOCIATION_RULES    R_EXTENSIBLE
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> ---------------------------------------
@@ -343,7 +353,7 @@ PARTI ITEMS                                              SUPPORT
       {Cricket Wickets,Catchers Mitt}                          0
       {Linseed Oil,Catchers Mitt}                              0
 
-18行が選択されました。
+18 rows selected.
 
 SQL>
 SQL> spool oml4sql-r-extensible-attribute-importance-via-rf

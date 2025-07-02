@@ -60,11 +60,14 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 declare
   v_xlst dbms_data_mining_transform.TRANSFORM_LIST;
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
   -- Force the column age to be a feature in the model
   dbms_data_mining_transform.set_transform(v_xlst,
     'AGE', NULL, 'AGE', 'AGE', 'FORCE_IN');
 
+  -- Model Settings ---------------------------------------------------
+  --
   -- The default classification algorithm is Naive Bayes. So override
   -- this choice to GLM logistic regression.
   -- Turn on feature selection and generation
@@ -93,14 +96,17 @@ BEGIN
   v_setlst('GLMS_RIDGE_REGRESSION') := 'GLMS_RIDGE_REG_ENABLE';
   */
 
+  v_data_query := q'|SELECT * FROM mining_data_build_v|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'GLMC_SH_Clas_sample',
     mining_function     => 'CLASSIFICATION',
-    data_query          => 'select * from mining_data_build_v',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id',
-    target_column_name  => 'affinity_card',
-    xform_list          => v_xlst);
+    case_id_column_name => 'CUST_ID',
+    target_column_name  => 'AFFINITY_CARD',
+    xform_list          => v_xlst
+  );
 END;
 /
 
@@ -309,7 +315,10 @@ END;
 
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
+  --
   -- Turn on ridge regression
   v_setlst('ALGO_NAME')             := 'ALGO_GENERALIZED_LINEAR_MODEL';
   -- output row diagnostic statistics into a table named GLMC_SH_SAMPLE_DIAG  
@@ -319,13 +328,16 @@ BEGIN
   v_setlst('GLMS_RIDGE_REGRESSION') := 'GLMS_RIDGE_REG_ENABLE';
   v_setlst('GLMS_SOLVER')           := 'GLMS_SOLVER_QR';
 
+  v_data_query := q'|SELECT * FROM mining_data_build_v|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'GLMC_SH_Clas_sample',
     mining_function     => 'CLASSIFICATION',
-    data_query          => 'select * from mining_data_build_v',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id',
-    target_column_name  => 'affinity_card');
+    case_id_column_name => 'CUST_ID',
+    target_column_name  => 'AFFINITY_CARD'
+  );
 END;
 /
 

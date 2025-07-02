@@ -35,28 +35,34 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('part_clas_sample');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
+SQL>
 SQL> -- Build a new partitioned SVM model
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    v_setlst('ALGO_NAME')              := 'ALGO_SUPPORT_VECTOR_MACHINES';
-  5    v_setlst('PREP_AUTO')              := 'ON';
-  6    v_setlst('SVMS_KERNEL_FUNCTION')   := 'SVMS_LINEAR';
-  7    v_setlst('ODMS_PARTITION_COLUMNS') := 'CUST_GENDER';
-  8
-  9    DBMS_DATA_MINING.CREATE_MODEL2(
- 10      model_name          => 'part_clas_sample',
- 11      mining_function     => 'CLASSIFICATION',
- 12      data_query          => 'select * from mining_data_build_parallel_v',
- 13      set_list            => v_setlst,
- 14      case_id_column_name => 'cust_id',
- 15      target_column_name  => 'affinity_card');
- 16  END;
- 17  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    v_setlst('ALGO_NAME')              := 'ALGO_SUPPORT_VECTOR_MACHINES';
+  7    v_setlst('PREP_AUTO')              := 'ON';
+  8    v_setlst('SVMS_KERNEL_FUNCTION')   := 'SVMS_LINEAR';
+  9    v_setlst('ODMS_PARTITION_COLUMNS') := 'CUST_GENDER';
+ 10
+ 11    v_data_query := q'|SELECT * FROM mining_data_build_parallel_v|';
+ 12
+ 13    DBMS_DATA_MINING.CREATE_MODEL2(
+ 14      model_name          => 'part_clas_sample',
+ 15      mining_function     => 'CLASSIFICATION',
+ 16      data_query          => v_data_query,
+ 17      set_list            => v_setlst,
+ 18      case_id_column_name => 'CUST_ID',
+ 19      target_column_name  => 'AFFINITY_CARD'
+ 20    );
+ 21  END;
+ 22  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- Display the model settings
@@ -80,7 +86,7 @@ PREP_AUTO                      ON
 SVMS_CONV_TOLERANCE            .0001
 SVMS_KERNEL_FUNCTION           SVMS_LINEAR
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -- Display the model signature
@@ -111,7 +117,7 @@ PRINTER_SUPPLIES                         NUMERICAL
 YRS_RESIDENCE                            NUMERICAL
 Y_BOX_GAMES                              NUMERICAL
 
-17行が選択されました。
+17 rows selected.
 
 SQL>
 SQL> -- Get a list of model views
@@ -147,7 +153,7 @@ DM$VWPART_CLAS_SAMPLE
 Model Build Alerts
 
 
-7行が選択されました。
+7 rows selected.
 
 SQL>
 SQL> -- Display the top ten model details per partition
@@ -177,7 +183,7 @@ CLASS ANAME                     AVAL                      COEFF
     1 CUST_MARITAL_STATUS       separated                  .644
     1 EDUCATION                 12th                       .537
 
-10行が選択されました。
+10 rows selected.
 
 SQL> -- for female customers
 SQL> SELECT target_value class, attribute_name aname, attribute_value aval, coefficient coeff
@@ -200,7 +206,7 @@ CLASS ANAME                     AVAL                      COEFF
     1 EDUCATION                 Masters                   1.301
     1 OCCUPATION                Exec.                     1.176
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -- Cleanup old model with the same name for repeat runs
@@ -208,38 +214,43 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('part2_clas_sample');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- Build another partitioned model with two partition columns
 SQL> -- with three partition values for CUST_INCOME_LEVEL
 SQL> DECLARE
-  2    xform_list dbms_data_mining_transform.TRANSFORM_LIST;
+  2    v_xlst   dbms_data_mining_transform.TRANSFORM_LIST;
   3    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  4  BEGIN
-  5    dbms_data_mining_transform.set_transform(xform_list,
-  6      'CUST_INCOME_LEVEL', null,
-  7      'CASE CUST_INCOME_LEVEL WHEN ''A: Below 30,000'' THEN ''LOW''
-  8      WHEN ''L: 300,000 and above'' THEN ''HIGH''
-  9      ELSE ''MEDIUM'' END', null);
- 10
- 11    v_setlst('ALGO_NAME')               := 'ALGO_SUPPORT_VECTOR_MACHINES';
- 12    v_setlst('PREP_AUTO')               := 'ON';
- 13    v_setlst('SVMS_KERNEL_FUNCTION')    := 'SVMS_LINEAR';
- 14    v_setlst('ODMS_PARTITION_COLUMNS')  := 'CUST_GENDER,CUST_INCOME_LEVEL';
- 15
- 16    DBMS_DATA_MINING.CREATE_MODEL2(
- 17      model_name          => 'part2_clas_sample',
- 18      mining_function     => 'CLASSIFICATION',
- 19      data_query          => 'select * from mining_data_build_parallel_v',
- 20      set_list            => v_setlst,
- 21      case_id_column_name => 'cust_id',
- 22      target_column_name  => 'affinity_card',
- 23      xform_list          => xform_list);
- 24  END;
- 25  /
+  4    v_data_query VARCHAR2(32767);
+  5  BEGIN
+  6    dbms_data_mining_transform.set_transform(v_xlst,
+  7      'CUST_INCOME_LEVEL', null,
+  8      'CASE CUST_INCOME_LEVEL WHEN ''A: Below 30,000'' THEN ''LOW''
+  9      WHEN ''L: 300,000 and above'' THEN ''HIGH''
+ 10      ELSE ''MEDIUM'' END', null);
+ 11
+ 12    -- Model Settings ---------------------------------------------------
+ 13    v_setlst('ALGO_NAME')               := 'ALGO_SUPPORT_VECTOR_MACHINES';
+ 14    v_setlst('PREP_AUTO')               := 'ON';
+ 15    v_setlst('SVMS_KERNEL_FUNCTION')    := 'SVMS_LINEAR';
+ 16    v_setlst('ODMS_PARTITION_COLUMNS')  := 'CUST_GENDER,CUST_INCOME_LEVEL';
+ 17
+ 18    v_data_query := q'|SELECT * FROM mining_data_build_parallel_v|';
+ 19
+ 20    DBMS_DATA_MINING.CREATE_MODEL2(
+ 21      model_name          => 'part2_clas_sample',
+ 22      mining_function     => 'CLASSIFICATION',
+ 23      data_query          => v_data_query,
+ 24      set_list            => v_setlst,
+ 25      case_id_column_name => 'CUST_ID',
+ 26      target_column_name  => 'AFFINITY_CARD',
+ 27      xform_list          => v_xlst
+ 28    );
+ 29  END;
+ 30  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- Display model details for partition: 'F','MEDIUM'
@@ -264,7 +275,7 @@ CLASS ANAME                     AVAL                      COEFF
     1 OCCUPATION                Handler                    .904
     1 OCCUPATION                Prof.                      .886
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL>
@@ -361,7 +372,7 @@ PD
 </Details>
 
 
-6行が選択されました。
+6 rows selected.
 
 SQL>
 SQL> ------------------
@@ -381,7 +392,7 @@ G        CNT    AVG_AGE
 F         62         28
 M        252         34
 
-2行が選択されました。
+2 rows selected.
 
 SQL>
 SQL> -- compare with the average age of all customers
@@ -396,7 +407,7 @@ CUST_GENDER         CNT    AVG_AGE
 F                   512         25
 M                   988         28
 
-2行が選択されました。
+2 rows selected.
 
 SQL>
 SQL> -- find the average age of predicted card users per gender and income
@@ -426,7 +437,7 @@ M J: 190,000 - 249,999                   35
 M K: 250,000 - 299,999                   34
 M L: 300,000 and above                   31
 
-11行が選択されました。
+11 rows selected.
 
 SQL>
 SQL> ------------------
@@ -448,7 +459,7 @@ G PERCENT
 F      88
 M      78
 
-2行が選択されました。
+2 rows selected.
 
 SQL>
 SQL> -- Suppose we have additional training data with an unknown gender
@@ -463,7 +474,7 @@ SQL> CREATE OR replace VIEW ext_mining_data_build_v AS
   7    Y_BOX_GAMES, OS_DOC_SET_KANJI
   8    FROM mining_data_build_parallel_v);
 
-View EXT_MINING_DATA_BUILD_Vは作成されました。
+View EXT_MINING_DATA_BUILD_V created.
 
 SQL>
 SQL> -- Now we can add these data as a new partition to model PART_CLAS_SAMPLE
@@ -473,7 +484,7 @@ SQL> BEGIN
   4  END;
   5  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -- And we similarly duplicate mining_data_apply_v
@@ -487,7 +498,7 @@ SQL> CREATE OR replace VIEW ext_mining_data_apply_v AS
   8  UNION
   9  SELECT * FROM mining_data_apply_parallel_v;
 
-View EXT_MINING_DATA_APPLY_Vは作成されました。
+View EXT_MINING_DATA_APPLY_V created.
 
 SQL>
 SQL> -- Re-calculate prediction accuracy per gender
@@ -506,7 +517,7 @@ F      88
 M      78
 U      82
 
-3行が選択されました。
+3 rows selected.
 
 SQL>
 SQL> spool oml4sql-r-extensible-algorithm-registration

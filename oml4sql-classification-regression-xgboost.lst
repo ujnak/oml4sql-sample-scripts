@@ -47,34 +47,39 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('XGC_SH_MODEL');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> ---------------------
 SQL> -- CREATE MODEL
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    v_setlst('ALGO_NAME')   := 'ALGO_XGBOOST';
-  5    -- for 0/1 target, choose binary:logistic as objective
-  6    v_setlst('objective')   := 'binary:logistic';
-  7    v_setlst('max_depth')   := '3';
-  8    v_setlst('eta')         := '1';
-  9    -- choose error and auc as eval_metric to evaluate training dataset
- 10    v_setlst('eval_metric') := 'error,auc';
- 11    v_setlst('num_round')   := '10';
- 12
- 13    DBMS_DATA_MINING.CREATE_MODEL2(
- 14      model_name          => 'XGC_SH_MODEL',
- 15      mining_function     => 'CLASSIFICATION',
- 16      data_query          => 'select * from mining_data_build_v',
- 17      set_list            => v_setlst,
- 18      case_id_column_name => 'cust_id',
- 19      target_column_name  => 'affinity_card');
- 20  END;
- 21  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    v_setlst('ALGO_NAME')   := 'ALGO_XGBOOST';
+  7    -- for 0/1 target, choose binary:logistic as objective
+  8    v_setlst('objective')   := 'binary:logistic';
+  9    v_setlst('max_depth')   := '3';
+ 10    v_setlst('eta')         := '1';
+ 11    -- choose error and auc as eval_metric to evaluate training dataset
+ 12    v_setlst('eval_metric') := 'error,auc';
+ 13    v_setlst('num_round')   := '10';
+ 14
+ 15    v_data_query := q'|SELECT * FROM mining_data_build_v|';
+ 16
+ 17    DBMS_DATA_MINING.CREATE_MODEL2(
+ 18      model_name          => 'XGC_SH_MODEL',
+ 19      mining_function     => 'CLASSIFICATION',
+ 20      data_query          => v_data_query,
+ 21      set_list            => v_setlst,
+ 22      case_id_column_name => 'CUST_ID',
+ 23      target_column_name  => 'AFFINITY_CARD'
+ 24    );
+ 25  END;
+ 26  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -103,7 +108,7 @@ ntree_limit                    0
 num_round                      10
 objective                      binary:logistic
 
-13行が選択されました。
+13 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -136,7 +141,7 @@ PRINTER_SUPPLIES                         NUMERICAL
 YRS_RESIDENCE                            NUMERICAL
 Y_BOX_GAMES                              NUMERICAL
 
-17行が選択されました。
+17 rows selected.
 
 SQL>
 SQL> -- Get a list of model views
@@ -169,7 +174,7 @@ DM$VWXGC_SH_MODEL
 Model Build Alerts
 
 
-6行が選択されました。
+6 rows selected.
 
 SQL>
 SQL> -- Global statistics
@@ -186,7 +191,7 @@ NUM_ROWS                            1500.000
 auc                                    0.912
 error                                  0.143
 
-3行が選択されました。
+3 rows selected.
 
 SQL>
 SQL> --attribute importance: top 10 important features
@@ -215,7 +220,7 @@ EDUCATION                 Masters         .043  .040      .033
 EDUCATION                 Profsc          .036  .029      .016
 HOUSEHOLD_SIZE            1               .035  .036      .016
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -252,7 +257,7 @@ ACTUAL_TARGET_VALUE PREDICTED_TARGET_VALUE      VALUE
                   1                      0        142
                   1                      1        204
 
-4行が選択されました。
+4 rows selected.
 
 SQL>
 SQL> -- Compute ACCURACY
@@ -268,7 +273,7 @@ ACCURACY
 --------
      .82
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> -- Compute AUC (Area Under the roc Curve)
@@ -301,7 +306,7 @@ AUC
 ---
 .86
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -334,32 +339,37 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('XGR_SH_MODEL');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> ---------------------
 SQL> -- CREATE MODEL
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    v_setlst('ALGO_NAME')               := 'ALGO_XGBOOST';
-  5    -- for 0/1 target, choose binary:logistic as objective
-  6    v_setlst('booster')            := 'gblinear';
-  7    v_setlst('alpha')              := '0.0001';
-  8    v_setlst('lambda')             := '1';
-  9    v_setlst('num_round')          := '100';
- 10
- 11    DBMS_DATA_MINING.CREATE_MODEL2(
- 12      model_name          => 'XGR_SH_MODEL',
- 13      mining_function     => 'REGRESSION',
- 14      data_query          => 'select * from mining_data_build_v',
- 15      set_list            => v_setlst,
- 16      case_id_column_name => 'cust_id',
- 17      target_column_name  => 'age');
- 18  END;
- 19  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    v_setlst('ALGO_NAME') := 'ALGO_XGBOOST';
+  7    -- for 0/1 target, choose binary:logistic as objective
+  8    v_setlst('booster')   := 'gblinear';
+  9    v_setlst('alpha')     := '0.0001';
+ 10    v_setlst('lambda')    := '1';
+ 11    v_setlst('num_round') := '100';
+ 12
+ 13    v_data_query := q'|SELECT * FROM mining_data_build_v|';
+ 14
+ 15    DBMS_DATA_MINING.CREATE_MODEL2(
+ 16      model_name          => 'XGR_SH_MODEL',
+ 17      mining_function     => 'REGRESSION',
+ 18      data_query          => v_data_query,
+ 19      set_list            => v_setlst,
+ 20      case_id_column_name => 'CUST_ID',
+ 21      target_column_name  => 'AGE'
+ 22    );
+ 23  END;
+ 24  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -385,7 +395,7 @@ lambda                         1
 ntree_limit                    0
 num_round                      100
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -418,7 +428,7 @@ PRINTER_SUPPLIES                         NUMERICAL
 YRS_RESIDENCE                            NUMERICAL
 Y_BOX_GAMES                              NUMERICAL
 
-17行が選択されました。
+17 rows selected.
 
 SQL>
 SQL> -- Get a list of model views
@@ -445,7 +455,7 @@ DM$VWXGR_SH_MODEL
 Model Build Alerts
 
 
-4行が選択されました。
+4 rows selected.
 
 SQL>
 SQL> -- Global statistics
@@ -461,7 +471,7 @@ NAME                           NUMERIC_VALUE STRING_VALUE
 NUM_ROWS                            1500.000
 rmse                                   9.125
 
-2行が選択されました。
+2 rows selected.
 
 SQL>
 SQL> -- attribute importance
@@ -483,7 +493,7 @@ Y_BOX_GAMES                               -1.810
 CUST_MARITAL_STATUS       never married   -1.135
 HOUSEHOLD_SIZE            1                -.699
 
-5行が選択されました。
+5 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -518,7 +528,7 @@ SQL> SELECT SQRT(AVG((A.pred - B.age) * (A.pred - B.age))) rmse,
 ------- -------
     8.9     6.5
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> --- prediction
@@ -621,6 +631,6 @@ DET
 </Details>
 
 
-9行が選択されました。
+9 rows selected.
 
 SQL> spool oml4sql-classification-svm

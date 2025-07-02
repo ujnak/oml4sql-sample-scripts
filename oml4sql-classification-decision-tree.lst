@@ -15,8 +15,9 @@ SQL> SET trimspool ON
 SQL> SET pages 10000
 SQL> SET linesize 420
 SQL> SET echo ON
-SQL> SET long 2000000000
-警告: このLONG設定によってJavaメモリーの問題が発生する可能性があります。この設定を引き下げるか、Javaが使用できるメモリーを増やす(あるいはその両方)ことをお薦めします。
+SQL> SET long 200000000
+Warning: This LONG setting may cause Java memory problems.
+It is recommended to reduce the setting and/or increase the memory available to Java.
 SQL>
 SQL> -----------------------------------------------------------------------
 SQL> --                            SAMPLE PROBLEM
@@ -69,7 +70,7 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('DT_SH_Clas_sample');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> --------------------------------
@@ -80,26 +81,17 @@ SQL> -- has not been specially prepared.  For this example, no data preparation
 SQL> -- will be performed.
 SQL> --
 SQL>
-SQL> -------------------
-SQL> -- SPECIFY SETTINGS
+SQL> --------------------------
+SQL> -- CREATE AND POPULATE A COST MATRIX TABLE
 SQL> --
 SQL> -- Cleanup old settings table objects for repeat runs
 SQL> BEGIN EXECUTE IMMEDIATE 'DROP TABLE dt_sh_sample_cost';
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
-SQL> --------------------------
-SQL> -- CREATE A SETTINGS TABLE
-SQL> --
-SQL> -- The default classification algorithm is Naive Bayes. In order to override
-SQL> -- this, create and populate a settings table to be used as input for
-SQL> -- CREATE_MODEL.
-SQL> --
-SQL> -- CREATE AND POPULATE A COST MATRIX TABLE
-SQL> --
 SQL> -- A cost matrix is used to influence the weighting of misclassification
 SQL> -- during model creation (and scoring).
 SQL> -- See Oracle Data Mining Concepts Guide for more details.
@@ -109,23 +101,27 @@ SQL> CREATE TABLE dt_sh_sample_cost (
   3    predicted_target_value        NUMBER,
   4    cost                          NUMBER);
 
-Table DT_SH_SAMPLE_COSTは作成されました。
+Table DT_SH_SAMPLE_COST created.
 
 SQL> INSERT INTO dt_sh_sample_cost VALUES (0,0,0);
 
-1行挿入しました。
+1 row inserted.
 
 SQL> INSERT INTO dt_sh_sample_cost VALUES (0,1,1);
 
-1行挿入しました。
+1 row inserted.
 
 SQL> INSERT INTO dt_sh_sample_cost VALUES (1,0,8);
 
-1行挿入しました。
+1 row inserted.
 
 SQL> INSERT INTO dt_sh_sample_cost VALUES (1,1,0);
 
-1行挿入しました。
+1 row inserted.
+
+SQL> commit;
+
+Commit complete.
 
 SQL>
 SQL> ---------------------
@@ -134,30 +130,39 @@ SQL> --
 SQL> -- Build a DT model
 SQL> DECLARE
   2    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  3  BEGIN
-  4    -- Populate settings table
-  5    v_setlst('ALGO_NAME')            := 'ALGO_DECISION_TREE';
-  6    v_setlst('CLAS_COST_TABLE_NAME') := 'dt_sh_sample_cost';
-  7
-  8    -- Examples of other possible settings are:
-  9    --v_setlst('TREE_IMPURITY_METRIC')   := 'TREE_IMPURITY_ENTROPY';
- 10    --v_setlst('TREE_TERM_MAX_DEPTH')    := '5';
- 11    --v_setlst('TREE_TERM_MINREC_SPLIT') := '5';
- 12    --v_setlst('TREE_TERM_MINPCT_SPLIT') := '2';
- 13    --v_setlst('TREE_TERM_MINREC_NODE')  := '5';
- 14    --v_setlst('TREE_TERM_MINPCT_NODE')  := '0.05';
- 15
- 16    DBMS_DATA_MINING.CREATE_MODEL2(
- 17      model_name          => 'DT_SH_Clas_sample',
- 18      mining_function     => 'CLASSIFICATION',
- 19      data_query          => 'SELECT * FROM mining_data_build_parallel_v',
- 20      set_list            => v_setlst,
- 21      case_id_column_name => 'cust_id',
- 22      target_column_name  => 'affinity_card');
- 23  END;
- 24  /
+  3    v_data_query VARCHAR2(32767);
+  4  BEGIN
+  5    -- Model Settings ---------------------------------------------------
+  6    --
+  7    -- The default classification algorithm is Naive Bayes. In order to override
+  8    -- this, create and populate a settings to be used as input for
+  9    -- CREATE_MODEL2.
+ 10    --
+ 11    v_setlst('ALGO_NAME')            := 'ALGO_DECISION_TREE';
+ 12    v_setlst('CLAS_COST_TABLE_NAME') := 'dt_sh_sample_cost';
+ 13
+ 14    -- Examples of other possible settings are:
+ 15    --v_setlst('TREE_IMPURITY_METRIC')   := 'TREE_IMPURITY_ENTROPY';
+ 16    --v_setlst('TREE_TERM_MAX_DEPTH')    := '5';
+ 17    --v_setlst('TREE_TERM_MINREC_SPLIT') := '5';
+ 18    --v_setlst('TREE_TERM_MINPCT_SPLIT') := '2';
+ 19    --v_setlst('TREE_TERM_MINREC_NODE')  := '5';
+ 20    --v_setlst('TREE_TERM_MINPCT_NODE')  := '0.05';
+ 21
+ 22    v_data_query := q'|SELECT * FROM mining_data_build_parallel_v|';
+ 23
+ 24    DBMS_DATA_MINING.CREATE_MODEL2(
+ 25      model_name          => 'DT_SH_Clas_sample',
+ 26      mining_function     => 'CLASSIFICATION',
+ 27      data_query          => v_data_query,
+ 28      set_list            => v_setlst,
+ 29      case_id_column_name => 'CUST_ID',
+ 30      target_column_name  => 'AFFINITY_CARD'
+ 31    );
+ 32  END;
+ 33  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -187,7 +192,7 @@ TREE_TERM_MINPCT_SPLIT         .1
 TREE_TERM_MINREC_NODE          10
 TREE_TERM_MINREC_SPLIT         20
 
-14行が選択されました。
+14 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -211,7 +216,7 @@ HOUSEHOLD_SIZE                           CATEGORICAL
 OCCUPATION                               CATEGORICAL
 YRS_RESIDENCE                            NUMERICAL
 
-8行が選択されました。
+8 rows selected.
 
 SQL>
 SQL> ------------------------
@@ -480,7 +485,7 @@ DM$VSDT_SH_CLAS_SAMPLE         Computed Settings
 DM$VTDT_SH_CLAS_SAMPLE         Classification Targets
 DM$VWDT_SH_CLAS_SAMPLE         Model Build Alerts
 
-9行が選択されました。
+9 rows selected.
 
 SQL>
 SQL> column ATTRIBUTE_NAME format a12
@@ -542,7 +547,7 @@ SQL> SELECT * FROM (
          1 Main                 11 EDUCATION    IN           11th
          1 Main                 11 EDUCATION    IN           12th
 
-19行が選択されました。
+19 rows selected.
 
 SQL>
 SQL> -- Information about node statistics
@@ -590,7 +595,7 @@ SQL> select node, node_support, predicted_target_value, target_value,
         20           26                      0            0             21
         20           26                      0            1              5
 
-37行が選択されました。
+37 rows selected.
 
 SQL>
 SQL> -- Information about the nodes in the decision tree
@@ -650,7 +655,7 @@ SQL> SELECT * FROM (
          8          239                      0          7 EDUCATION    IN           5th-6th
          8          239                      0          7 EDUCATION    IN           7th-8th
 
-19行が選択されました。
+19 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -771,7 +776,7 @@ SQL> SELECT cust_id FROM
     101250
     101306
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> ------------------
@@ -838,7 +843,7 @@ SQL> SELECT T.cust_id, S.prediction, S.probability, S.cost
     100010          0  .676025918 2.591792657
     100010          1  .323974082 .676025918
 
-20行が選択されました。
+20 rows selected.
 
 SQL>
 SQL> ------------------
@@ -1066,6 +1071,6 @@ SQL> SELECT cust_id, education,
                                           </Details>
 
 
-32行が選択されました。
+32 rows selected.
 
 SQL> spool oml4sql-classification-glm

@@ -36,18 +36,10 @@ SET echo ON
 --                            BUILD THE MODEL
 -----------------------------------------------------------------------
 
--------------------
--- SPECIFY SETTINGS
---
 -- Cleanup old settings table objects for repeat runs
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE nb_sh_sample_priors';  
 EXCEPTION WHEN OTHERS THEN NULL; END;
 /
-
--- Algorithm setting:
--- NB is the default classifier, thus there is no need to specify 
--- the algorithm in settings table when the mining_function parameter
--- of the CREATE_MODEL operation specifies classification.
 
 -- CREATE AND POPULATE A PRIORS TABLE
 -- The priors represent the overall distribution of the target in
@@ -64,6 +56,7 @@ CREATE TABLE nb_sh_sample_priors (
   prior_probability NUMBER);
 INSERT INTO nb_sh_sample_priors VALUES (0,0.65);
 INSERT INTO nb_sh_sample_priors VALUES (1,0.35);
+commit;
 
 ---------------------
 -- CREATE A NEW MODEL
@@ -75,17 +68,27 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 -- Build a new NB model
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
+  --
+  -- NB is the default classifier, thus there is no need to specify
+  -- the algorithm in settings when the mining_function parameter
+  -- of the CREATE_MODEL2 operation specifies classification.
+  --
   v_setlst('PREP_AUTO')              := 'ON';
   v_setlst('CLAS_PRIORS_TABLE_NAME') := 'nb_sh_sample_priors';
+
+  v_data_query := q'|SELECT * FROM mining_data_build_parallel_v|';
 
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'NB_SH_Clas_sample',
     mining_function     => 'CLASSIFICATION',
-    data_query          => 'select * from mining_data_build_parallel_v',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id',
-    target_column_name  => 'affinity_card');  
+    case_id_column_name => 'CUST_ID',
+    target_column_name  => 'AFFINITY_CARD'
+  );  
 END;
 /
 
@@ -277,6 +280,7 @@ INSERT INTO nb_sh_cost VALUES (0,0,0);
 INSERT INTO nb_sh_cost VALUES (0,1,.35);
 INSERT INTO nb_sh_cost VALUES (1,0,.65);
 INSERT INTO nb_sh_cost VALUES (1,1,0);
+commit;
 
 -- Compute Test Metrics
 DECLARE

@@ -152,27 +152,27 @@ CREATE or REPLACE VIEW sales_trans_cust_parallel AS SELECT /*+ parallel (4)*/ * 
 --
 -- Data for AR modeling may need binning if it contains numerical data.
 
--------------------
--- SPECIFY SETTINGS
+----------------------------------------------
+-- Build AR model with transactional input
 --
--- The default (and only) algorithm for association rules is
--- Apriori AR. However, we need a settings table 
--- to override the default Min Support, Min Confidence,
--- and Max items settings.
--- Add settings for Transaction Input - the presence
--- of an Item Id column specification indicates to the
--- API that the input is transactional
--- 
 BEGIN DBMS_DATA_MINING.DROP_MODEL('AR_SH_SAMPLE');
 EXCEPTION WHEN OTHERS THEN NULL; END;
 /
 
-----------------------------------------------
--- Build AR model with transactional input
---
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
+  --
+  -- The default (and only) algorithm for association rules is
+  -- Apriori AR. However, we need a settings
+  -- to override the default Min Support, Min Confidence,
+  -- and Max items settings.
+  -- Add settings for Transaction Input - the presence
+  -- of an Item Id column specification indicates to the
+  -- API that the input is transactional
+  --
   v_setlst('ALGO_NAME')                := 'ALGO_APRIORI_ASSOCIATION_RULES';
   v_setlst('PREP_AUTO')                := 'ON';
   v_setlst('ASSO_MIN_SUPPORT')         := '0.1';
@@ -181,10 +181,12 @@ BEGIN
   v_setlst('ODMS_ITEM_ID_COLUMN_NAME') := 'PROD_NAME';
   v_setlst('ASSO_AGGREGATES')          := 'AMOUNT_SOLD';
 
+  v_data_query := q'|SELECT * FROM sales_trans_cust_parallel|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'AR_SH_SAMPLE',
     mining_function     => 'ASSOCIATION',
-    data_query          => 'SELECT * FROM sales_trans_cust_parallel',
+    data_query          => v_data_query,
     set_list            => v_setlst,
     case_id_column_name => 'CUST_ID'
   );
@@ -359,6 +361,7 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
   v_setlst('ALGO_NAME')                := 'ALGO_APRIORI_ASSOCIATION_RULES';
   v_setlst('PREP_AUTO')                := 'ON';
@@ -367,10 +370,12 @@ BEGIN
   v_setlst('ASSO_MAX_RULE_LENGTH')     := '3';
   v_setlst('ODMS_ITEM_ID_COLUMN_NAME') := 'PROD_NAME';
 
+  v_data_query := q'|SELECT * FROM sales_trans_2col_parallel|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'AR_SH_SAMPLE_2COL',
     mining_function     => 'ASSOCIATION',
-    data_query          => 'SELECT * FROM sales_trans_2col_parallel',
+    data_query          => v_data_query,
     set_list            => v_setlst,
     case_id_column_name => 'CUST_ID'
   );

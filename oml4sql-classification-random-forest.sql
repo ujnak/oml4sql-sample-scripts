@@ -14,7 +14,7 @@ SET trimspool ON
 SET pages 10000
 SET linesize 420
 SET echo ON
-SET long 2000000000
+SET long 200000000
 
 -----------------------------------------------------------------------
 --                            SAMPLE PROBLEM
@@ -74,9 +74,6 @@ EXCEPTION WHEN OTHERS THEN NULL; END;
 -- will be performed.
 --
 
--------------------
--- SPECIFY SETTINGS
---
 -- Cleanup old settings table objects for repeat runs
 BEGIN EXECUTE IMMEDIATE 'DROP TABLE rf_sh_sample_cost';  
 EXCEPTION WHEN OTHERS THEN NULL; END;
@@ -96,6 +93,7 @@ INSERT INTO rf_sh_sample_cost VALUES (0,0,0);
 INSERT INTO rf_sh_sample_cost VALUES (0,1,1);
 INSERT INTO rf_sh_sample_cost VALUES (1,0,8);
 INSERT INTO rf_sh_sample_cost VALUES (1,1,0);
+commit;
 
 ---------------------
 -- CREATE A NEW MODEL
@@ -103,32 +101,37 @@ INSERT INTO rf_sh_sample_cost VALUES (1,1,0);
 -- Build a RF model
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
   v_setlst('ALGO_NAME')            := 'ALGO_RANDOM_FOREST';
   v_setlst('CLAS_COST_TABLE_NAME') := 'rf_sh_sample_cost';
   v_setlst('RFOR_NUM_TREES')       := '25';
 
   -- Examples of other possible settings are:
-  --v_setlst('RFOR_MTRY') := '5';
+  -- v_setlst('RFOR_MTRY') := '5';
   -- rfor_mtry specifies the number of attributes that are to be
   -- randomly chosen for computing splits at each node of the trees in
   -- the forest.
-  --v_setlst('RFOR_SAMPLING_RATIO')    := '0.5';
-  --v_setlst('ODMS_RANDOM_SEED')       := '41';
-  --v_setlst('TREE_IMPURITY_METRIC')   := 'TREE_IMPURITY_ENTROPY';
-  --v_setlst('TREE_TERM_MAX_DEPTH')    := '5';
-  --v_setlst('TREE_TERM_MINREC_SPLIT') := '5';
-  --v_setlst('TREE_TERM_MINPCT_SPLIT') := '2';
-  --v_setlst('TREE_TERM_MINREC_NODE')  := '5';
-  --v_setlst('TREE_TERM_MINPCT_NODE')  := '0.05';
+  -- v_setlst('RFOR_SAMPLING_RATIO')    := '0.5';
+  -- v_setlst('ODMS_RANDOM_SEED')       := '41';
+  -- v_setlst('TREE_IMPURITY_METRIC')   := 'TREE_IMPURITY_ENTROPY';
+  -- v_setlst('TREE_TERM_MAX_DEPTH')    := '5';
+  -- v_setlst('TREE_TERM_MINREC_SPLIT') := '5';
+  -- v_setlst('TREE_TERM_MINPCT_SPLIT') := '2';
+  -- v_setlst('TREE_TERM_MINREC_NODE')  := '5';
+  -- v_setlst('TREE_TERM_MINPCT_NODE')  := '0.05';
+
+  v_data_query := q'|SELECT * FROM mining_data_build_parallel_v|';
 
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'RF_SH_Clas_Sample',
     mining_function     => 'CLASSIFICATION',
-    data_query          => 'select * from mining_data_build_parallel_v',
+    data_query          => v_data_query,
     set_list            => v_setlst,
-    case_id_column_name => 'cust_id',
-    target_column_name  => 'affinity_card');
+    case_id_column_name => 'CUST_ID',
+    target_column_name  => 'AFFINITY_CARD'
+  );
 END;
 /
 

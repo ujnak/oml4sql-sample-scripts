@@ -62,27 +62,30 @@ CREATE OR REPLACE VIEW CUSTOMERS360_V AS
 --                            BUILD THE MODEL
 -----------------------------------------------------------------------
 
--------------------------
--- SET OUTLIER RATE IN SETTINGS TABLE - DEFAULT IS 0.05
---
-
 BEGIN DBMS_DATA_MINING.DROP_MODEL('CUSTOMERS360MODEL_AD');
 EXCEPTION WHEN OTHERS THEN NULL; END;
 /
+
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
+  -- Model Settings ---------------------------------------------------
   v_setlst('ALGO_NAME')         := 'ALGO_EXPECTATION_MAXIMIZATION';
   v_setlst('PREP_AUTO')         := 'ON';
+  -- SET OUTLIER RATE - DEFAULT IS 0.05
   v_setlst('EMCS_OUTLIER_RATE') := '0.1';
-        
+
+  v_data_query := q'|SELECT * FROM CUSTOMERS360_V|';
+
   DBMS_DATA_MINING.CREATE_MODEL2(
-        MODEL_NAME          => 'CUSTOMERS360MODEL_AD',
-        MINING_FUNCTION     => 'CLASSIFICATION',
-        DATA_QUERY          => 'SELECT * FROM CUSTOMERS360_V',
-        CASE_ID_COLUMN_NAME => 'CUST_ID',
-        SET_LIST            => v_setlst,
-        TARGET_COLUMN_NAME  => NULL); -- NULL target indicates anomaly detection      
+    model_name          => 'CUSTOMERS360MODEL_AD',
+    mining_function     => 'CLASSIFICATION',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
+    case_id_column_name => 'CUST_ID',
+    target_column_name  => NULL -- NULL target indicates anomaly detection
+  );
 END;
 /
 

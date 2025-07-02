@@ -52,15 +52,9 @@ SQL> BEGIN DBMS_DATA_MINING.DROP_MODEL('OC_SH_Clus_sample');
   2  EXCEPTION WHEN OTHERS THEN NULL; END;
   3  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
-SQL> -------------------
-SQL> -- SPECIFY SETTINGS
-SQL> --
-SQL> -- K-Means is the default clustering algorithm. Override the
-SQL> -- default to set the algorithm to O-Cluster.
-SQL> --
 SQL> ---------------------
 SQL> -- CREATE A NEW MODEL
 SQL> --
@@ -69,43 +63,52 @@ SQL> -- TO_CHAR function is used to transform columns to
 SQL> -- categorical attributes since numeric datatypes
 SQL> -- are treated as numeric attributes.
 SQL> DECLARE
-  2    xformlist dbms_data_mining_transform.TRANSFORM_LIST;
+  2     v_xlst  dbms_data_mining_transform.TRANSFORM_LIST;
   3    v_setlst DBMS_DATA_MINING.SETTING_LIST;
-  4  BEGIN
-  5    dbms_data_mining_transform.SET_TRANSFORM(
-  6      xformlist, 'AFFINITY_CARD', null, 'TO_CHAR(AFFINITY_CARD)', null);
-  7    dbms_data_mining_transform.SET_TRANSFORM(
-  8      xformlist, 'BOOKKEEPING_APPLICATION', null, 'TO_CHAR(BOOKKEEPING_APPLICATION)', null);
-  9    dbms_data_mining_transform.SET_TRANSFORM(
- 10      xformlist, 'BULK_PACK_DISKETTES', null, 'TO_CHAR(BULK_PACK_DISKETTES)', null);
- 11    dbms_data_mining_transform.SET_TRANSFORM(
- 12      xformlist, 'FLAT_PANEL_MONITOR', null, 'TO_CHAR(FLAT_PANEL_MONITOR)', null);
- 13    dbms_data_mining_transform.SET_TRANSFORM(
- 14      xformlist, 'HOME_THEATER_PACKAGE', null, 'TO_CHAR(HOME_THEATER_PACKAGE)', null);
- 15    dbms_data_mining_transform.SET_TRANSFORM(
- 16      xformlist, 'OS_DOC_SET_KANJI', null, 'TO_CHAR(OS_DOC_SET_KANJI)', null);
- 17    dbms_data_mining_transform.SET_TRANSFORM(
- 18      xformlist, 'PRINTER_SUPPLIES', null, 'TO_CHAR(PRINTER_SUPPLIES)', null);
- 19    dbms_data_mining_transform.SET_TRANSFORM(
- 20      xformlist, 'Y_BOX_GAMES', null, 'TO_CHAR(Y_BOX_GAMES)', null);
- 21
- 22    v_setlst('ALGO_NAME')         := 'ALGO_O_CLUSTER';
- 23    v_setlst('CLUS_NUM_CLUSTERS') := '10';
- 24    v_setlst('PREP_AUTO')         := 'ON';
- 25    -- Other possible settings are:
- 26    -- v_setlst('OCLT_SENSITIVITY') := '0.5';
- 27
- 28    DBMS_DATA_MINING.CREATE_MODEL2(
- 29      model_name          => 'OC_SH_Clus_sample',
- 30      mining_function     => 'CLUSTERING',
- 31      data_query          => 'select * from mining_data_build_parallel_v',
- 32      case_id_column_name => 'cust_id',
- 33      set_list            => v_setlst,
- 34      xform_list          => xformlist);
- 35  END;
- 36  /
+  4    v_data_query VARCHAR2(32767);
+  5  BEGIN
+  6    dbms_data_mining_transform.SET_TRANSFORM(
+  7      v_xlst, 'AFFINITY_CARD', null, 'TO_CHAR(AFFINITY_CARD)', null);
+  8    dbms_data_mining_transform.SET_TRANSFORM(
+  9      v_xlst, 'BOOKKEEPING_APPLICATION', null, 'TO_CHAR(BOOKKEEPING_APPLICATION)', null);
+ 10    dbms_data_mining_transform.SET_TRANSFORM(
+ 11      v_xlst, 'BULK_PACK_DISKETTES', null, 'TO_CHAR(BULK_PACK_DISKETTES)', null);
+ 12    dbms_data_mining_transform.SET_TRANSFORM(
+ 13      v_xlst, 'FLAT_PANEL_MONITOR', null, 'TO_CHAR(FLAT_PANEL_MONITOR)', null);
+ 14    dbms_data_mining_transform.SET_TRANSFORM(
+ 15      v_xlst, 'HOME_THEATER_PACKAGE', null, 'TO_CHAR(HOME_THEATER_PACKAGE)', null);
+ 16    dbms_data_mining_transform.SET_TRANSFORM(
+ 17      v_xlst, 'OS_DOC_SET_KANJI', null, 'TO_CHAR(OS_DOC_SET_KANJI)', null);
+ 18    dbms_data_mining_transform.SET_TRANSFORM(
+ 19      v_xlst, 'PRINTER_SUPPLIES', null, 'TO_CHAR(PRINTER_SUPPLIES)', null);
+ 20    dbms_data_mining_transform.SET_TRANSFORM(
+ 21      v_xlst, 'Y_BOX_GAMES', null, 'TO_CHAR(Y_BOX_GAMES)', null);
+ 22
+ 23    -- Model Settings ---------------------------------------------------
+ 24    --
+ 25    -- K-Means is the default clustering algorithm. Override the
+ 26    -- default to set the algorithm to O-Cluster.
+ 27    --
+ 28    v_setlst('ALGO_NAME')         := 'ALGO_O_CLUSTER';
+ 29    v_setlst('CLUS_NUM_CLUSTERS') := '10';
+ 30    v_setlst('PREP_AUTO')         := 'ON';
+ 31    -- Other possible settings are:
+ 32    -- v_setlst('OCLT_SENSITIVITY') := '0.5';
+ 33
+ 34    v_data_query := q'|SELECT * FROM mining_data_build_parallel_v|';
+ 35
+ 36    DBMS_DATA_MINING.CREATE_MODEL2(
+ 37      model_name          => 'OC_SH_Clus_sample',
+ 38      mining_function     => 'CLUSTERING',
+ 39      data_query          => v_data_query,
+ 40      set_list            => v_setlst,
+ 41      case_id_column_name => 'CUST_ID',
+ 42      xform_list          => v_xlst
+ 43    );
+ 44  END;
+ 45  /
 
-PL/SQLプロシージャが正常に完了しました。
+PL/SQL procedure successfully completed.
 
 SQL>
 SQL> -------------------------
@@ -128,7 +131,7 @@ ODMS_MISSING_VALUE_TREATMENT   ODMS_MISSING_VALUE_AUTO
 ODMS_SAMPLING                  ODMS_SAMPLING_DISABLE
 PREP_AUTO                      ON
 
-7行が選択されました。
+7 rows selected.
 
 SQL>
 SQL> --------------------------
@@ -161,7 +164,7 @@ PRINTER_SUPPLIES                         CATEGORICAL
 YRS_RESIDENCE                            NUMERICAL
 Y_BOX_GAMES                              CATEGORICAL
 
-17行が選択されました。
+17 rows selected.
 
 SQL>
 SQL> -------------------------
@@ -177,7 +180,7 @@ MINING_FUNCTION      ALGORITHM
 -------------------- --------------------
 CLUSTERING           O_CLUSTER
 
-1行が選択されました。
+1 row selected.
 
 SQL>
 SQL> ------------------------
@@ -202,7 +205,7 @@ DM$VROC_SH_CLUS_SAMPLE         Clustering Rules
 DM$VSOC_SH_CLUS_SAMPLE         Computed Settings
 DM$VWOC_SH_CLUS_SAMPLE         Model Build Alerts
 
-8行が選択されました。
+8 rows selected.
 
 SQL>
 SQL> -- Binning information
@@ -235,7 +238,7 @@ AGE                          15     74.133     79.000
 CUST_GENDER                   1                       F
 CUST_GENDER                   2                       M
 
-17行が選択されました。
+17 rows selected.
 
 SQL>
 SQL> -- Cluster details are best seen in pieces - based on the kind of
@@ -275,7 +278,7 @@ SQL> SELECT cluster_id clu_id, record_count rec_cnt, parent, tree_level
         18        134         10          4
         19        127         10          4
 
-19行が選択されました。
+19 rows selected.
 
 SQL>
 SQL> -- TAXONOMY
@@ -306,7 +309,7 @@ CLUSTER_ID LEFT_CHILD_ID RIGHT_CHILD_ID
         18
         19
 
-19行が選択されました。
+19 rows selected.
 
 SQL>
 SQL> -- SPLIT PREDICATES
@@ -347,7 +350,7 @@ CLUSTER_ID ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME    OP VAL
          4 OCCUPATION                                IN Farming
          4 OCCUPATION                                IN Handler
 
-15行が選択されました。
+15 rows selected.
 
 SQL>
 SQL> -- CENTROIDS FOR LEAF CLUSTERS
@@ -391,7 +394,7 @@ CLUSTER_ID ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME            MEAN     VARIANCE M
          1 YRS_RESIDENCE                                    4.089        3.690
          1 Y_BOX_GAMES                                                         0
 
-17行が選択されました。
+17 rows selected.
 
 SQL>
 SQL> -- HISTOGRAM FOR ATTRIBUTE OF A LEAF CLUSTER
@@ -425,7 +428,7 @@ CLUSTER_ID ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME      BIN_ID LABEL             
          1 AGE                                             14 (69.2667; 74.1333]       1.00
          1 AGE                                             15 (74.1333; 79]            3.00
 
-15行が選択されました。
+15 rows selected.
 
 SQL>
 SQL> -- RULES FOR LEAF CLUSTERS
@@ -461,7 +464,7 @@ CLUSTER_ID RULE_SUPPORT RULE_CONFIDENCE
         18          103            .769
         19           96            .756
 
-19行が選択されました。
+19 rows selected.
 
 SQL>
 SQL> -- RULE DETAILS FOR LEAF CLUSTERS
@@ -581,7 +584,7 @@ CLUSTER_ID ATTRIBUTE_NAME       ATTRIBUTE_SUBNAME    OP NUMERIC_VALUE ATTRIBUTE_
          2 Y_BOX_GAMES                               IN               0                        440        .002
          2 Y_BOX_GAMES                               IN               1                        440        .002
 
-97行が選択されました。
+97 rows selected.
 
 SQL>
 SQL> -----------------------------------------------------------------------
@@ -626,7 +629,7 @@ SQL> SELECT CLUSTER_ID(oc_sh_clus_sample USING *) AS clus, COUNT(*) AS cnt
          7        115
         17         63
 
-10行が選択されました。
+10 rows selected.
 
 SQL>
 SQL> -- See dmkmdemo.sql for more examples
@@ -680,6 +683,6 @@ SQL> SELECT cust_id,
            </Details>
 
 
-5行が選択されました。
+5 rows selected.
 
 SQL> spool oml4sql-cross-validation-decision-tree

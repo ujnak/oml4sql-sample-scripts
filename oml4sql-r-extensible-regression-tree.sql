@@ -90,6 +90,7 @@ END;
 
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
   -- Model Settings -----------------------------------------------------------
   v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
@@ -102,17 +103,18 @@ BEGIN
   -- split attributes, node counts, weights, deviation and mean of the built model
 
   v_setlst('RALG_DETAILS_FORMAT') := 
-    'select cast(''a'' as varchar2(20)) node, ' ||
-    'cast(''a'' as varchar2(20)) split, ' ||
-    '1 NodeCnt, 1 wt, 1 deviation, 1 mean from dual';
+    q'|select cast('a' as varchar2(20)) node, cast('a' as varchar2(20)) split, 1 NodeCnt, 1 wt, 1 deviation, 1 mean from dual|';
+
+  v_data_query := q'|SELECT * FROM mining_data_build_v|';
   
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'DT_RDEMO_REGRESSION',
     mining_function     => 'REGRESSION',
-    data_query          => 'select * from mining_data_build_v',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
     case_id_column_name => 'CUST_ID',
-    target_column_name  => 'AGE',
-    set_list            => v_setlst);
+    target_column_name  => 'AGE'
+  );
 END;
 /
 
@@ -241,6 +243,7 @@ END;
 
 DECLARE
   v_setlst DBMS_DATA_MINING.SETTING_LIST;
+  v_data_query VARCHAR2(32767);
 BEGIN
   -- Model Settings -------------------------------------------------------------
   v_setlst('ALGO_EXTENSIBLE_LANG')  := 'R';
@@ -255,17 +258,18 @@ BEGIN
   -- the built model
 
   v_setlst('RALG_DETAILS_FORMAT') := 
-    'select cast(''a'' as varchar2(20)) node, ' ||
-    'cast(''a'' as varchar2(20)) split, ' ||
-    '1 NodeCnt, 1 LeftNodeCnt, 1 RightNodeCnt from dual';
+    q'|select cast('a' as varchar2(20)) node, cast('a' as varchar2(20)) split, 1 NodeCnt, 1 LeftNodeCnt, 1 RightNodeCnt from dual|';
+
+  v_data_query := q'|SELECT * FROM mining_data_build_v|';
   
   DBMS_DATA_MINING.CREATE_MODEL2(
     model_name          => 'DT_RDEMO_CLASSIFICATION',
     mining_function     => 'CLASSIFICATION',
-    data_query          => 'select * from mining_data_build_v',
+    data_query          => v_data_query,
+    set_list            => v_setlst,
     case_id_column_name => 'CUST_ID',
-    target_column_name  => 'AFFINITY_CARD',
-    set_list            => v_setlst);
+    target_column_name  => 'AFFINITY_CARD'
+  );
 END;
 /
 
