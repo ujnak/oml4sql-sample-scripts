@@ -176,14 +176,6 @@ END;
 /
 
 -------------------------
--- DISPLAY MODEL SETTINGS
---
-column setting_name format a30
-column setting_value format a30
-select setting_name, setting_value from Rkm_sh_sample_settings
-order by setting_name;
-      
--------------------------
 -- DISPLAY MODEL METADATA
 --
 column model_name format a20
@@ -305,12 +297,6 @@ BEGIN
 END;
 /
 
--------------------------
--- DISPLAY MODEL SETTINGS
---
-select setting_name, setting_value from Rkm_sh_sample_settings
-order by setting_name;
-      
 -------------------------
 -- DISPLAY MODEL METADATA
 --
