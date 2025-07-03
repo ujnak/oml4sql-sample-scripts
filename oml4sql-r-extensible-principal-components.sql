@@ -133,6 +133,15 @@ END;
 /
 
 -------------------------
+-- DISPLAY MODEL SETTINGS
+--
+column setting_name format a30
+column setting_value format a40
+select setting_name, setting_value from user_mining_model_settings
+where model_name = 'RPCA_SH_FE_SAMPLE'
+order by setting_name;
+
+-------------------------
 -- DISPLAY MODEL METADATA
 --
 column model_name format a20
@@ -245,6 +254,13 @@ BEGIN
   );
 END;
 /
+
+-------------------------
+-- DISPLAY MODEL SETTINGS
+--
+select setting_name, setting_value from user_mining_model_settings
+where model_name = 'RPCA_SH_FE_SAMPLE_P'
+order by setting_name;
 
 -------------------------
 -- DISPLAY MODEL METADATA

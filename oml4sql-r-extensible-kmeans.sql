@@ -176,6 +176,15 @@ END;
 /
 
 -------------------------
+-- DISPLAY MODEL SETTINGS
+--
+column setting_name format a30
+column setting_value format a30
+select setting_name, setting_value from user_mining_model_settings
+where model_name = 'RKM_SH_CLUS_SAMPLE'
+order by setting_name;
+
+-------------------------
 -- DISPLAY MODEL METADATA
 --
 column model_name format a20
@@ -296,6 +305,13 @@ BEGIN
   );
 END;
 /
+
+-------------------------
+-- DISPLAY MODEL SETTINGS
+--
+select setting_name, setting_value from user_mining_model_settings
+where model_name = 'RKM_SH_CLUS_SAMPLE_S'
+order by setting_name;
 
 -------------------------
 -- DISPLAY MODEL METADATA
